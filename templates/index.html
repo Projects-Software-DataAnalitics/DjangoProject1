@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Smart School System Login</title>
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+</head>
+
+<body class="login-body">
+
+    <main class="login-wrapper">
+
+        <section class="login-hero">
+            <h1 class="app-title">Smart School System</h1>
+            <p class="app-subtitle">Access your courses, grades and announcements!</p>
+        </section>
+
+        <!-- Role Selection -->
+        <section class="role-selection">
+            <div class="role-buttons">
+                <a href="{% url 'student-login' %}" class="role-btn">Student</a>
+                <a href="{% url 'instructor-login' %}" class="role-btn">Instructor</a>
+                <a href="{% url 'faculty-head-login' %}" class="role-btn">Faculty Head</a>
+            </div>
+        </section>
+
+        <footer class="login-footer">© {{ now|date:'Y' }} Smart School</footer>
+
+    </main>
+
+</body>
+
+</html>
+
+

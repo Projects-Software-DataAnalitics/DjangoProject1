@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Student Login - Smart School System</title>
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+</head>
+
+<body class="login-body">
+
+    <main class="login-wrapper">
+
+        <section class="login-hero">
+            <h1 class="app-title">Student Login</h1>
+        </section>
+
+        <section class="login-form-container">
+            <a href="{% url 'home' %}" class="back-btn">← Back</a>
+            <form id="student-login-form" class="login-form">
+                <label class="input-label" for="student-username">Username</label>
+                <input type="text" id="student-username" placeholder="Enter your username" required>
+                <label class="input-label" for="student-password">Password</label>
+                <input type="password" id="student-password" placeholder="Enter your password" required>
+                <button type="submit" class="primary-btn">Login</button>
+            </form>
+            <p id="student-login-error" class="error-text"></p>
+        </section>
+
+        <footer class="login-footer">© {{ now|date:'Y' }} Smart School</footer>
+
+    </main>
+
+    <script>
+        // --- Student Login ---
+        const studentForm = document.getElementById("student-login-form");
+        studentForm.addEventListener("submit", function(e) {
+            e.preventDefault();
+
+            const username = document.getElementById("student-username").value;
+            const password = document.getElementById("student-password").value;
+
+            fetch("{% static 'json/students.json' %}")
+                .then(response => response.json())
+                .then(data => {
+                    const student = data.find(s => s.username === username && s.password === password);
+                    if(student) {
+                        sessionStorage.setItem('loggedStudent', JSON.stringify(student));
+                        window.location.href = "{% url 'student' %}";
+                    } else {
+                        document.getElementById("student-login-error").textContent = "Invalid username or password!";
+                    }
+                });
+        });
+    </script>
+
+</body>
+
+</html>
+

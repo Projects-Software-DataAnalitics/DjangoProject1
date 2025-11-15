@@ -1,0 +1,46 @@
+body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 24px; }
+.login-container { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+input, button { border: 1px solid #ccc; border-radius: 8px; }
+button { background: #0b5fff; color: #fff; border: none; cursor: pointer; }
+button:hover { background: #0a53d5; }
+
+.sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 0; overflow-x: hidden; transition: width 0.2s ease; background: #1f2937; color: #fff; padding-top: 60px; }
+.sidebar ul { list-style: none; padding: 0 12px; }
+.sidebar li { padding: 12px; cursor: pointer; border-radius: 8px; }
+.sidebar li:hover { background: rgba(255,255,255,0.1); }
+.sidebar .back-link { display: block; color: #cbd5e1; padding: 12px; text-decoration: none; }
+.sidebar .back-link:hover { color: #fff; }
+
+.content { margin-left: 0; transition: margin-left 0.2s ease; padding: 24px; }
+.menu-btn { font-size: 20px; padding: 8px 12px; }
+
+.login-body { display: grid; min-height: 100dvh; place-items: center; padding: 32px; background: linear-gradient(135deg,#eef2ff 0%, #f8fafc 100%); }
+.login-wrapper { width: 100%; max-width: 600px; display: flex; flex-direction: column; align-items: center; }
+.login-hero { text-align: center; margin-bottom: 32px; width: 100%; }
+.app-title { margin: 0; font-size: 40px; color: #0b2a6f; font-weight: 700; }
+.app-subtitle { margin: 8px 0 0; color: #475569; font-size: 16px; }
+
+.role-selection { width: 100%; display: flex; justify-content: center; align-items: center; margin: 50px 0; }
+.role-buttons { display: flex !important; flex-direction: column !important; gap: 24px !important; align-items: center !important; justify-content: center !important; width: 100% !important; max-width: 500px !important; margin: 0 auto !important; }
+.role-btn { width: 100% !important; max-width: 500px !important; padding: 36px 48px !important; font-size: 26px !important; font-weight: 700 !important; border-radius: 10px !important; background: #ffffff !important; color: #0b2a6f !important; border: 3px solid #cbd5e1 !important; text-decoration: none !important; display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; box-shadow: 0 6px 20px rgba(15,23,42,0.12) !important; transition: all 0.3s !important; }
+.role-btn:hover { transform: translateY(-3px) !important; box-shadow: 0 10px 30px rgba(15,23,42,0.2) !important; border-color: #0b5fff !important; background: #f8faff !important; }
+
+.login-form-container { width: 100%; }
+.back-btn { color: #64748b; text-decoration: none; padding: 8px 0; margin-bottom: 16px; font-size: 14px; display: inline-block; }
+.back-btn:hover { color: #0b5fff; }
+.card-title { margin: 0 0 12px; font-size: 18px; color: #0f172a; }
+.login-form { display: grid; gap: 10px; }
+.input-label { font-size: 12px; color: #475569; }
+.login-form input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; box-sizing: border-box; }
+.login-form input:focus { outline: none; border-color: #0b5fff; background: #fff; box-shadow: 0 0 0 4px rgba(11,95,255,0.12); }
+.primary-btn { width: 100%; padding: 12px; border-radius: 10px; background: #0b5fff; color: #fff; border: none; font-weight: 600; cursor: pointer; }
+.primary-btn:hover { background: #0a53d5; }
+.error-text { color: #e11d48; min-height: 20px; margin-top: 8px; font-size: 14px; }
+.login-footer { text-align: center; margin-top: 24px; color: #64748b; font-size: 12px; }
+
+@media (max-width: 800px) {
+  .role-buttons { flex-direction: column; }
+  .role-btn { width: 100%; }
+  .app-title { font-size: 32px; }
+}
+

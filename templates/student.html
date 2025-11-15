@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Dashboard</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li id="personal-info-btn">Personal Information</li>
+        <li id="my-courses-btn">My Courses</li>
+        <li id="grades-btn">Grades</li>
+        <li id="announcements-btn">Announcements</li>
+        <li id="logout-btn">Logout</li>
+    </ul>
+    <a class="back-link" href="/">Back to Login</a>
+    </div>
+
+<!-- Main content -->
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
+    <h1>Welcome Student</h1>
+    <div id="personal-info"></div>
+    </div>
+
+<script src="{% static 'js/student.js' %}"></script>
+</body>
+</html>
+
+

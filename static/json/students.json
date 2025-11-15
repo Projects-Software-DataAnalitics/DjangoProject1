@@ -1,0 +1,21 @@
+[
+  {
+    "firstName": "Alice",
+    "lastName": "Johnson",
+    "username": "alice.johnson",
+    "password": "12345",
+    "department": "Computer Engineering",
+    "class": "2A",
+    "courses": ["Mathematics", "Physics", "Programming"]
+  },
+  {
+    "firstName": "Bob Michael",
+    "lastName": "Smith",
+    "username": "bob.smith",
+    "password": "abcde",
+    "department": "Electrical Engineering",
+    "class": "3B",
+    "courses": ["Circuits", "Electromagnetics", "Algorithms"]
+  }
+]
+

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Faculty Head Dashboard</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li id="personal-info-btn">Personal Information</li>
+        <li id="my-courses-btn">My Courses</li>
+        <li id="announcements-btn">Announcements</li>
+        <li id="logout-btn">Logout</li>
+    </ul>
+    <a class="back-link" href="/">Back to Login</a>
+    </div>
+
+<!-- Main content -->
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
+    <h1>Welcome Faculty Head</h1>
+    <div id="personal-info"></div>
+    </div>
+
+<script src="{% static 'js/faculty_head.js' %}"></script>
+</body>
+</html>
+

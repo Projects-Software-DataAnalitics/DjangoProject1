@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Instructor Login - Smart School System</title>
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+</head>
+
+<body class="login-body">
+
+    <main class="login-wrapper">
+
+        <section class="login-hero">
+            <h1 class="app-title">Instructor Login</h1>
+        </section>
+
+        <section class="login-form-container">
+            <a href="{% url 'home' %}" class="back-btn">← Back</a>
+            <form id="instructor-login-form" class="login-form">
+                <label class="input-label" for="instructor-username">Username</label>
+                <input type="text" id="instructor-username" placeholder="Enter your username" required>
+                <label class="input-label" for="instructor-password">Password</label>
+                <input type="password" id="instructor-password" placeholder="Enter your password" required>
+                <button type="submit" class="primary-btn">Login</button>
+            </form>
+            <p id="instructor-login-error" class="error-text"></p>
+        </section>
+
+        <footer class="login-footer">© {{ now|date:'Y' }} Smart School</footer>
+
+    </main>
+
+    <script>
+        // --- Instructor Login ---
+        const instructorForm = document.getElementById("instructor-login-form");
+        instructorForm.addEventListener("submit", function(e) {
+            e.preventDefault();
+
+            const username = document.getElementById("instructor-username").value;
+            const password = document.getElementById("instructor-password").value;
+
+            fetch("{% static 'json/instructors.json' %}")
+                .then(response => response.json())
+                .then(data => {
+                    const instructor = data.find(i => i.username === username && i.password === password);
+                    if(instructor) {
+                        sessionStorage.setItem('loggedInstructor', JSON.stringify(instructor));
+                        window.location.href = "{% url 'instructor' %}";
+                    } else {
+                        document.getElementById("instructor-login-error").textContent = "Invalid username or password!";
+                    }
+                });
+        });
+    </script>
+
+</body>
+
+</html>
+

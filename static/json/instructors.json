@@ -1,0 +1,17 @@
+[
+    {
+        "firstName": "John",
+        "lastName": "Doe",
+        "username": "john.doe",
+        "password": "1234",
+        "courses": ["Mathematics"]
+    },
+    {
+        "firstName": "Emily",
+        "lastName": "Smith",
+        "username": "emily.smith",
+        "password": "5678",
+        "courses": ["Physics"]
+    }
+]
+

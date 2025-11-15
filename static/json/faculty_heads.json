@@ -1,0 +1,21 @@
+[
+  {
+    "firstName": "Dr. Sarah",
+    "lastName": "Williams",
+    "username": "sarah.williams",
+    "password": "head456",
+    "department": "Computer Engineering",
+    "faculty": "Engineering",
+    "courses": ["Advanced Algorithms", "Research Methods", "Academic Leadership"]
+  },
+  {
+    "firstName": "Prof. Michael",
+    "lastName": "Brown",
+    "username": "michael.brown",
+    "password": "head123",
+    "department": "Electrical Engineering",
+    "faculty": "Engineering",
+    "courses": ["Power Systems", "Faculty Management", "Strategic Planning"]
+  }
+]
+
