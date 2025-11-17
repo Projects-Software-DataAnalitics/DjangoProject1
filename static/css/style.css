@@ -44,3 +44,38 @@ button:hover { background: #0a53d5; }
   .app-title { font-size: 32px; }
 }
 
+
+.grades-table {
+    width: 90%;
+    margin: 20px auto;
+    border-collapse: collapse;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.grades-table th, .grades-table td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: center;
+    min-width: 100px;
+}
+
+.grades-table th {
+    background-color: #0b5fff;
+    color: white;
+}
+
+.grades-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.grades-table tr:hover {
+    background-color: #f1f1f1;
+    transition: 0.3s;
+}
+
+#grades-section h2 {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
