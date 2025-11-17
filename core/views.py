@@ -1,5 +1,5 @@
 from django.shortcuts import render
-
+from .models import Student, Grade
 
 def index(request):
     return render(request, 'index.html')
@@ -27,3 +27,9 @@ def instructor_dashboard(request):
 
 def faculty_head_dashboard(request):
     return render(request, 'faculty_head.html')
+
+
+def student_grades(request, username):
+    student = get_object_or_404(Student, username=username)
+    grades = Grade.objects.filter(student=student)
+    return render(request, 'student.html', {'student': student, 'grades': grades})

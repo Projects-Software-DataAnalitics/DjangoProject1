@@ -27,4 +27,6 @@ urlpatterns = [
     path('student/', core_views.student_dashboard, name='student'),
     path('instructor/', core_views.instructor_dashboard, name='instructor'),
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
+    path('student/<str:username>/', core_views.student_grades, name='student_grades'),
+
 ]
