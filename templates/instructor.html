@@ -23,6 +23,10 @@
     <div id="personal-info"></div>
     </div>
 
+<form id="csrf-form" style="display:none;">
+    {% csrf_token %}
+</form>
+
 <script src="{% static 'js/instructor.js' %}"></script>
 </body>
 </html>

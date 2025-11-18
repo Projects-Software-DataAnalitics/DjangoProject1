@@ -24,6 +24,11 @@ if (!instructorData) {
     window.location.href = "/";
 }
 
+function getCsrfToken() {
+    const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
+    return cookieMatch ? cookieMatch[1] : null;
+}
+
 // ----------------------------
 // Sidebar button listeners
 // ----------------------------
@@ -71,8 +76,8 @@ function showGrades() {
                 ${coursesOptions}
             </select>
         </div>
-        <div id="file-upload-section" style="margin-top: 24px; display: none;">
-        </div>
+        <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
+        <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
     `;
     
     // Course selection event listener
@@ -84,75 +89,99 @@ function showGrades() {
         if (selectedCourse) {
             fileUploadSection.style.display = "block";
             updateFileUploadSection(selectedCourse);
+            refreshUploadStatus(selectedCourse);
         } else {
             fileUploadSection.style.display = "none";
+            refreshUploadStatus(null);
         }
     });
+
+    refreshUploadStatus(null);
+}
+
+function getUploadStorageKey(course) {
+    return `uploadedGrades_${instructorData.username}_${course}`;
+}
+
+function refreshUploadStatus(course) {
+    const statusEl = document.getElementById("upload-status");
+    if (!statusEl) return;
+
+    if (!course) {
+        statusEl.textContent = "";
+        statusEl.style.color = "#475569";
+        return;
+    }
+
+    const stored = localStorage.getItem(getUploadStorageKey(course));
+    if (stored) {
+        const info = JSON.parse(stored);
+        const uploadedAt = new Date(info.timestamp).toLocaleString();
+        statusEl.textContent = `Latest upload (${info.filename}) on ${uploadedAt}`;
+        statusEl.style.color = "#15803d";
+    } else {
+        statusEl.textContent = "No CSV uploaded for this course yet.";
+        statusEl.style.color = "#475569";
+    }
 }
 
 function updateFileUploadSection(course) {
     const fileUploadSection = document.getElementById("file-upload-section");
-    const storageKey = `uploadedFile_${instructorData.username}_${course}`;
-    const uploadedFile = localStorage.getItem(storageKey);
-    
-    if (uploadedFile) {
-        // File already uploaded - show file name with change/delete buttons
-        const fileName = JSON.parse(uploadedFile).name;
-        fileUploadSection.innerHTML = `
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Upload CSV File</label>
-            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; max-width: 400px;">
-                <span style="flex: 1; color: #0f172a;">${fileName}</span>
-                <button id="change-file-btn" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; cursor: pointer; font-size: 12px;">Change</button>
-                <button id="delete-file-btn" style="padding: 6px 12px; border: 1px solid #e11d48; border-radius: 6px; background: #fff; color: #e11d48; cursor: pointer; font-size: 12px;">Delete</button>
-            </div>
-            <input type="file" id="csv-file-input-hidden" accept=".csv" style="display: none;">
-        `;
-        
-        // Change button event
-        document.getElementById("change-file-btn").addEventListener("click", function() {
-            document.getElementById("csv-file-input-hidden").click();
-        });
-        
-        // Delete button event
-        document.getElementById("delete-file-btn").addEventListener("click", function() {
-            localStorage.removeItem(storageKey);
-            updateFileUploadSection(course);
-        });
-        
-        // Hidden file input change event
-        document.getElementById("csv-file-input-hidden").addEventListener("change", function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const fileData = {
-                    name: file.name,
-                    size: file.size,
-                    type: file.type
-                };
-                localStorage.setItem(storageKey, JSON.stringify(fileData));
-                updateFileUploadSection(course);
-            }
-        });
-    } else {
-        // No file uploaded - show upload input
-        fileUploadSection.innerHTML = `
-            <label for="csv-file-input" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Upload CSV File</label>
-            <input type="file" id="csv-file-input" accept=".csv" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc;">
-        `;
-        
-        // File input change event
-        document.getElementById("csv-file-input").addEventListener("change", function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const fileData = {
-                    name: file.name,
-                    size: file.size,
-                    type: file.type
-                };
-                localStorage.setItem(storageKey, JSON.stringify(fileData));
-                updateFileUploadSection(course);
-            }
-        });
+    fileUploadSection.innerHTML = `
+        <label for="csv-file-input" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Upload CSV File</label>
+        <input type="file" id="csv-file-input" accept=".csv" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc;">
+        <p style="margin-top: 8px; color: #475569; font-size: 13px;">Expected columns: student_username, course_name, midterm, assignment, final</p>
+    `;
+
+    document.getElementById("csv-file-input").addEventListener("change", function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            uploadGradesFile(file, course);
+        }
+    });
+}
+
+function uploadGradesFile(file, course) {
+    const statusEl = document.getElementById("upload-status");
+    if (!course) {
+        statusEl.textContent = "Please select a course.";
+        statusEl.style.color = "#b91c1c";
+        return;
     }
+
+    const formData = new FormData();
+    formData.append("csv_file", file);
+
+    statusEl.textContent = "Uploading...";
+    statusEl.style.color = "#0f172a";
+
+    fetch("/grades/upload/", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": getCsrfToken() || ""
+        },
+        body: formData,
+        credentials: "same-origin"
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === "ok") {
+            localStorage.setItem(
+                getUploadStorageKey(course),
+                JSON.stringify({ filename: file.name, timestamp: Date.now() })
+            );
+            statusEl.textContent = `Grades uploaded successfully for ${course}.`;
+            statusEl.style.color = "#15803d";
+            refreshUploadStatus(course);
+        } else {
+            statusEl.textContent = data.error || "Upload failed.";
+            statusEl.style.color = "#b91c1c";
+        }
+    })
+    .catch(() => {
+        statusEl.textContent = "Upload error.";
+        statusEl.style.color = "#b91c1c";
+    });
 }
 
 function showAnnouncements() {

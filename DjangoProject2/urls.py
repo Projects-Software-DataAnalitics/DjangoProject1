@@ -21,6 +21,7 @@ from core import views as core_views
 urlpatterns = [
     path('', core_views.index, name='home'),
     path('admin/', admin.site.urls),
+    path('grades/upload/', core_views.upload_grades, name='upload_grades'),
     path('student-login/', core_views.student_login, name='student-login'),
     path('instructor-login/', core_views.instructor_login, name='instructor-login'),
     path('faculty-head-login/', core_views.faculty_head_login, name='faculty-head-login'),
