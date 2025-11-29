@@ -1,6 +1,3 @@
-// ----------------------------
-// Toggle sidebar
-// ----------------------------
 const menuBtn = document.getElementById("menu-btn");
 menuBtn.addEventListener("click", toggleSidebar);
 
@@ -16,25 +13,16 @@ function toggleSidebar() {
     }
 }
 
-// ----------------------------
-// Get logged faculty head
-// ----------------------------
 const facultyHeadData = JSON.parse(sessionStorage.getItem('loggedFacultyHead'));
 if (!facultyHeadData) {
     window.location.href = "/";
 }
 
-// ----------------------------
-// Sidebar button listeners
-// ----------------------------
 document.getElementById("personal-info-btn").addEventListener("click", showPersonalInfo);
 document.getElementById("my-courses-btn").addEventListener("click", showMyCourses);
 document.getElementById("announcements-btn").addEventListener("click", showAnnouncements);
 document.getElementById("logout-btn").addEventListener("click", logout);
 
-// ----------------------------
-// Functions
-// ----------------------------
 function showPersonalInfo() {
     const infoDiv = document.getElementById("personal-info");
     infoDiv.innerHTML = `
@@ -67,7 +55,6 @@ function logout() {
     window.location.href = "/";
 }
 
-// Default view: keep content empty
 document.getElementById("personal-info").innerHTML = "";
 
 

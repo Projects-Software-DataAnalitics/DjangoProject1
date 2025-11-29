@@ -23,13 +23,11 @@ function getCsrfToken() {
     return cookieMatch ? cookieMatch[1] : null;
 }
 
-
 document.getElementById("personal-info-btn").addEventListener("click", showPersonalInfo);
 document.getElementById("my-courses-btn").addEventListener("click", showMyCourses);
 document.getElementById("grades-btn").addEventListener("click", showGrades);
 document.getElementById("announcements-btn").addEventListener("click", showAnnouncements);
 document.getElementById("logout-btn").addEventListener("click", logout);
-
 
 function showPersonalInfo() {
     const infoDiv = document.getElementById("personal-info");
@@ -70,7 +68,6 @@ function showGrades() {
         <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
     `;
     
-    // Course selection event listener
     const courseSelect = document.getElementById("course-select");
     courseSelect.addEventListener("change", function() {
         const selectedCourse = this.value;
