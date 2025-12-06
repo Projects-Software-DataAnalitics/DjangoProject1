@@ -1,12 +1,29 @@
 import csv
 import io
 
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.http import JsonResponse, HttpResponseForbidden
+from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Grade, Student
+from .models import Grade, Student, Course, LearningOutcome
 
+
+def faculty_head_required(view_func):
+    def wrapper(request, *args, **kwargs):
+        user = request.user
+        if not user.is_authenticated:
+            return view_func(request, *args, **kwargs)
+
+        role = getattr(user, "role", None)
+        if role is None and hasattr(user, "profile"):
+            role = getattr(user.profile, "role", None)
+
+        if role != "faculty_head":
+            return HttpResponseForbidden("You are not allowed here")
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 @csrf_exempt
 def upload_grades(request):
@@ -93,6 +110,7 @@ def instructor_dashboard(request):
     return render(request, 'instructor.html')
 
 
+@faculty_head_required
 def faculty_head_dashboard(request):
     return render(request, 'faculty_head.html')
 
@@ -101,3 +119,34 @@ def student_grades(request, username):
     student = get_object_or_404(Student, username=username)
     grades = Grade.objects.filter(student=student)
     return render(request, 'student.html', {'student': student, 'grades': grades})
+
+@faculty_head_required
+def all_courses(request):
+    # Courses bu projede JSON tarafında tutulduğu için
+    # template, kursları frontend'de faculty_heads.json'dan okuyacak.
+    return render(request, 'faculty/all_courses.html')
+
+@faculty_head_required
+def my_courses(request):
+    # My Courses sayfası da giriş yapan faculty head'in
+    # sessionStorage'daki kurslarını gösterecek.
+    return render(request, 'faculty/my_courses.html')
+
+@faculty_head_required
+def outcomes(request):
+    outcomes = LearningOutcome.objects.all()
+    return render(request, 'faculty/outcomes.html', {'outcomes': outcomes})
+
+@faculty_head_required
+def create_outcome(request):
+    if request.method == 'POST':
+        text = request.POST.get('text')
+        LearningOutcome.objects.create(text=text, created_by=request.user)
+        return redirect('outcomes')
+
+    return render(request, 'faculty/create_outcome.html')
+
+@faculty_head_required
+def give_grade(request, course_id):
+    course = get_object_or_404(Course, id=course_id)
+    return render(request, 'faculty/give_grade.html', {'course': course})

@@ -1,0 +1,27 @@
+{% extends "faculty/base.html" %}
+
+{% block title %}My Courses{% endblock %}
+
+{% block content %}
+    <h1>My Courses</h1>
+
+    <ul id="my-courses-list"></ul>
+
+    <script>
+        const raw = sessionStorage.getItem("loggedFacultyHead");
+        const list = document.getElementById("my-courses-list");
+
+        if (!raw) {
+            list.innerHTML = "<li>You are not logged in as a faculty head.</li>";
+        } else {
+            const facultyHead = JSON.parse(raw);
+            const courses = facultyHead.courses || [];
+
+            if (courses.length === 0) {
+                list.innerHTML = "<li>You don't have any courses assigned.</li>";
+            } else {
+                list.innerHTML = courses.map(c => `<li>${c}</li>`).join("");
+            }
+        }
+    </script>
+{% endblock %}

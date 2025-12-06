@@ -5,9 +5,12 @@ button { background: #0b5fff; color: #fff; border: none; cursor: pointer; }
 button:hover { background: #0a53d5; }
 
 .sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 0; overflow-x: hidden; transition: width 0.2s ease; background: #1f2937; color: #fff; padding-top: 60px; }
-.sidebar ul { list-style: none; padding: 0 12px; }
-.sidebar li { padding: 12px; cursor: pointer; border-radius: 8px; }
+.sidebar ul { list-style: none; padding: 0 12px; margin: 0; }
+.sidebar li { padding: 12px; border-radius: 8px; }
 .sidebar li:hover { background: rgba(255,255,255,0.1); }
+.sidebar a { display: block; color: #ffffff; text-decoration: none; }
+.sidebar a:visited { color: #ffffff; }
+.sidebar a:hover { color: #ffffff; }
 .sidebar .back-link { display: block; color: #cbd5e1; padding: 12px; text-decoration: none; }
 .sidebar .back-link:hover { color: #fff; }
 

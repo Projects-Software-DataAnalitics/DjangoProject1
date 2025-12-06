@@ -1,0 +1,63 @@
+{% extends "faculty/base.html" %}
+{% load static %}
+
+{% block title %}All Courses{% endblock %}
+
+{% block content %}
+    <h1>All Courses</h1>
+
+    <table class="grades-table">
+        <thead>
+        <tr>
+            <th>Course</th>
+            <th>Instructor</th>
+        </tr>
+        </thead>
+        <tbody id="all-courses-body">
+        </tbody>
+    </table>
+
+    <script>
+        const tbody = document.getElementById("all-courses-body");
+
+        function addRow(courseName, ownerName) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${courseName}</td>
+                <td>${ownerName}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        // Instructors JSON
+        fetch("{% static 'json/instructors.json' %}")
+            .then(r => r.json())
+            .then(instructors => {
+                instructors.forEach(inst => {
+                    (inst.courses || []).forEach(courseName => {
+                        addRow(courseName, inst.firstName + " " + inst.lastName);
+                    });
+                });
+            })
+            .catch(() => {
+                // ignore, we'll still try faculty heads
+            })
+            .finally(() => {
+                // Faculty heads JSON
+                fetch("{% static 'json/faculty_heads.json' %}")
+                    .then(r => r.json())
+                    .then(heads => {
+                        heads.forEach(head => {
+                            (head.courses || []).forEach(courseName => {
+                                addRow(courseName, head.firstName + " " + head.lastName);
+                            });
+                        });
+                    })
+                    .catch(() => {
+                        if (!tbody.children.length) {
+                            tbody.innerHTML = `<tr><td colspan="2">Could not load courses.</td></tr>`;
+                        }
+                    });
+            });
+    </script>
+{% endblock %}

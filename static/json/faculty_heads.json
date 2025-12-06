@@ -6,7 +6,11 @@
     "password": "head456",
     "department": "Computer Engineering",
     "faculty": "Engineering",
-    "courses": ["Advanced Algorithms", "Research Methods", "Academic Leadership"]
+    "courses": [
+      "Advanced Algorithms",
+      "Research Methods",
+      "Academic Leadership"
+    ]
   },
   {
     "firstName": "Prof. Michael",
@@ -15,7 +19,10 @@
     "password": "head123",
     "department": "Electrical Engineering",
     "faculty": "Engineering",
-    "courses": ["Power Systems", "Faculty Management", "Strategic Planning"]
+    "courses": [
+      "Power Systems",
+      "Faculty Management",
+      "Strategic Planning"
+    ]
   }
 ]
-

@@ -29,5 +29,9 @@ urlpatterns = [
     path('instructor/', core_views.instructor_dashboard, name='instructor'),
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
     path('student/<str:username>/', core_views.student_grades, name='student_grades'),
-
+    path('faculty-head/all-courses/', core_views.all_courses, name='all_courses'),
+    path('faculty-head/my-courses/', core_views.my_courses, name='my_courses'),
+    path('faculty-head/learning-outcomes/', core_views.outcomes, name='outcomes'),
+    path('faculty-head/learning-outcomes/create/', core_views.create_outcome, name='create_outcome'),
+    path('faculty-head/course/<int:course_id>/grade/', core_views.give_grade, name='give_grade'),
 ]

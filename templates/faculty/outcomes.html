@@ -1,0 +1,34 @@
+{% extends "faculty/base.html" %}
+
+{% block title %}Learning Outcomes{% endblock %}
+
+{% block content %}
+    <h1>Learning Outcomes</h1>
+
+    <p>
+        <a href="{% url 'create_outcome' %}" class="role-btn">Create New Outcome</a>
+    </p>
+
+    {% if outcomes %}
+        <table class="grades-table">
+            <thead>
+            <tr>
+                <th>Outcome</th>
+                <th>Created By</th>
+                <th>Created At</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for outcome in outcomes %}
+                <tr>
+                    <td>{{ outcome.text }}</td>
+                    <td>{{ outcome.created_by.get_full_name|default:outcome.created_by.username }}</td>
+                    <td>{{ outcome.created_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No learning outcomes defined yet.</p>
+    {% endif %}
+{% endblock %}
