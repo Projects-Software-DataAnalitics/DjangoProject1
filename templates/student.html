@@ -34,6 +34,7 @@
                         <th>Midterm</th>
                         <th>Assignment</th>
                         <th>Final</th>
+                        <th>Details</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -43,6 +44,11 @@
                         <td>{{ grade.midterm }}</td>
                         <td>{{ grade.assignment }}</td>
                         <td>{{ grade.final }}</td>
+                        <td>
+                            <button onclick="showDetails('{{ grade.course_name }}')">
+                                Show Details
+                            </button>
+                        </td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -52,7 +58,15 @@
             <p class="no-grades-message">No grades available yet.</p>
         {% endif %}
     </div>
+</div>
+
+<div id="popup" class="popup-overlay" style="display: none;">
+    <div class="popup-box">
+        <h3 id="popup-title">Course Details</h3>
+        <p id="popup-content"></p>
+        <button onclick="closePopup()">Close</button>
     </div>
+</div>
 
 <script src="{% static 'js/student.js' %}"></script>
 </body>

@@ -1,3 +1,4 @@
+
 function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
     const content = document.getElementById("content");
@@ -79,6 +80,31 @@ function logout() {
     sessionStorage.clear();
     window.location.href = "/";
 }
+
+function showDetails(courseName) {
+    const popup = document.getElementById("popup");
+    const title = document.getElementById("popup-title");
+    const content = document.getElementById("popup-content");
+
+    title.innerText = courseName;
+
+    // Static text
+    content.innerText =
+        "Grade Calculation:\n\n" +
+        "Midterm Exam: 33%\n" +
+        "Assignments: 33%\n" +
+        "Final Exam: 33%\n\n" ;
+
+    popup.style.display = "flex";
+}
+
+function closePopup() {
+    const popup = document.getElementById("popup");
+    if (popup) {
+        popup.style.display = "none";
+    }
+}
+
 
 document.getElementById("personal-info").innerHTML = "";
 
