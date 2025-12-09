@@ -42,8 +42,9 @@ class Grade(models.Model):
     def __str__(self):
         return f"{self.student.username} - {self.course.name}"
 
-class LearningOutcome(models.Model):
+class ProgramOutcome(models.Model):
     text = models.CharField(max_length=255)
+    course_name = models.CharField(max_length=255, blank=True, default="")
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
