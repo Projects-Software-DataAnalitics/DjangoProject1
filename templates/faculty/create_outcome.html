@@ -1,16 +1,32 @@
 {% extends "faculty/base.html" %}
+{% load static %}
 
-{% block title %}Create Learning Outcome{% endblock %}
+{% block title %}Create Program Outcome{% endblock %}
 
 {% block content %}
     <div style="max-width: 640px; margin: 0 auto;">
-        <h1 style="margin-bottom: 8px;">Create Learning Outcome</h1>
+        <h1 style="margin-bottom: 8px;">Create Program Outcome</h1>
         <p style="margin-top: 0; margin-bottom: 24px; color: #475569;">
             Define a clear and measurable outcome for your program or course.
         </p>
 
+        {% if error %}
+            <div class="error-text" style="margin-bottom: 12px;">{{ error }}</div>
+        {% endif %}
+
         <form method="post" style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
             {% csrf_token %}
+            <input type="hidden" id="creator_username" name="creator_username">
+            <input type="hidden" id="creator_first_name" name="creator_first_name">
+            <input type="hidden" id="creator_last_name" name="creator_last_name">
+            <input type="hidden" id="course_name" name="course_name" value="{{ course_name }}">
+
+            <div style="display: grid; gap: 6px; margin-bottom: 12px;">
+                <label style="font-size: 14px; font-weight: 600; color: #0f172a;">Selected Course</label>
+                <div style="padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc;">
+                    {{ course_name|default:"(No course selected)" }}
+                </div>
+            </div>
             <div style="display: grid; gap: 12px;">
                 <label for="id_text" style="font-size: 14px; font-weight: 600; color: #0f172a;">
                     Outcome Text
@@ -28,10 +44,91 @@
                 <button type="submit" class="primary-btn" style="max-width: 180px;">
                     Save Outcome
                 </button>
-                <a href="{% url 'outcomes' %}" class="back-btn" style="align-self: center;">
+                <a href="{% url 'program_outcomes' %}" class="back-btn" style="align-self: center;">
                     Cancel
                 </a>
             </div>
         </form>
     </div>
+
+    <div style="margin-top: 32px;">
+        <h2 style="margin-bottom: 12px;">Courses (Instructors & Faculty Heads)</h2>
+        <table class="grades-table">
+            <thead>
+            <tr>
+                <th>Course</th>
+                <th>Owner</th>
+                <th>Role</th>
+            </tr>
+            </thead>
+            <tbody id="courses-list-body">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        (function () {
+            const creatorUsername = document.getElementById("creator_username");
+            const creatorFirstName = document.getElementById("creator_first_name");
+            const creatorLastName = document.getElementById("creator_last_name");
+
+            // Prefill creator info from frontend "login" data (sessionStorage)
+            const raw = sessionStorage.getItem("loggedFacultyHead");
+            if (raw) {
+                try {
+                    const facultyHead = JSON.parse(raw);
+                    creatorUsername.value = facultyHead.username || "";
+                    creatorFirstName.value = facultyHead.firstName || "";
+                    creatorLastName.value = facultyHead.lastName || "";
+                } catch (e) {
+                    // ignore parse errors
+                }
+            }
+
+            const tbody = document.getElementById("courses-list-body");
+
+            function addRow(courseName, ownerName, roleLabel) {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${courseName}</td>
+                    <td>${ownerName}</td>
+                    <td>${roleLabel}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+
+            function ensureFallbackRow() {
+                if (!tbody.children.length) {
+                    tbody.innerHTML = `<tr><td colspan="3">No courses could be loaded.</td></tr>`;
+                }
+            }
+
+            // Load instructor courses first, then faculty heads
+            fetch("{% static 'json/instructors.json' %}")
+                .then(r => r.json())
+                .then(instructors => {
+                    instructors.forEach(inst => {
+                        (inst.courses || []).forEach(courseName => {
+                            addRow(courseName, `${inst.firstName} ${inst.lastName}`, "Instructor");
+                        });
+                    });
+                })
+                .catch(() => {
+                    // still try faculty heads
+                })
+                .finally(() => {
+                    fetch("{% static 'json/faculty_heads.json' %}")
+                        .then(r => r.json())
+                        .then(heads => {
+                            heads.forEach(head => {
+                                (head.courses || []).forEach(courseName => {
+                                    addRow(courseName, `${head.firstName} ${head.lastName}`, "Faculty Head");
+                                });
+                            });
+                        })
+                        .catch(() => ensureFallbackRow())
+                        .finally(() => ensureFallbackRow());
+                });
+        })();
+    </script>
 {% endblock %}

@@ -1,11 +1,11 @@
 import csv
 import io
 
+from django.contrib.auth.models import User
 from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.csrf import csrf_exempt
-
-from .models import Grade, Student, Course, LearningOutcome
+from .models import Grade, Student, Course, ProgramOutcome
 
 
 def faculty_head_required(view_func):
@@ -122,29 +122,71 @@ def student_grades(request, username):
 
 @faculty_head_required
 def all_courses(request):
-    # Courses bu projede JSON tarafında tutulduğu için
-    # template, kursları frontend'de faculty_heads.json'dan okuyacak.
     return render(request, 'faculty/all_courses.html')
 
 @faculty_head_required
 def my_courses(request):
-    # My Courses sayfası da giriş yapan faculty head'in
-    # sessionStorage'daki kurslarını gösterecek.
     return render(request, 'faculty/my_courses.html')
 
 @faculty_head_required
-def outcomes(request):
-    outcomes = LearningOutcome.objects.all()
-    return render(request, 'faculty/outcomes.html', {'outcomes': outcomes})
+def program_outcomes(request):
+    outcomes_qs = ProgramOutcome.objects.select_related('created_by').order_by('-created_at')
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_name = o.created_by.get_full_name() or o.created_by.username
+        outcomes_data.append(
+            {
+                'text': o.text,
+                'course': o.course_name or '',
+                'created_by': creator_name,
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+            }
+        )
+    return render(
+        request,
+        'faculty/program_outcomes.html',
+        {
+            'outcomes_data': outcomes_data,
+        }
+    )
 
 @faculty_head_required
-def create_outcome(request):
+def create_program_outcome(request):
     if request.method == 'POST':
-        text = request.POST.get('text')
-        LearningOutcome.objects.create(text=text, created_by=request.user)
-        return redirect('outcomes')
+        text = (request.POST.get('text') or '').strip()
+        course_name = (request.POST.get('course_name') or '').strip()
+        creator = request.user if request.user.is_authenticated else None
+        if creator is None:
+            username = (request.POST.get('creator_username') or '').strip()
+            first_name = (request.POST.get('creator_first_name') or '').strip()
+            last_name = (request.POST.get('creator_last_name') or '').strip()
 
-    return render(request, 'faculty/create_outcome.html')
+            if username:
+                creator, created = User.objects.get_or_create(
+                    username=username,
+                    defaults={'first_name': first_name, 'last_name': last_name}
+                )
+                if created:
+                    creator.set_unusable_password()
+                    creator.save()
+
+        if not creator:
+            return HttpResponseForbidden("Login required to create program outcomes.")
+
+        if not text or not course_name:
+            return render(
+                request,
+                'faculty/create_outcome.html',
+                {
+                    'error': 'Outcome text and course are required.',
+                    'course_name': course_name,
+                }
+            )
+
+        ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=creator)
+        return redirect('program_outcomes')
+
+    return render(request, 'faculty/create_outcome.html', {'course_name': request.GET.get('course', '')})
 
 @faculty_head_required
 def give_grade(request, course_id):
