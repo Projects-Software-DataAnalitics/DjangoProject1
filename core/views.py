@@ -1,10 +1,13 @@
 import csv
 import io
+import json
+import os
 
 from django.contrib.auth.models import User
 from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from .models import Grade, Student, Course, ProgramOutcome
 
 
@@ -60,28 +63,37 @@ def upload_grades(request):
     final_source = normalized_fields['final']
 
     try:
+        def parse_score(raw_value, label):
+            value = (raw_value or '').strip()
+            if value == '':
+                raise ValueError(f'{label} must not be empty')
+            return float(value)
+
         for row in reader:
-            username = row[username_source].strip()
-            course_name = row[course_source].strip()
-            midterm = float(row[midterm_source])
-            assignment = float(row[assignment_source])
-            final = float(row[final_source])
+            username = (row[username_source] or '').strip()
+            course_name = (row[course_source] or '').strip()
+            midterm = parse_score(row[midterm_source], 'midterm')
+            assignment = parse_score(row[assignment_source], 'assignment')
+            final = parse_score(row[final_source], 'final')
 
             if not username or not course_name:
-                return JsonResponse({'error': 'Username and course name required'}, status=400)
+                return JsonResponse({'error': 'Username and course_name are required'}, status=400)
 
-            student, _ = Student.objects.get_or_create(
-                username=username,
-                defaults={'student_id': f'{username}_id'}
-            )
+            student = Student.objects.filter(username=username).first()
+            if not student:
+                return JsonResponse({'error': f'Student not found: {username}'}, status=400)
+
+            course = Course.objects.filter(name=course_name).first()
+            if not course:
+                return JsonResponse({'error': f'Course not found: {course_name}'}, status=400)
 
             Grade.objects.update_or_create(
                 student=student,
-                course_name=course_name,
+                course=course,
                 defaults={'midterm': midterm, 'assignment': assignment, 'final': final}
             )
-    except (KeyError, ValueError):
-        return JsonResponse({'error': 'Invalid data in CSV'}, status=400)
+    except (KeyError, ValueError) as exc:
+        return JsonResponse({'error': f'CSV hatası: {exc}'}, status=400)
 
     return JsonResponse({'status': 'ok'})
 
@@ -116,12 +128,41 @@ def faculty_head_dashboard(request):
 
 
 def student_grades(request, username):
-    student, _ = Student.objects.get_or_create(
-        username=username,
-        defaults={'student_id': f'{username}_id'}
+    student = get_object_or_404(Student, username=username)
+    grades_qs = Grade.objects.filter(student=student).select_related('course')
+
+    courses_with_grades = []
+    students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+    try:
+        with open(students_json_path, encoding='utf-8') as f:
+            students_data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        students_data = []
+
+    user_courses = []
+    for entry in students_data:
+        if entry.get('username') == username:
+            user_courses = entry.get('courses', []) or []
+            break
+
+    for course_name in user_courses:
+        grade_obj = next((g for g in grades_qs if g.course.name == course_name), None)
+        courses_with_grades.append({
+            'course_name': course_name,
+            'midterm': grade_obj.midterm if grade_obj else None,
+            'assignment': grade_obj.assignment if grade_obj else None,
+            'final': grade_obj.final if grade_obj else None,
+        })
+
+    return render(
+        request,
+        'student.html',
+        {
+            'student': student,
+            'grades': grades_qs,
+            'courses_with_grades': courses_with_grades,
+        }
     )
-    grades = Grade.objects.filter(student=student).select_related('course')
-    return render(request, 'student.html', {'student': student, 'grades': grades})
 
 @faculty_head_required
 def all_courses(request):
