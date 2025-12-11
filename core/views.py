@@ -116,8 +116,11 @@ def faculty_head_dashboard(request):
 
 
 def student_grades(request, username):
-    student = get_object_or_404(Student, username=username)
-    grades = Grade.objects.filter(student=student)
+    student, _ = Student.objects.get_or_create(
+        username=username,
+        defaults={'student_id': f'{username}_id'}
+    )
+    grades = Grade.objects.filter(student=student).select_related('course')
     return render(request, 'student.html', {'student': student, 'grades': grades})
 
 @faculty_head_required
