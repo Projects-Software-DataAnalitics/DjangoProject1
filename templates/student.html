@@ -24,7 +24,7 @@
     <h1>Welcome Student</h1>
     <div id="personal-info"></div>
     <div id="grades-section" style="display: none;">
-        {% if grades %}
+        {% if courses_with_grades %}
         <section class="grades-section">
             <h2>Your Grades</h2>
             <table class="grades-table">
@@ -38,14 +38,14 @@
                     </tr>
                 </thead>
                 <tbody>
-                {% for grade in grades %}
+                {% for item in courses_with_grades %}
                     <tr>
-                        <td>{{ grade.course.name }}</td>
-                        <td>{{ grade.midterm }}</td>
-                        <td>{{ grade.assignment }}</td>
-                        <td>{{ grade.final }}</td>
+                        <td>{{ item.course_name }}</td>
+                        <td>{% if item.midterm is not None %}{{ item.midterm }}{% else %}-{% endif %}</td>
+                        <td>{% if item.assignment is not None %}{{ item.assignment }}{% else %}-{% endif %}</td>
+                        <td>{% if item.final is not None %}{{ item.final }}{% else %}-{% endif %}</td>
                         <td>
-                            <button onclick="showDetails('{{ grade.course_name }}')">
+                            <button onclick="showDetails('{{ item.course_name }}')">
                                 Show Details
                             </button>
                         </td>
