@@ -24,39 +24,7 @@
     <h1>Welcome Student</h1>
     <div id="personal-info"></div>
     <div id="grades-section" style="display: none;">
-        {% if grades %}
-        <section class="grades-section">
-            <h2>Your Grades</h2>
-            <table class="grades-table">
-                <thead>
-                    <tr>
-                        <th>Course</th>
-                        <th>Midterm</th>
-                        <th>Assignment</th>
-                        <th>Final</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for grade in grades %}
-                    <tr>
-                        <td>{{ grade.course_name }}</td>
-                        <td>{{ grade.midterm }}</td>
-                        <td>{{ grade.assignment }}</td>
-                        <td>{{ grade.final }}</td>
-                        <td>
-                            <button onclick="showDetails('{{ grade.course_name }}')">
-                                Show Details
-                            </button>
-                        </td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </section>
-        {% elif grades is not None %}
-            <p class="no-grades-message">No grades available yet.</p>
-        {% endif %}
+        <!-- Grades will be loaded dynamically via JavaScript -->
     </div>
 </div>
 

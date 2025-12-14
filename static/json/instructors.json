@@ -12,6 +12,26 @@
         "username": "emily.smith",
         "password": "5678",
         "courses": ["Physics"]
+    },
+    {
+        "firstName": "William",
+        "lastName": "Turner",
+        "username": "william.turner",
+        "password": "0987",
+        "courses": ["Algorithms"]
+    },
+    {
+        "firstName": "austen",
+        "lastName": "Moon",
+        "username": "austen.moon",
+        "password": "2016",
+        "courses": ["web programming"]
+    },
+    {
+        "firstName": "Derek",
+        "lastName": "Lynch",
+        "username": "derek.lynch",
+        "password": "2015",
+        "courses": ["Computer Architecture"]
     }
 ]
-

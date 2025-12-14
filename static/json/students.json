@@ -6,7 +6,7 @@
     "password": "12345",
     "department": "Computer Engineering",
     "class": "2A",
-    "courses": ["Mathematics", "Physics", "Programming"]
+    "courses": ["Mathematics", "Physics", "Programming","Algorithms","Computer Architecture","web programming"]
   },
   {
     "firstName": "Bob Michael",
@@ -15,7 +15,17 @@
     "password": "abcde",
     "department": "Electrical Engineering",
     "class": "3B",
-    "courses": ["Circuits", "Electromagnetics", "Algorithms"]
+    "courses": ["Circuits", "Electromagnetics", "Algorithms","Computer Architecture","web programming"]
+  },
+  {
+    "firstName": "Jane ",
+    "lastName": "Rock",
+    "username": "jane.rock",
+    "password": "123",
+    "department": "Electrical Engineering",
+    "class": "3B",
+    "courses": ["Mathematics", "Physics", "Programming","Algorithms","Computer Architecture","web programming"]
   }
+
 ]
 

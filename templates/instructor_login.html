@@ -45,19 +45,48 @@
         instructorForm.addEventListener("submit", function(e) {
             e.preventDefault();
 
-            const username = document.getElementById("instructor-username").value;
-            const password = document.getElementById("instructor-password").value;
+            const username = document.getElementById("instructor-username").value.trim();
+            const password = document.getElementById("instructor-password").value.trim();
+            const errorElement = document.getElementById("instructor-login-error");
+
+            // Clear previous errors
+            errorElement.textContent = "";
+
+            if (!username || !password) {
+                errorElement.textContent = "Please enter both username and password!";
+                return;
+            }
 
             fetch("{% static 'json/instructors.json' %}")
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    const instructor = data.find(i => i.username === username && i.password === password);
+                    console.log('Loaded instructors:', data);
+                    console.log('Looking for:', username, password);
+                    
+                    const instructor = data.find(i => {
+                        const userMatch = i.username && i.username.trim() === username;
+                        const passMatch = i.password && String(i.password).trim() === password;
+                        console.log(`Checking: ${i.username} (${userMatch}) - ${i.password} (${passMatch})`);
+                        return userMatch && passMatch;
+                    });
+                    
                     if(instructor) {
+                        console.log('Login successful:', instructor);
                         sessionStorage.setItem('loggedInstructor', JSON.stringify(instructor));
                         window.location.href = "{% url 'instructor' %}";
                     } else {
-                        document.getElementById("instructor-login-error").textContent = "Invalid username or password!";
+                        errorElement.textContent = "Invalid username or password!";
+                        console.log('Login failed - no matching instructor found');
                     }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    errorElement.textContent = "Error loading instructor data. Please try again.";
                 });
         });
     </script>

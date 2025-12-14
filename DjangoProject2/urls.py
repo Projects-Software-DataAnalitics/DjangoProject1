@@ -29,5 +29,11 @@ urlpatterns = [
     path('instructor/', core_views.instructor_dashboard, name='instructor'),
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
     path('student/<str:username>/', core_views.student_grades, name='student_grades'),
+    path('api/student/<str:username>/grades/', core_views.get_student_grades_api, name='get_student_grades_api'),
+    path('api/course/<str:course_name>/students/', core_views.get_course_students, name='get_course_students'),
+    path('api/grades/manual/', core_views.save_manual_grades, name='save_manual_grades'),
+    path('api/instructor/<str:course_name>/grades/', core_views.get_instructor_grades, name='get_instructor_grades'),
+    path('api/students/courses/', core_views.get_all_students_courses, name='get_all_students_courses'),
+    path('api/courses/enrollment/', core_views.get_course_enrollment, name='get_course_enrollment'),
 
 ]
