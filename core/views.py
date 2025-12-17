@@ -119,6 +119,9 @@ def student_dashboard(request):
 
 
 def instructor_dashboard(request):
+    username = request.GET.get('username')
+    if username:
+        request.session['instructor_username'] = username
     return render(request, 'instructor.html')
 
 
@@ -195,6 +198,29 @@ def program_outcomes(request):
     )
 
 @faculty_head_required
+def course_program_outcomes(request, course_name):
+    outcomes_qs = ProgramOutcome.objects.filter(course_name=course_name).select_related('created_by').order_by('-created_at')
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_name = o.created_by.get_full_name() or o.created_by.username
+        outcomes_data.append(
+            {
+                'text': o.text,
+                'course': o.course_name or '',
+                'created_by': creator_name,
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+            }
+        )
+    return render(
+        request,
+        'faculty/course_program_outcomes.html',
+        {
+            'course_name': course_name,
+            'outcomes_data': outcomes_data,
+        }
+    )
+
+@faculty_head_required
 def create_program_outcome(request):
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
@@ -228,7 +254,7 @@ def create_program_outcome(request):
             )
 
         ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=creator)
-        return redirect('program_outcomes')
+        return redirect('course_program_outcomes', course_name=course_name)
 
     return render(request, 'faculty/create_outcome.html', {'course_name': request.GET.get('course', '')})
 
@@ -236,3 +262,249 @@ def create_program_outcome(request):
 def give_grade(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     return render(request, 'faculty/give_grade.html', {'course': course})
+
+
+def instructor_required(view_func):
+    """Decorator to check if user is an instructor (based on username in request)"""
+    def wrapper(request, *args, **kwargs):
+        username = request.GET.get('username') or request.POST.get('username')
+        if username:
+            request.session['instructor_username'] = username
+        else:
+            username = request.session.get('instructor_username')
+        
+        if not username:
+            from django.shortcuts import redirect
+            return redirect('instructor')
+        
+        user, created = User.objects.get_or_create(username=username)
+        if created:
+            user.set_unusable_password()
+            user.save()
+        
+        from .models import UserProfile
+        profile, profile_created = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={'role': 'instructor'}
+        )
+        if not profile_created and profile.role != 'instructor':
+            profile.role = 'instructor'
+            profile.save()
+        
+        request.instructor_user = user
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+@instructor_required
+def learning_outcomes(request):
+    """Show learning outcomes for instructor's own courses only"""
+    instructor_user = request.instructor_user
+    username = instructor_user.username
+    
+    instructor_courses = Course.objects.filter(instructor=instructor_user)
+    course_names_from_db = [course.name for course in instructor_courses]
+    
+    course_names_from_json = []
+    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+    try:
+        with open(instructors_json_path, encoding='utf-8') as f:
+            instructors_data = json.load(f)
+            for inst in instructors_data:
+                if inst.get('username') == username:
+                    course_names_from_json = inst.get('courses', []) or []
+                    break
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    course_names = list(set(course_names_from_db + course_names_from_json))
+    
+    outcomes_qs = ProgramOutcome.objects.filter(
+        course_name__in=course_names
+    ).select_related('created_by').order_by('-created_at')
+    
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_name = o.created_by.get_full_name() or o.created_by.username
+        outcomes_data.append(
+            {
+                'text': o.text,
+                'course': o.course_name or '',
+                'created_by': creator_name,
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+            }
+        )
+    
+    return render(
+        request,
+        'instructor/learning_outcomes.html',
+        {
+            'outcomes_data': outcomes_data,
+            'instructor_courses': course_names,
+        }
+    )
+
+
+@instructor_required
+def course_learning_outcomes(request, course_name):
+    """Show learning outcomes for a specific course (only if instructor owns it)"""
+    instructor_user = request.instructor_user
+    username = instructor_user.username
+    
+    if request.method == 'POST':
+        text = (request.POST.get('text') or '').strip()
+        if text:
+            ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=instructor_user)
+        from django.urls import reverse
+        redirect_url = reverse('course_learning_outcomes', args=[course_name])
+        redirect_url += f'?username={username}'
+        return redirect(redirect_url)
+    
+    outcomes_qs = ProgramOutcome.objects.filter(
+        course_name=course_name
+    ).select_related('created_by').order_by('-created_at')
+    
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_name = o.created_by.get_full_name() or o.created_by.username
+        outcomes_data.append(
+            {
+                'id': o.id,
+                'text': o.text,
+                'course': o.course_name or '',
+                'created_by': creator_name,
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+            }
+        )
+    
+    return render(
+        request,
+        'instructor/course_learning_outcomes.html',
+        {
+            'course_name': course_name,
+            'outcomes_data': outcomes_data,
+        }
+    )
+
+
+@instructor_required
+def update_learning_outcome(request, outcome_id):
+    """Update a learning outcome"""
+    instructor_user = request.instructor_user
+    username = instructor_user.username
+    
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, created_by=instructor_user)
+    
+    if request.method == 'POST':
+        text = (request.POST.get('text') or '').strip()
+        if text:
+            outcome.text = text
+            outcome.save()
+        from django.urls import reverse
+        redirect_url = reverse('course_learning_outcomes', args=[outcome.course_name])
+        redirect_url += f'?username={username}'
+        return redirect(redirect_url)
+    
+    return JsonResponse({'text': outcome.text})
+
+
+@instructor_required
+def delete_learning_outcome(request, outcome_id):
+    """Delete a learning outcome"""
+    instructor_user = request.instructor_user
+    username = instructor_user.username
+    
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, created_by=instructor_user)
+    course_name = outcome.course_name
+    outcome.delete()
+    
+    from django.urls import reverse
+    redirect_url = reverse('course_learning_outcomes', args=[course_name])
+    redirect_url += f'?username={username}'
+    return redirect(redirect_url)
+
+
+@instructor_required
+def create_learning_outcome(request):
+    """Create a learning outcome for instructor's own course"""
+    instructor_user = request.instructor_user
+    username = instructor_user.username
+    
+    instructor_courses_from_json = []
+    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+    try:
+        with open(instructors_json_path, encoding='utf-8') as f:
+            instructors_data = json.load(f)
+            for inst in instructors_data:
+                if inst.get('username') == username:
+                    instructor_courses_from_json = inst.get('courses', []) or []
+                    break
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    course_names_from_db = [c.name for c in Course.objects.filter(instructor=instructor_user)]
+    all_available_courses = list(set(course_names_from_db + instructor_courses_from_json))
+    
+    if request.method == 'POST':
+        text = (request.POST.get('text') or '').strip()
+        course_name = (request.POST.get('course_name') or '').strip()
+        
+        if not course_name or not text:
+            instructor_courses = Course.objects.filter(instructor=instructor_user)
+            course_names_from_db = [course.name for course in instructor_courses]
+            course_names_from_json = []
+            instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+            try:
+                with open(instructors_json_path, encoding='utf-8') as f:
+                    instructors_data = json.load(f)
+                    for inst in instructors_data:
+                        if inst.get('username') == username:
+                            course_names_from_json = inst.get('courses', []) or []
+                            break
+            except (OSError, json.JSONDecodeError):
+                pass
+            course_names = list(set(course_names_from_db + course_names_from_json))
+            
+            return render(
+                request,
+                'instructor/create_learning_outcome.html',
+                {
+                    'error': 'Outcome text and course are required.',
+                    'course_name': course_name,
+                    'instructor_courses': course_names,
+                }
+            )
+        
+        ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=instructor_user)
+        from django.urls import reverse
+        redirect_url = reverse('course_learning_outcomes', args=[course_name])
+        redirect_url += f'?username={username}'
+        return redirect(redirect_url)
+    
+    instructor_courses = Course.objects.filter(instructor=instructor_user)
+    course_names_from_db = [course.name for course in instructor_courses]
+    
+    course_names_from_json = []
+    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+    try:
+        with open(instructors_json_path, encoding='utf-8') as f:
+            instructors_data = json.load(f)
+            for inst in instructors_data:
+                if inst.get('username') == username:
+                    course_names_from_json = inst.get('courses', []) or []
+                    break
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    course_names = list(set(course_names_from_db + course_names_from_json))
+    
+    course_name_from_get = request.GET.get('course', '')
+    
+    return render(
+        request,
+        'instructor/create_learning_outcome.html',
+        {
+            'course_name': course_name_from_get,
+            'instructor_courses': course_names,
+        }
+    )

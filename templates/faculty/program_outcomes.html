@@ -4,13 +4,8 @@
 {% block title %}Program Outcomes{% endblock %}
 
 {% block content %}
-    <div style="display: flex; align-items: center; gap: 12px; margin-left: 0; margin-top: 10px;">
+    <div style="margin-left: 0; margin-top: 10px;">
         <h1 style="font-size: 32px; margin: 0;">Program Outcomes</h1>
-        <a id="create-btn"
-           href="#"
-           style="display: none; font-weight: 600; color: #0f172a; text-decoration: none; border: 1px solid #cbd5e1; padding: 6px 10px; border-radius: 8px; background: #f8fafc;">
-            Create a new program outcome
-        </a>
     </div>
 
     <p style="margin-left: 0; margin-bottom: 16px; color: #474a53; font-size: 20px; font-weight: 600;">
@@ -32,28 +27,15 @@
         </table>
     </div>
 
-    <div id="outcomes-panel" style="display: none; margin-top: 16px;">
-        <h3 id="selected-course-title" style="margin-bottom: 8px; color: #0f172a;">Program Outcomes</h3>
-        <div id="outcomes-content">
-            <p style="margin-top: 8px;">There is no program outcome yet.</p>
-        </div>
-    </div>
-
-    {{ outcomes_data|json_script:"outcomes-data" }}
-
     <script>
         (function () {
             const tbody = document.getElementById("courses-list-body");
-            const panel = document.getElementById("outcomes-panel");
-            const selectedTitle = document.getElementById("selected-course-title");
-            const outcomesContent = document.getElementById("outcomes-content");
-            const createBtn = document.getElementById("create-btn");
-
-            const outcomesData = JSON.parse(document.getElementById("outcomes-data").textContent);
+            const baseUrl = "{% url 'course_program_outcomes' course_name='COURSE_NAME_PLACEHOLDER' %}";
 
             function addRow(courseName, ownerName, roleLabel) {
                 const tr = document.createElement("tr");
                 tr.dataset.course = courseName;
+                tr.style.cursor = "pointer";
                 tr.innerHTML = `
                     <td>${courseName}</td>
                     <td>${ownerName}</td>
@@ -93,32 +75,12 @@
                         .finally(() => ensureFallbackRow());
                 });
 
-            function renderOutcomes(course) {
-                const filtered = outcomesData.filter(o => (o.course || "") === course);
-                if (!filtered.length) {
-                    outcomesContent.innerHTML = `<p style="margin-top: 8px;">There is no program outcome yet.</p>`;
-                    return;
-                }
-                const list = filtered.map(o => `
-                    <li style="margin-bottom: 6px;">
-                        <span>${o.text}</span>
-                        <span style="color: #6b7280; font-size: 13px; margin-left: 8px;">— ${o.created_by}</span>
-                    </li>
-                `).join("");
-                outcomesContent.innerHTML = `<ul style="list-style: disc; padding-left: 20px; margin-top: 8px;">${list}</ul>`;
-            }
-
             tbody.addEventListener("click", function (e) {
                 const row = e.target.closest("tr");
-                if (!row) return;
-                const course = row.dataset.course || row.cells[0]?.textContent || "Selected Course";
-                selectedTitle.textContent = `Program Outcomes for ${course}`;
-                renderOutcomes(course);
-                panel.style.display = "block";
-
-                // show create button for the selected course
-                createBtn.href = "{% url 'create_program_outcome' %}?course=" + encodeURIComponent(course);
-                createBtn.style.display = "inline-block";
+                if (!row || !row.dataset.course) return;
+                const course = row.dataset.course;
+                const url = baseUrl.replace('COURSE_NAME_PLACEHOLDER', encodeURIComponent(course));
+                window.location.href = url;
             });
         })();
     </script>

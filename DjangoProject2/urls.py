@@ -32,6 +32,12 @@ urlpatterns = [
     path('faculty-head/all-courses/', core_views.all_courses, name='all_courses'),
     path('faculty-head/my-courses/', core_views.my_courses, name='my_courses'),
     path('faculty-head/program-outcomes/', core_views.program_outcomes, name='program_outcomes'),
+    path('faculty-head/program-outcomes/<str:course_name>/', core_views.course_program_outcomes, name='course_program_outcomes'),
     path('faculty-head/program-outcomes/create/', core_views.create_program_outcome, name='create_program_outcome'),
     path('faculty-head/course/<int:course_id>/grade/', core_views.give_grade, name='give_grade'),
+    path('instructor/learning-outcomes/', core_views.learning_outcomes, name='learning_outcomes'),
+    path('instructor/learning-outcomes/<str:course_name>/', core_views.course_learning_outcomes, name='course_learning_outcomes'),
+    path('instructor/learning-outcomes/create/', core_views.create_learning_outcome, name='create_learning_outcome'),
+    path('instructor/learning-outcomes/update/<int:outcome_id>/', core_views.update_learning_outcome, name='update_learning_outcome'),
+    path('instructor/learning-outcomes/delete/<int:outcome_id>/', core_views.delete_learning_outcome, name='delete_learning_outcome'),
 ]

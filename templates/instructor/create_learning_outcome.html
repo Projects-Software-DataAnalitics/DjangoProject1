@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Learning Outcome</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script>
+        (function() {
+            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
+            if (!instructorData) {
+                window.location.href = "/";
+                return;
+            }
+            
+            if (!window.location.search.includes('username=')) {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('username', instructorData.username);
+                window.location.href = currentUrl.toString();
+                return;
+            }
+        })();
+    </script>
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li id="personal-info-btn">Personal Information</li>
+        <li id="my-courses-btn">My Courses</li>
+        <li id="grades-btn">Grades</li>
+        <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
+        <li id="announcements-btn">Announcements</li>
+        <li id="logout-btn">Logout</li>
+    </ul>
+</div>
+
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
+    <div style="max-width: 640px; margin: 0 auto;">
+        <h1 style="margin-bottom: 8px;">Create Learning Outcome</h1>
+        <p style="margin-top: 0; margin-bottom: 24px; color: #475569;">
+            Define a clear and measurable outcome for your course.
+        </p>
+
+        {% if error %}
+            <div class="error-text" style="margin-bottom: 12px;">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+            {% csrf_token %}
+            <input type="hidden" id="username" name="username">
+
+            <div style="display: grid; gap: 6px; margin-bottom: 12px;">
+                <label style="font-size: 14px; font-weight: 600; color: #0f172a;">Selected Course</label>
+                <select id="course-select" name="course_name" required style="padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px;">
+                    <option value="">-- Select a course --</option>
+                    {% for course in instructor_courses %}
+                        <option value="{{ course }}" {% if course == course_name %}selected{% endif %}>{{ course }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display: grid; gap: 12px;">
+                <label for="id_text" style="font-size: 14px; font-weight: 600; color: #0f172a;">
+                    Outcome Text
+                </label>
+                <textarea
+                    id="id_text"
+                    name="text"
+                    rows="4"
+                    required
+                    style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box;"
+                ></textarea>
+            </div>
+
+            <div style="margin-top: 20px; display: flex; gap: 12px;">
+                <button type="submit" class="primary-btn" style="max-width: 180px;">
+                    Save Outcome
+                </button>
+                <a href="{% url 'learning_outcomes' %}" id="cancel-link" class="back-btn" style="align-self: center;">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        (function () {
+            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+            if (!instructorData) {
+                window.location.href = "/";
+                return;
+            }
+
+            const usernameField = document.getElementById("username");
+            if (usernameField) {
+                usernameField.value = instructorData.username;
+            }
+
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    const courseSelect = document.getElementById('course-select');
+                    if (courseSelect && !courseSelect.value) {
+                        e.preventDefault();
+                        alert('Please select a course');
+                        return false;
+                    }
+                });
+            }
+
+            const cancelLink = document.getElementById("cancel-link");
+            if (cancelLink) {
+                const url = new URL(cancelLink.href);
+                url.searchParams.set('username', instructorData.username);
+                cancelLink.href = url.toString();
+            }
+
+            const learningOutcomesLink = document.getElementById("learning-outcomes-link");
+            if (learningOutcomesLink) {
+                const url = new URL(learningOutcomesLink.href);
+                url.searchParams.set('username', instructorData.username);
+                learningOutcomesLink.href = url.toString();
+            }
+        })();
+    </script>
+
+<script src="{% static 'js/instructor.js' %}"></script>
+</div>
+</body>
+</html>
+

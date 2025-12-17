@@ -18,6 +18,14 @@ if (!instructorData) {
     window.location.href = "/";
 }
 
+if (instructorData && instructorData.username) {
+    const currentUrl = new URL(window.location.href);
+    if (!currentUrl.searchParams.has('username')) {
+        currentUrl.searchParams.set('username', instructorData.username);
+        window.location.href = currentUrl.toString();
+    }
+}
+
 function getCsrfToken() {
     const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
     return cookieMatch ? cookieMatch[1] : null;
@@ -183,4 +191,18 @@ function logout() {
 
 document.getElementById("personal-info").innerHTML = "";
 
+const learningOutcomesLink = document.getElementById("learning-outcomes-link");
+if (learningOutcomesLink && instructorData) {
+    const url = new URL(learningOutcomesLink.href, window.location.origin);
+    url.searchParams.set('username', instructorData.username);
+    learningOutcomesLink.href = url.toString();
+    
+    learningOutcomesLink.addEventListener('click', function(e) {
+        const linkUrl = new URL(this.href);
+        if (!linkUrl.searchParams.has('username')) {
+            linkUrl.searchParams.set('username', instructorData.username);
+            this.href = linkUrl.toString();
+        }
+    });
+}
 

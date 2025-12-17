@@ -1,0 +1,90 @@
+{% extends "faculty/base.html" %}
+{% load static %}
+
+{% block title %}Program Outcomes - {{ course_name }}{% endblock %}
+
+{% block content %}
+    <div style="margin-left: 0; margin-top: 10px;">
+        <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ course_name }}</h1>
+        <p id="instructor-info" style="color: #6b7280; font-size: 16px; margin: 0 0 24px 0;">
+            Loading instructor information...
+        </p>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+        <a href="{% url 'create_program_outcome' %}?course={{ course_name|urlencode }}" class="role-btn" style="display: inline-block;">
+            Create Program Outcome
+        </a>
+    </div>
+
+    <div style="margin-top: 32px;">
+        <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Program Outcomes</h2>
+        {% if outcomes_data %}
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                {% for outcome in outcomes_data %}
+                    <li style="background: #f8fafc; padding: 16px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <p style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500;">
+                            {{ outcome.text }}
+                        </p>
+                        <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                            Created by <strong>{{ outcome.created_by }}</strong> on {{ outcome.created_at }}
+                        </p>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div style="background: #f8fafc; padding: 32px; border-radius: 8px; text-align: center; border: 1px dashed #cbd5e1;">
+                <p style="margin: 0; font-size: 16px; color: #6b7280;">
+                    No program outcomes have been added yet for this course.
+                </p>
+                <p style="margin: 12px 0 0 0; font-size: 14px; color: #9ca3af;">
+                    Click "Create Program Outcome" above to add the first one.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        (function () {
+            const courseName = "{{ course_name|escapejs }}";
+            const instructorInfo = document.getElementById("instructor-info");
+            
+            function findInstructor(courseName) {
+                return Promise.all([
+                    fetch("{% static 'json/instructors.json' %}").then(r => r.json()).catch(() => []),
+                    fetch("{% static 'json/faculty_heads.json' %}").then(r => r.json()).catch(() => [])
+                ]).then(([instructors, facultyHeads]) => {
+                    // Check instructors
+                    for (const inst of instructors) {
+                        if ((inst.courses || []).includes(courseName)) {
+                            return {
+                                name: `${inst.firstName} ${inst.lastName}`,
+                                role: "Instructor"
+                            };
+                        }
+                    }
+                    // Check faculty heads
+                    for (const head of facultyHeads) {
+                        if ((head.courses || []).includes(courseName)) {
+                            return {
+                                name: `${head.firstName} ${head.lastName}`,
+                                role: "Faculty Head"
+                            };
+                        }
+                    }
+                    return null;
+                });
+            }
+
+            findInstructor(courseName).then(info => {
+                if (info) {
+                    instructorInfo.textContent = `Taught by ${info.name} (${info.role})`;
+                } else {
+                    instructorInfo.textContent = "Instructor information not available";
+                    instructorInfo.style.color = "#9ca3af";
+                }
+            });
+        })();
+    </script>
+{% endblock %}
+

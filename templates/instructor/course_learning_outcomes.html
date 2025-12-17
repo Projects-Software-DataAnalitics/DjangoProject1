@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Learning Outcomes - {{ course_name }}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script>
+        (function() {
+            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
+            if (!instructorData) {
+                window.location.href = "/";
+                return;
+            }
+            
+            if (!window.location.search.includes('username=')) {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('username', instructorData.username);
+                window.location.href = currentUrl.toString();
+                return;
+            }
+        })();
+    </script>
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li id="personal-info-btn">Personal Information</li>
+        <li id="my-courses-btn">My Courses</li>
+        <li id="grades-btn">Grades</li>
+        <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
+        <li id="announcements-btn">Announcements</li>
+        <li id="logout-btn">Logout</li>
+    </ul>
+</div>
+
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
+    <div style="margin-left: 0; margin-top: 10px;">
+        <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ course_name }}</h1>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+        <button id="create-btn" class="role-btn" style="display: inline-block; cursor: pointer;">
+            Create Learning Outcome
+        </button>
+    </div>
+
+    <div id="create-form-container" style="display: none; margin-bottom: 24px; background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+        <form id="create-outcome-form" method="post">
+            {% csrf_token %}
+            <input type="hidden" id="username" name="username">
+            <input type="hidden" name="course_name" value="{{ course_name }}">
+            <div style="margin-bottom: 16px;">
+                <textarea
+                    id="outcome-text"
+                    name="text"
+                    rows="4"
+                    placeholder="Enter learning outcome..."
+                    required
+                    style="width: 100%; padding: 16px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 16px;"
+                ></textarea>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button type="submit" class="primary-btn" style="padding: 12px 24px; font-size: 16px;">
+                    Save
+                </button>
+                <button type="button" id="cancel-form-btn" style="padding: 12px 24px; font-size: 16px; background: #6b7280; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div style="margin-top: 32px;">
+        <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes</h2>
+        {% if outcomes_data %}
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                {% for outcome in outcomes_data %}
+                    <li id="outcome-{{ forloop.counter0 }}" style="background: #f8fafc; padding: 16px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #3b82f6; display: flex; justify-content: space-between; align-items: start;">
+                        <div style="flex: 1;">
+                            <p id="outcome-text-{{ forloop.counter0 }}" style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500;">
+                                {{ outcome.text }}
+                            </p>
+                            <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                                Created by <strong>{{ outcome.created_by }}</strong> on {{ outcome.created_at }}
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-left: 16px;">
+                            <button class="edit-outcome-btn" data-outcome-id="{{ outcome.id }}" data-outcome-text="{{ outcome.text|escapejs }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #3b82f6;" title="Edit">✏️</button>
+                            <button class="delete-outcome-btn" data-outcome-id="{{ outcome.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444;" title="Delete">🗑️</button>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div style="background: #f8fafc; padding: 32px; border-radius: 8px; text-align: center; border: 1px dashed #cbd5e1;">
+                <p style="margin: 0; font-size: 16px; color: #6b7280;">
+                    No learning outcomes have been added yet for this course.
+                </p>
+                <p style="margin: 12px 0 0 0; font-size: 14px; color: #9ca3af;">
+                    Click "Create Learning Outcome" above to add the first one.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        (function () {
+            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+            if (!instructorData) {
+                window.location.href = "/";
+                return;
+            }
+
+            const usernameField = document.getElementById("username");
+            if (usernameField) {
+                usernameField.value = instructorData.username;
+            }
+
+            const createBtn = document.getElementById("create-btn");
+            const createFormContainer = document.getElementById("create-form-container");
+            const cancelFormBtn = document.getElementById("cancel-form-btn");
+            const createForm = document.getElementById("create-outcome-form");
+
+            if (createBtn && createFormContainer) {
+                createBtn.addEventListener('click', function() {
+                    createFormContainer.style.display = createFormContainer.style.display === 'none' ? 'block' : 'none';
+                    if (createFormContainer.style.display === 'block') {
+                        document.getElementById('outcome-text').focus();
+                    }
+                });
+            }
+
+            if (cancelFormBtn && createFormContainer) {
+                cancelFormBtn.addEventListener('click', function() {
+                    createFormContainer.style.display = 'none';
+                    createForm.reset();
+                });
+            }
+
+            if (createForm) {
+                createForm.addEventListener('submit', function(e) {
+                    const formUrl = new URL(createForm.action || window.location.href);
+                    formUrl.searchParams.set('username', instructorData.username);
+                    createForm.action = formUrl.toString();
+                });
+            }
+
+            const updateUrlBase = "{% url 'update_learning_outcome' outcome_id=0 %}";
+            const deleteUrlBase = "{% url 'delete_learning_outcome' outcome_id=0 %}";
+
+            document.querySelectorAll('.edit-outcome-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const outcomeId = this.dataset.outcomeId;
+                    const outcomeText = this.dataset.outcomeText;
+                    const newText = prompt('Edit outcome:', outcomeText);
+                    if (newText && newText.trim() && newText !== outcomeText) {
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = updateUrlBase.replace('0', outcomeId) + `?username=${instructorData.username}`;
+                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                        form.innerHTML = `
+                            <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                            <input type="hidden" name="text" value="${newText.trim()}">
+                            <input type="hidden" name="username" value="${instructorData.username}">
+                        `;
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                });
+            });
+
+            document.querySelectorAll('.delete-outcome-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to delete this learning outcome?')) {
+                        const outcomeId = this.dataset.outcomeId;
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = deleteUrlBase.replace('0', outcomeId) + `?username=${instructorData.username}`;
+                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                        form.innerHTML = `
+                            <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                            <input type="hidden" name="username" value="${instructorData.username}">
+                        `;
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                });
+            });
+
+            const learningOutcomesLink = document.getElementById("learning-outcomes-link");
+            if (learningOutcomesLink) {
+                const url = new URL(learningOutcomesLink.href);
+                url.searchParams.set('username', instructorData.username);
+                learningOutcomesLink.href = url.toString();
+            }
+        })();
+    </script>
+
+<script src="{% static 'js/instructor.js' %}"></script>
+</div>
+</body>
+</html>
+
