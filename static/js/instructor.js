@@ -23,10 +23,18 @@ function getCsrfToken() {
     return cookieMatch ? cookieMatch[1] : null;
 }
 
-document.getElementById("personal-info-btn").addEventListener("click", showPersonalInfo);
-document.getElementById("my-courses-btn").addEventListener("click", showMyCourses);
-document.getElementById("grades-btn").addEventListener("click", showGrades);
-document.getElementById("announcements-btn").addEventListener("click", showAnnouncements);
+document.getElementById("personal-info-btn").addEventListener("click", function() {
+    window.location.href = "/instructor/personal-info/";
+});
+document.getElementById("my-courses-btn").addEventListener("click", function() {
+    window.location.href = "/instructor/my-courses/";
+});
+document.getElementById("grades-btn").addEventListener("click", function() {
+    window.location.href = "/instructor/grades/";
+});
+document.getElementById("announcements-btn").addEventListener("click", function() {
+    window.location.href = "/instructor/announcements/";
+});
 document.getElementById("logout-btn").addEventListener("click", logout);
 
 function showPersonalInfo() {
@@ -181,6 +189,18 @@ function logout() {
     window.location.href = "/";
 }
 
-document.getElementById("personal-info").innerHTML = "";
+// Load content based on current page section
+const currentPath = window.location.pathname;
+if (currentPath.includes('/personal-info/')) {
+    showPersonalInfo();
+} else if (currentPath.includes('/my-courses/')) {
+    showMyCourses();
+} else if (currentPath.includes('/grades/')) {
+    showGrades();
+} else if (currentPath.includes('/announcements/')) {
+    showAnnouncements();
+} else {
+    document.getElementById("personal-info").innerHTML = "";
+}
 
 

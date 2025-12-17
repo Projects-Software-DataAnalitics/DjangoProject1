@@ -48,16 +48,28 @@
             const username = document.getElementById("faculty-head-username").value;
             const password = document.getElementById("faculty-head-password").value;
 
-            fetch("{% static 'json/faculty_heads.json' %}")
+            fetch("{% static 'json/credentials.json' %}")
                 .then(response => response.json())
-                .then(data => {
-                    const facultyHead = data.find(f => f.username === username && f.password === password);
-                    if(facultyHead) {
-                        sessionStorage.setItem('loggedFacultyHead', JSON.stringify(facultyHead));
-                        window.location.href = "{% url 'faculty-head' %}";
+                .then(credentials => {
+                    const cred = credentials.find(c => c.username === username && c.password === password && c.role === "faculty_head");
+                    if(cred) {
+                        fetch("{% static 'json/faculty_heads.json' %}")
+                            .then(response => response.json())
+                            .then(facultyHeads => {
+                                const facultyHead = facultyHeads.find(f => f.username === username);
+                                if(facultyHead) {
+                                    sessionStorage.setItem('loggedFacultyHead', JSON.stringify(facultyHead));
+                                    window.location.href = "{% url 'faculty-head' %}";
+                                } else {
+                                    document.getElementById("faculty-head-login-error").textContent = "User data not found!";
+                                }
+                            });
                     } else {
                         document.getElementById("faculty-head-login-error").textContent = "Invalid username or password!";
                     }
+                })
+                .catch(() => {
+                    document.getElementById("faculty-head-login-error").textContent = "Login error. Please try again.";
                 });
         });
     </script>

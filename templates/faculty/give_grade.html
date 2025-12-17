@@ -1,0 +1,21 @@
+{% extends "faculty/base.html" %}
+
+{% block title %}Give Grade{% endblock %}
+
+{% block content %}
+    <h1>Give Grade</h1>
+
+    {% if course %}
+        <h2>{{ course.code }} - {{ course.name }}</h2>
+    {% endif %}
+
+    <p>
+        This page is intended for assigning grades to students for this course.
+        Currently, grades are uploaded via CSV using the <code>/grades/upload/</code> endpoint.
+    </p>
+
+    <p style="margin-top: 20px;">
+        <a href="{% url 'my_courses' %}">Back to My Courses</a> |
+        <a href="{% url 'faculty-head' %}">Faculty Head Dashboard</a>
+    </p>
+{% endblock %}

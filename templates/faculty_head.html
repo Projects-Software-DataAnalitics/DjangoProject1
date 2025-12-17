@@ -1,30 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Faculty Head Dashboard</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-</head>
-<body>
-<!-- Sidebar -->
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li id="personal-info-btn">Personal Information</li>
-        <li id="my-courses-btn">My Courses</li>
-        <li id="announcements-btn">Announcements</li>
-        <li id="logout-btn">Logout</li>
-    </ul>
-    </div>
+{% extends "faculty/base.html" %}
 
-<!-- Main content -->
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    <h1>Welcome Faculty Head</h1>
-    <div id="personal-info"></div>
-    </div>
+{% block title %}Faculty Head Dashboard{% endblock %}
 
-<script src="{% static 'js/faculty_head.js' %}"></script>
-</body>
-</html>
+{% block content %}
+    <h1 id="welcome-title">Welcome Faculty Head</h1>
+
+    <section id="profile" style="margin-top: 16px; margin-bottom: 24px; display: none;">
+        <div id="personal-info"></div>
+    </section>
+
+    <section id="grades-section" style="margin-top: 32px; display: none;">
+        <h2 style="text-align: left; margin-bottom: 16px;">Grades</h2>
+        <div id="grades-inner"></div>
+    </section>
+
+    <script>
+        const facultyHeadRaw = sessionStorage.getItem("loggedFacultyHead");
+        if (!facultyHeadRaw) {
+            window.location.href = "/";
+        } else {
+            const facultyHead = JSON.parse(facultyHeadRaw);
+
+            const infoDiv = document.getElementById("personal-info");
+            infoDiv.innerHTML = `
+                <h2>Personal Information</h2>
+                <p><strong>Name:</strong> ${facultyHead.firstName} ${facultyHead.lastName}</p>
+                <p><strong>Username:</strong> ${facultyHead.username}</p>
+                <p><strong>Department:</strong> ${facultyHead.department || "N/A"}</p>
+                <p><strong>Faculty:</strong> ${facultyHead.faculty || "N/A"}</p>
+                <p><strong>Courses:</strong> ${(facultyHead.courses || []).join(", ") || "N/A"}</p>
+            `;
+
+            const welcomeTitle = document.getElementById("welcome-title");
+            const profileSection = document.getElementById("profile");
+            const gradesSection = document.getElementById("grades-section");
+
+            function hideWelcome() {
+                if (welcomeTitle) {
+                    welcomeTitle.style.display = "none";
+                }
+            }
+
+            if (window.location.hash === "#grades-section") {
+                hideWelcome();
+                profileSection.style.display = "none";
+                gradesSection.style.display = "block";
+            } else if (window.location.hash === "#profile") {
+                hideWelcome();
+                profileSection.style.display = "block";
+                gradesSection.style.display = "none";
+            }
+
+            window.addEventListener("hashchange", function() {
+                hideWelcome();
+                if (window.location.hash === "#grades-section") {
+                    profileSection.style.display = "none";
+                    gradesSection.style.display = "block";
+                } else if (window.location.hash === "#profile") {
+                    profileSection.style.display = "block";
+                    gradesSection.style.display = "none";
+                }
+            });
+        }
+    </script>
+{% endblock %}
 

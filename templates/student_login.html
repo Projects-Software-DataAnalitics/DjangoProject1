@@ -48,17 +48,29 @@
             const username = document.getElementById("student-username").value;
             const password = document.getElementById("student-password").value;
 
-            fetch("{% static 'json/students.json' %}")
+            fetch("{% static 'json/credentials.json' %}")
                 .then(response => response.json())
-                .then(data => {
-                    const student = data.find(s => s.username === username && s.password === password);
-                    if(student) {
-                        sessionStorage.setItem('loggedStudent', JSON.stringify(student));
-                        const encodedUsername = encodeURIComponent(student.username);
-                        window.location.href = `/student/${encodedUsername}/`;
+                .then(credentials => {
+                    const cred = credentials.find(c => c.username === username && c.password === password && c.role === "student");
+                    if(cred) {
+                        fetch("{% static 'json/students.json' %}")
+                            .then(response => response.json())
+                            .then(students => {
+                                const student = students.find(s => s.username === username);
+                                if(student) {
+                                    sessionStorage.setItem('loggedStudent', JSON.stringify(student));
+                                    const encodedUsername = encodeURIComponent(student.username);
+                                    window.location.href = `/student/${encodedUsername}/`;
+                                } else {
+                                    document.getElementById("student-login-error").textContent = "User data not found!";
+                                }
+                            });
                     } else {
                         document.getElementById("student-login-error").textContent = "Invalid username or password!";
                     }
+                })
+                .catch(() => {
+                    document.getElementById("student-login-error").textContent = "Login error. Please try again.";
                 });
         });
     </script>

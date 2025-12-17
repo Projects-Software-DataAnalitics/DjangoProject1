@@ -27,7 +27,17 @@ urlpatterns = [
     path('faculty-head-login/', core_views.faculty_head_login, name='faculty-head-login'),
     path('student/', core_views.student_dashboard, name='student'),
     path('instructor/', core_views.instructor_dashboard, name='instructor'),
+    path('instructor/personal-info/', core_views.instructor_personal_info, name='instructor-personal-info'),
+    path('instructor/my-courses/', core_views.instructor_my_courses, name='instructor-my-courses'),
+    path('instructor/grades/', core_views.instructor_grades, name='instructor-grades'),
+    path('instructor/announcements/', core_views.instructor_announcements, name='instructor-announcements'),
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
+    path('all-courses/', core_views.all_courses, name='all_courses'),
+    path('my-courses/', core_views.my_courses, name='my_courses'),
+    path('outcomes/', core_views.program_outcomes, name='outcomes'),
+    path('create-outcome/', core_views.create_program_outcome, name='create_outcome'),
     path('student/<str:username>/', core_views.student_grades, name='student_grades'),
+    path('faculty-head/program-outcomes/create/', core_views.create_program_outcome, name='create_program_outcome'),
+    path('faculty-head/program-outcomes/', core_views.program_outcomes, name='program_outcomes'),
 
 ]
