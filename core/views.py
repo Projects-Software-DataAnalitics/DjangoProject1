@@ -119,10 +119,18 @@ def student_dashboard(request):
 
 
 def instructor_dashboard(request):
-    username = request.GET.get('username')
-    if username:
-        request.session['instructor_username'] = username
     return render(request, 'instructor.html')
+
+
+@csrf_exempt
+def set_instructor_session(request):
+    """Set instructor username in session"""
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        if username:
+            request.session['instructor_username'] = username
+            return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'error'}, status=400)
 
 
 @faculty_head_required
@@ -265,13 +273,9 @@ def give_grade(request, course_id):
 
 
 def instructor_required(view_func):
-    """Decorator to check if user is an instructor (based on username in request)"""
+    """Decorator to check if user is an instructor (based on session)"""
     def wrapper(request, *args, **kwargs):
-        username = request.GET.get('username') or request.POST.get('username')
-        if username:
-            request.session['instructor_username'] = username
-        else:
-            username = request.session.get('instructor_username')
+        username = request.session.get('instructor_username')
         
         if not username:
             from django.shortcuts import redirect
@@ -355,10 +359,7 @@ def course_learning_outcomes(request, course_name):
         text = (request.POST.get('text') or '').strip()
         if text:
             ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=instructor_user)
-        from django.urls import reverse
-        redirect_url = reverse('course_learning_outcomes', args=[course_name])
-        redirect_url += f'?username={username}'
-        return redirect(redirect_url)
+        return redirect('course_learning_outcomes', course_name=course_name)
     
     outcomes_qs = ProgramOutcome.objects.filter(
         course_name=course_name
@@ -400,10 +401,7 @@ def update_learning_outcome(request, outcome_id):
         if text:
             outcome.text = text
             outcome.save()
-        from django.urls import reverse
-        redirect_url = reverse('course_learning_outcomes', args=[outcome.course_name])
-        redirect_url += f'?username={username}'
-        return redirect(redirect_url)
+        return redirect('course_learning_outcomes', course_name=outcome.course_name)
     
     return JsonResponse({'text': outcome.text})
 
@@ -418,10 +416,7 @@ def delete_learning_outcome(request, outcome_id):
     course_name = outcome.course_name
     outcome.delete()
     
-    from django.urls import reverse
-    redirect_url = reverse('course_learning_outcomes', args=[course_name])
-    redirect_url += f'?username={username}'
-    return redirect(redirect_url)
+    return redirect('course_learning_outcomes', course_name=course_name)
 
 
 @instructor_required

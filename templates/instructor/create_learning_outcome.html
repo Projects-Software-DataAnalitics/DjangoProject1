@@ -13,12 +13,6 @@
                 return;
             }
             
-            if (!window.location.search.includes('username=')) {
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('username', instructorData.username);
-                window.location.href = currentUrl.toString();
-                return;
-            }
         })();
     </script>
 </head>
@@ -108,19 +102,6 @@
                 });
             }
 
-            const cancelLink = document.getElementById("cancel-link");
-            if (cancelLink) {
-                const url = new URL(cancelLink.href);
-                url.searchParams.set('username', instructorData.username);
-                cancelLink.href = url.toString();
-            }
-
-            const learningOutcomesLink = document.getElementById("learning-outcomes-link");
-            if (learningOutcomesLink) {
-                const url = new URL(learningOutcomesLink.href);
-                url.searchParams.set('username', instructorData.username);
-                learningOutcomesLink.href = url.toString();
-            }
         })();
     </script>
 

@@ -54,9 +54,7 @@
                     const instructor = data.find(i => i.username === username && i.password === password);
                     if(instructor) {
                         sessionStorage.setItem('loggedInstructor', JSON.stringify(instructor));
-                        const instructorUrl = new URL("{% url 'instructor' %}", window.location.origin);
-                        instructorUrl.searchParams.set('username', instructor.username);
-                        window.location.href = instructorUrl.toString();
+                        window.location.href = "{% url 'instructor' %}";
                     } else {
                         document.getElementById("instructor-login-error").textContent = "Invalid username or password!";
                     }

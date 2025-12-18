@@ -16,15 +16,21 @@ function toggleSidebar() {
 const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
 if (!instructorData) {
     window.location.href = "/";
+} else {
+    function getCsrfToken() {
+        const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
+        return cookieMatch ? cookieMatch[1] : null;
+    }
+    fetch('/instructor/set-session/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCsrfToken() || ''
+        },
+        body: `username=${encodeURIComponent(instructorData.username)}`
+    }).catch(() => {});
 }
 
-if (instructorData && instructorData.username) {
-    const currentUrl = new URL(window.location.href);
-    if (!currentUrl.searchParams.has('username')) {
-        currentUrl.searchParams.set('username', instructorData.username);
-        window.location.href = currentUrl.toString();
-    }
-}
 
 function getCsrfToken() {
     const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
@@ -191,18 +197,4 @@ function logout() {
 
 document.getElementById("personal-info").innerHTML = "";
 
-const learningOutcomesLink = document.getElementById("learning-outcomes-link");
-if (learningOutcomesLink && instructorData) {
-    const url = new URL(learningOutcomesLink.href, window.location.origin);
-    url.searchParams.set('username', instructorData.username);
-    learningOutcomesLink.href = url.toString();
-    
-    learningOutcomesLink.addEventListener('click', function(e) {
-        const linkUrl = new URL(this.href);
-        if (!linkUrl.searchParams.has('username')) {
-            linkUrl.searchParams.set('username', instructorData.username);
-            this.href = linkUrl.toString();
-        }
-    });
-}
 

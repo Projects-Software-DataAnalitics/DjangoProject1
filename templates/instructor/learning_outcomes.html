@@ -13,12 +13,6 @@
                 return;
             }
             
-            if (!window.location.search.includes('username=')) {
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('username', instructorData.username);
-                window.location.href = currentUrl.toString();
-                return;
-            }
         })();
     </script>
 </head>
@@ -68,8 +62,6 @@
                 return;
             }
 
-            const usernameParam = `?username=${encodeURIComponent(instructorData.username)}`;
-
             function addRow(courseName) {
                 const tr = document.createElement("tr");
                 tr.dataset.course = courseName;
@@ -92,18 +84,12 @@
 
             ensureFallbackRow();
 
-            const learningOutcomesLink = document.getElementById("learning-outcomes-link");
-            if (learningOutcomesLink) {
-                const url = new URL(learningOutcomesLink.href);
-                url.searchParams.set('username', instructorData.username);
-                learningOutcomesLink.href = url.toString();
-            }
 
             tbody.addEventListener("click", function (e) {
                 const row = e.target.closest("tr");
                 if (!row || !row.dataset.course) return;
                 const course = row.dataset.course;
-                const url = baseUrl.replace('COURSE_NAME_PLACEHOLDER', encodeURIComponent(course)) + usernameParam;
+                const url = baseUrl.replace('COURSE_NAME_PLACEHOLDER', encodeURIComponent(course));
                 window.location.href = url;
             });
         })();

@@ -12,13 +12,6 @@
                 window.location.href = "/";
                 return;
             }
-            
-            if (!window.location.search.includes('username=')) {
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('username', instructorData.username);
-                window.location.href = currentUrl.toString();
-                return;
-            }
         })();
     </script>
 </head>
@@ -139,13 +132,6 @@
                 });
             }
 
-            if (createForm) {
-                createForm.addEventListener('submit', function(e) {
-                    const formUrl = new URL(createForm.action || window.location.href);
-                    formUrl.searchParams.set('username', instructorData.username);
-                    createForm.action = formUrl.toString();
-                });
-            }
 
             const updateUrlBase = "{% url 'update_learning_outcome' outcome_id=0 %}";
             const deleteUrlBase = "{% url 'delete_learning_outcome' outcome_id=0 %}";
@@ -231,12 +217,11 @@
 
                         const form = document.createElement('form');
                         form.method = 'POST';
-                        form.action = updateUrlBase.replace('0', outcomeId) + `?username=${instructorData.username}`;
+                        form.action = updateUrlBase.replace('0', outcomeId);
                         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
                         form.innerHTML = `
                             <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
                             <input type="hidden" name="text" value="${newText}">
-                            <input type="hidden" name="username" value="${instructorData.username}">
                         `;
                         document.body.appendChild(form);
                         form.submit();
@@ -292,11 +277,10 @@
 
                 const form = document.createElement('form');
                 form.method = 'POST';
-                form.action = deleteUrlBase.replace('0', outcomeId) + `?username=${instructorData.username}`;
+                form.action = deleteUrlBase.replace('0', outcomeId);
                 const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
                 form.innerHTML = `
                     <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
-                    <input type="hidden" name="username" value="${instructorData.username}">
                 `;
                 document.body.appendChild(form);
                 form.submit();
@@ -309,12 +293,6 @@
                 });
             });
 
-            const learningOutcomesLink = document.getElementById("learning-outcomes-link");
-            if (learningOutcomesLink) {
-                const url = new URL(learningOutcomesLink.href);
-                url.searchParams.set('username', instructorData.username);
-                learningOutcomesLink.href = url.toString();
-            }
         })();
     </script>
 

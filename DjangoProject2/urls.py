@@ -27,6 +27,7 @@ urlpatterns = [
     path('faculty-head-login/', core_views.faculty_head_login, name='faculty-head-login'),
     path('student/', core_views.student_dashboard, name='student'),
     path('instructor/', core_views.instructor_dashboard, name='instructor'),
+    path('instructor/set-session/', core_views.set_instructor_session, name='set_instructor_session'),
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
     path('student/<str:username>/', core_views.student_grades, name='student_grades'),
     path('faculty-head/all-courses/', core_views.all_courses, name='all_courses'),
