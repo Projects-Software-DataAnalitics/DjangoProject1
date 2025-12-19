@@ -8,13 +8,12 @@
     <ul id="my-courses-list"></ul>
 
     <script>
-        const raw = sessionStorage.getItem("loggedFacultyHead");
+        const facultyHead = {{ faculty_head|safe }};
         const list = document.getElementById("my-courses-list");
 
-        if (!raw) {
+        if (!facultyHead || !facultyHead.username) {
             list.innerHTML = "<li>You are not logged in as a faculty head.</li>";
         } else {
-            const facultyHead = JSON.parse(raw);
             const courses = facultyHead.courses || [];
 
             if (courses.length === 0) {

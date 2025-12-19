@@ -13,10 +13,26 @@ function toggleSidebar() {
     }
 }
 
-const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+let instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
 if (!instructorData) {
     window.location.href = "/";
 } else {
+    const jsonPathElement = document.getElementById('instructor-json-path');
+    const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
+    
+    fetch(jsonPath + '?t=' + Date.now())
+        .then(response => response.json())
+        .then(data => {
+            const currentInstructor = data.find(i => i.username === instructorData.username);
+            if (currentInstructor) {
+                sessionStorage.setItem('loggedInstructor', JSON.stringify(currentInstructor));
+                window.instructorData = currentInstructor;
+                instructorData = currentInstructor;
+            }
+        })
+        .catch(() => {
+        });
+    
     function getCsrfToken() {
         const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
         return cookieMatch ? cookieMatch[1] : null;
@@ -37,67 +53,229 @@ function getCsrfToken() {
     return cookieMatch ? cookieMatch[1] : null;
 }
 
-document.getElementById("personal-info-btn").addEventListener("click", showPersonalInfo);
-document.getElementById("my-courses-btn").addEventListener("click", showMyCourses);
-document.getElementById("grades-btn").addEventListener("click", showGrades);
-document.getElementById("announcements-btn").addEventListener("click", showAnnouncements);
 document.getElementById("logout-btn").addEventListener("click", logout);
+
+const pageType = document.body.dataset.page || '';
+if (pageType === 'profile') {
+    showPersonalInfo();
+} else if (pageType === 'my_courses') {
+    showMyCourses();
+} else if (pageType === 'grades') {
+    showGrades();
+} else if (pageType === 'announcements') {
+    showAnnouncements();
+}
 
 function showPersonalInfo() {
     const infoDiv = document.getElementById("personal-info");
-    infoDiv.innerHTML = `
-        <h2>Personal Information</h2>
-        <p><strong>Name:</strong> ${instructorData.firstName} ${instructorData.lastName}</p>
-        <p><strong>Username:</strong> ${instructorData.username}</p>
-        <p><strong>Course:</strong> ${instructorData.courses.join(", ")}</p>
-    `;
+    const jsonPathElement = document.getElementById('instructor-json-path');
+    const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
+    
+    const storedData = sessionStorage.getItem('loggedInstructor');
+    if (!storedData) {
+        window.location.href = "/";
+        return;
+    }
+    
+    const storedInstructor = JSON.parse(storedData);
+    const currentUsername = storedInstructor.username;
+    
+    fetch(jsonPath + '?t=' + Date.now())
+        .then(response => response.json())
+        .then(data => {
+            const currentInstructor = data.find(i => i.username === currentUsername);
+            if (currentInstructor) {
+                sessionStorage.setItem('loggedInstructor', JSON.stringify(currentInstructor));
+                infoDiv.innerHTML = `
+                    <h2>Personal Information</h2>
+                    <p><strong>Name:</strong> ${currentInstructor.firstName} ${currentInstructor.lastName}</p>
+                    <p><strong>Username:</strong> ${currentInstructor.username}</p>
+                    <p><strong>Faculty:</strong> ${currentInstructor.faculty || 'N/A'}</p>
+                    <p><strong>Department:</strong> ${currentInstructor.department || 'N/A'}</p>
+                    <p><strong>Course:</strong> ${(currentInstructor.courses || []).join(", ")}</p>
+                `;
+            } else {
+                const freshData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+                if (freshData) {
+                    infoDiv.innerHTML = `
+                        <h2>Personal Information</h2>
+                        <p><strong>Name:</strong> ${freshData.firstName} ${freshData.lastName}</p>
+                        <p><strong>Username:</strong> ${freshData.username}</p>
+                        <p><strong>Faculty:</strong> ${freshData.faculty || 'N/A'}</p>
+                        <p><strong>Department:</strong> ${freshData.department || 'N/A'}</p>
+                        <p><strong>Course:</strong> ${(freshData.courses || []).join(", ")}</p>
+                    `;
+                }
+            }
+        })
+        .catch(() => {
+            const freshData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+            if (freshData) {
+                infoDiv.innerHTML = `
+                    <h2>Personal Information</h2>
+                    <p><strong>Name:</strong> ${freshData.firstName} ${freshData.lastName}</p>
+                    <p><strong>Username:</strong> ${freshData.username}</p>
+                    <p><strong>Faculty:</strong> ${freshData.faculty || 'N/A'}</p>
+                    <p><strong>Department:</strong> ${freshData.department || 'N/A'}</p>
+                    <p><strong>Course:</strong> ${(freshData.courses || []).join(", ")}</p>
+                `;
+            }
+        });
 }
 
 function showMyCourses() {
     const infoDiv = document.getElementById("personal-info");
-    infoDiv.innerHTML = `
-        <h2>My Courses</h2>
-        <ul>
-            ${instructorData.courses.map(course => `<li>${course}</li>`).join('')}
-        </ul>
-    `;
+    const jsonPathElement = document.getElementById('instructor-json-path');
+    const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
+    
+    const storedData = sessionStorage.getItem('loggedInstructor');
+    if (!storedData) {
+        window.location.href = "/";
+        return;
+    }
+    
+    const storedInstructor = JSON.parse(storedData);
+    const currentUsername = storedInstructor.username;
+    
+    fetch(jsonPath + '?t=' + Date.now())
+        .then(response => response.json())
+        .then(data => {
+            const currentInstructor = data.find(i => i.username === currentUsername);
+            if (currentInstructor) {
+                sessionStorage.setItem('loggedInstructor', JSON.stringify(currentInstructor));
+                infoDiv.innerHTML = `
+                    <h2>My Courses</h2>
+                    <ul>
+                        ${(currentInstructor.courses || []).map(course => `<li>${course}</li>`).join('')}
+                    </ul>
+                `;
+            } else {
+                infoDiv.innerHTML = `
+                    <h2>My Courses</h2>
+                    <ul>
+                        <li>No courses found.</li>
+                    </ul>
+                `;
+            }
+        })
+        .catch(() => {
+            const freshData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+            if (freshData) {
+                infoDiv.innerHTML = `
+                    <h2>My Courses</h2>
+                    <ul>
+                        ${(freshData.courses || []).map(course => `<li>${course}</li>`).join('')}
+                    </ul>
+                `;
+            } else {
+                infoDiv.innerHTML = `
+                    <h2>My Courses</h2>
+                    <ul>
+                        <li>No courses found.</li>
+                    </ul>
+                `;
+            }
+        });
 }
 
 function showGrades() {
     const infoDiv = document.getElementById("personal-info");
-    const coursesOptions = instructorData.courses.map(course => 
-        `<option value="${course}">${course}</option>`
-    ).join('');
+    const jsonPathElement = document.getElementById('instructor-json-path');
+    const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
     
-    infoDiv.innerHTML = `
-        <h2>Grades</h2>
-        <div style="margin-top: 24px;">
-            <label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
-            <select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
-                <option value="">-- Select a course --</option>
-                ${coursesOptions}
-            </select>
-        </div>
-        <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
-        <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
-    `;
+    const storedData = sessionStorage.getItem('loggedInstructor');
+    if (!storedData) {
+        window.location.href = "/";
+        return;
+    }
     
-    const courseSelect = document.getElementById("course-select");
-    courseSelect.addEventListener("change", function() {
-        const selectedCourse = this.value;
-        const fileUploadSection = document.getElementById("file-upload-section");
-        
-        if (selectedCourse) {
-            fileUploadSection.style.display = "block";
-            updateFileUploadSection(selectedCourse);
-            refreshUploadStatus(selectedCourse);
-        } else {
-            fileUploadSection.style.display = "none";
-            refreshUploadStatus(null);
-        }
-    });
+    const storedInstructor = JSON.parse(storedData);
+    const currentUsername = storedInstructor.username;
+    
+    fetch(jsonPath + '?t=' + Date.now())
+        .then(response => response.json())
+        .then(data => {
+            const currentInstructor = data.find(i => i.username === currentUsername);
+            let courses = [];
+            if (currentInstructor) {
+                sessionStorage.setItem('loggedInstructor', JSON.stringify(currentInstructor));
+                courses = currentInstructor.courses || [];
+            } else {
+                const freshData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+                courses = freshData ? (freshData.courses || []) : [];
+            }
+            
+            const coursesOptions = courses.map(course => 
+                `<option value="${course}">${course}</option>`
+            ).join('');
+            
+            infoDiv.innerHTML = `
+                <h2>Grades</h2>
+                <div style="margin-top: 24px;">
+                    <label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
+                    <select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
+                        <option value="">-- Select a course --</option>
+                        ${coursesOptions}
+                    </select>
+                </div>
+                <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
+                <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
+            `;
+            
+            const courseSelect = document.getElementById("course-select");
+            courseSelect.addEventListener("change", function() {
+                const selectedCourse = this.value;
+                const fileUploadSection = document.getElementById("file-upload-section");
+                
+                if (selectedCourse) {
+                    fileUploadSection.style.display = "block";
+                    updateFileUploadSection(selectedCourse);
+                    refreshUploadStatus(selectedCourse);
+                } else {
+                    fileUploadSection.style.display = "none";
+                    refreshUploadStatus(null);
+                }
+            });
 
-    refreshUploadStatus(null);
+            refreshUploadStatus(null);
+        })
+        .catch(() => {
+            const freshData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+            const courses = freshData ? (freshData.courses || []) : [];
+            const coursesOptions = courses.map(course => 
+                `<option value="${course}">${course}</option>`
+            ).join('');
+            
+            infoDiv.innerHTML = `
+                <h2>Grades</h2>
+                <div style="margin-top: 24px;">
+                    <label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
+                    <select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
+                        <option value="">-- Select a course --</option>
+                        ${coursesOptions}
+                    </select>
+                </div>
+                <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
+                <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
+            `;
+            
+            const courseSelect = document.getElementById("course-select");
+            courseSelect.addEventListener("change", function() {
+                const selectedCourse = this.value;
+                const fileUploadSection = document.getElementById("file-upload-section");
+                
+                if (selectedCourse) {
+                    fileUploadSection.style.display = "block";
+                    updateFileUploadSection(selectedCourse);
+                    refreshUploadStatus(selectedCourse);
+                } else {
+                    fileUploadSection.style.display = "none";
+                    refreshUploadStatus(null);
+                }
+            });
+
+            refreshUploadStatus(null);
+        });
 }
 
 function getUploadStorageKey(course) {

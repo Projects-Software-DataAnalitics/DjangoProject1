@@ -1,0 +1,47 @@
+{% extends "faculty/base.html" %}
+{% load static %}
+
+{% block title %}Program Outcome Detail{% endblock %}
+
+{% block content %}
+    <h1 style="font-size: 28px; color: #0f172a; margin-bottom: 32px;">Program Outcome</h1>
+    
+    <div style="background: #f8fafc; padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-bottom: 32px;">
+        <p style="font-size: 18px; color: #0f172a; font-weight: 500; margin: 0; line-height: 1.6;">
+            {{ outcome.text }}
+        </p>
+    </div>
+    
+    <div style="margin-top: 40px;">
+        <h2 style="font-size: 22px; color: #0f172a; margin-bottom: 24px;">Linked Learning Outcomes</h2>
+        
+        {% if learning_outcomes %}
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+            {% for lo in learning_outcomes %}
+            <div style="background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <p style="margin: 0 0 8px 0; font-size: 18px; color: #1e293b; line-height: 1.5; font-weight: 500;">
+                    {{ lo.text }}
+                </p>
+                <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">
+                    <strong>{{ lo.instructor }}</strong> - {{ lo.course }}
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 13px; color: #9ca3af;">
+                    Created on {{ lo.created_at }}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
+            <p style="font-size: 16px; color: #64748b; margin: 0;">This program outcome is not linked to any learning outcomes.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div style="margin-top: 32px;">
+        <a href="{% url 'program_outcomes' %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+            ← Back to Program Outcomes
+        </a>
+    </div>
+{% endblock %}
+

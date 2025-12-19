@@ -34,16 +34,15 @@
         <h1 style="font-size: 32px; margin: 0;">Learning Outcomes</h1>
     </div>
 
-    <p style="margin-left: 0; margin-bottom: 16px; color: #474a53; font-size: 20px; font-weight: 600;">
-        Select a course to see the learning outcomes.
+    <p style="margin-left: 0; margin-bottom: 16px; color: #64748b; font-size: 16px; line-height: 1.6;">
+        Select a course to set the learning outcomes and link them to program outcomes.
     </p>
 
     <div style="margin-top: 12px; margin-bottom: 28px;">
-        <h2 style="margin-bottom: 12px;">My Courses</h2>
         <table class="grades-table">
             <thead>
             <tr>
-                <th>Course</th>
+                <th>My Courses</th>
             </tr>
             </thead>
             <tbody id="courses-list-body">
@@ -55,47 +54,92 @@
         (function () {
             const tbody = document.getElementById("courses-list-body");
             const baseUrl = "{% url 'course_learning_outcomes' course_name='COURSE_NAME_PLACEHOLDER' %}";
-            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+            const storedData = sessionStorage.getItem('loggedInstructor');
             
-            if (!instructorData) {
+            if (!storedData) {
                 window.location.href = "/";
                 return;
             }
 
-            function addRow(courseName) {
-                const tr = document.createElement("tr");
-                tr.dataset.course = courseName;
-                tr.style.cursor = "pointer";
-                tr.innerHTML = `
-                    <td>${courseName}</td>
-                `;
-                tbody.appendChild(tr);
-            }
+            const jsonPathElement = document.getElementById('instructor-json-path');
+            const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
+            
+            fetch(jsonPath + '?t=' + Date.now())
+                .then(response => response.json())
+                .then(data => {
+                    const storedInstructor = JSON.parse(storedData);
+                    const currentInstructor = data.find(i => i.username === storedInstructor.username);
+                    if (currentInstructor) {
+                        sessionStorage.setItem('loggedInstructor', JSON.stringify(currentInstructor));
+                        displayCourses(currentInstructor);
+                    } else {
+                        displayCourses(storedInstructor);
+                    }
+                })
+                .catch(() => {
+                    const storedInstructor = JSON.parse(storedData);
+                    displayCourses(storedInstructor);
+                });
 
-            function ensureFallbackRow() {
-                if (!tbody.children.length) {
-                    tbody.innerHTML = `<tr><td>No courses available.</td></tr>`;
+            function displayCourses(data) {
+                tbody.innerHTML = '';
+                
+                function addRow(courseName) {
+                    const tr = document.createElement("tr");
+                    tr.dataset.course = courseName;
+                    tr.style.cursor = "pointer";
+                    tr.innerHTML = `
+                        <td>${courseName}</td>
+                    `;
+                    tbody.appendChild(tr);
                 }
+
+                function ensureFallbackRow() {
+                    if (!tbody.children.length) {
+                        tbody.innerHTML = `<tr><td>No courses available.</td></tr>`;
+                    }
+                }
+
+                (data.courses || []).forEach(courseName => {
+                    addRow(courseName);
+                });
+
+                ensureFallbackRow();
+
+                tbody.addEventListener("click", function (e) {
+                    const row = e.target.closest("tr");
+                    if (!row || !row.dataset.course) return;
+                    const course = row.dataset.course;
+                    const courseSlug = course.replace(/\s+/g, '-');
+                    const url = baseUrl.replace('COURSE_NAME_PLACEHOLDER', courseSlug);
+                    window.location.href = url;
+                });
             }
-
-            (instructorData.courses || []).forEach(courseName => {
-                addRow(courseName);
-            });
-
-            ensureFallbackRow();
-
-
-            tbody.addEventListener("click", function (e) {
-                const row = e.target.closest("tr");
-                if (!row || !row.dataset.course) return;
-                const course = row.dataset.course;
-                const url = baseUrl.replace('COURSE_NAME_PLACEHOLDER', encodeURIComponent(course));
-                window.location.href = url;
-            });
         })();
     </script>
 
+<script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
 <script src="{% static 'js/instructor.js' %}"></script>
+<script>
+    (function() {
+        document.getElementById("personal-info-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor' %}";
+        });
+        document.getElementById("my-courses-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor' %}";
+        });
+        document.getElementById("grades-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor' %}";
+        });
+        document.getElementById("announcements-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor' %}";
+        });
+        document.getElementById("logout-btn").addEventListener("click", function() {
+            sessionStorage.clear();
+            window.location.href = "/";
+        });
+    })();
+</script>
 </div>
 </body>
 </html>

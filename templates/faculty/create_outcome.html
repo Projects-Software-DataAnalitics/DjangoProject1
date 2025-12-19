@@ -19,13 +19,12 @@
             <input type="hidden" id="creator_username" name="creator_username">
             <input type="hidden" id="creator_first_name" name="creator_first_name">
             <input type="hidden" id="creator_last_name" name="creator_last_name">
-            <input type="hidden" id="course_name" name="course_name" value="{{ course_name }}">
 
             <div style="display: grid; gap: 6px; margin-bottom: 12px;">
-                <label style="font-size: 14px; font-weight: 600; color: #0f172a;">Selected Course</label>
-                <div style="padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc;">
-                    {{ course_name|default:"(No course selected)" }}
-                </div>
+                <label for="course_name" style="font-size: 14px; font-weight: 600; color: #0f172a;">Select Course</label>
+                <select id="course_name" name="course_name" required style="padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-family: inherit;">
+                    <option value="">-- Select a course --</option>
+                </select>
             </div>
             <div style="display: grid; gap: 12px;">
                 <label for="id_text" style="font-size: 14px; font-weight: 600; color: #0f172a;">
@@ -103,32 +102,71 @@
                 }
             }
 
-            // Load instructor courses first, then faculty heads
-            fetch("{% static 'json/instructors.json' %}")
-                .then(r => r.json())
-                .then(instructors => {
-                    instructors.forEach(inst => {
-                        (inst.courses || []).forEach(courseName => {
-                            addRow(courseName, `${inst.firstName} ${inst.lastName}`, "Instructor");
-                        });
+            let currentFacultyHeadDepartment = null;
+            const courseSelect = document.getElementById("course_name");
+
+            const raw2 = sessionStorage.getItem("loggedFacultyHead");
+            if (raw2) {
+                try {
+                    const facultyHead = JSON.parse(raw2);
+                    currentFacultyHeadDepartment = facultyHead.department;
+                } catch (e) {
+                }
+            }
+
+            if (!currentFacultyHeadDepartment && "{{ faculty_head_department|escapejs }}") {
+                currentFacultyHeadDepartment = "{{ faculty_head_department|escapejs }}";
+            }
+
+            Promise.all([
+                fetch("{% static 'json/faculty_heads.json' %}").then(r => r.json()).catch(() => []),
+                fetch("{% static 'json/instructors.json' %}").then(r => r.json()).catch(() => [])
+            ]).then(([heads, instructors]) => {
+                if (!currentFacultyHeadDepartment) {
+                    for (const head of heads) {
+                        if (head.username === "{{ user.username|escapejs }}") {
+                            currentFacultyHeadDepartment = head.department;
+                            break;
+                        }
+                    }
+                }
+
+                const allCourses = new Set();
+
+                instructors.forEach(inst => {
+                    if (currentFacultyHeadDepartment && inst.department !== currentFacultyHeadDepartment) {
+                        return;
+                    }
+                    (inst.courses || []).forEach(courseName => {
+                        allCourses.add(courseName);
+                        addRow(courseName, `${inst.firstName} ${inst.lastName}`, "Instructor");
                     });
-                })
-                .catch(() => {
-                    // still try faculty heads
-                })
-                .finally(() => {
-                    fetch("{% static 'json/faculty_heads.json' %}")
-                        .then(r => r.json())
-                        .then(heads => {
-                            heads.forEach(head => {
-                                (head.courses || []).forEach(courseName => {
-                                    addRow(courseName, `${head.firstName} ${head.lastName}`, "Faculty Head");
-                                });
-                            });
-                        })
-                        .catch(() => ensureFallbackRow())
-                        .finally(() => ensureFallbackRow());
                 });
+
+                heads.forEach(head => {
+                    if (currentFacultyHeadDepartment && head.department !== currentFacultyHeadDepartment) {
+                        return;
+                    }
+                    (head.courses || []).forEach(courseName => {
+                        if (!allCourses.has(courseName)) {
+                            allCourses.add(courseName);
+                            addRow(courseName, `${head.firstName} ${head.lastName}`, "Faculty Head");
+                        }
+                    });
+                });
+
+                Array.from(allCourses).sort().forEach(courseName => {
+                    const option = document.createElement("option");
+                    option.value = courseName;
+                    option.textContent = courseName;
+                    if (courseName === "{{ course_name|escapejs }}") {
+                        option.selected = true;
+                    }
+                    courseSelect.appendChild(option);
+                });
+
+                ensureFallbackRow();
+            }).catch(() => ensureFallbackRow());
         })();
     </script>
 {% endblock %}

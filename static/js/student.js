@@ -15,9 +15,25 @@ function toggleSidebar() {
 document.getElementById("menu-btn").addEventListener("click", toggleSidebar);
 
 
-const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
+let studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
 if (!studentData) {
     window.location.href = "/";
+} else {
+    const jsonPathElement = document.getElementById('student-json-path');
+    const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/students.json';
+    
+    fetch(jsonPath)
+        .then(response => response.json())
+        .then(data => {
+            const currentStudent = data.find(s => s.username === studentData.username);
+            if (currentStudent) {
+                sessionStorage.setItem('loggedStudent', JSON.stringify(currentStudent));
+                window.studentData = currentStudent;
+                studentData = currentStudent;
+            }
+        })
+        .catch(() => {
+        });
 }
 
 
@@ -29,15 +45,16 @@ document.getElementById("logout-btn").addEventListener("click", logout);
 
 
 function showPersonalInfo() {
+    const freshData = JSON.parse(sessionStorage.getItem('loggedStudent')) || studentData;
     const infoDiv = document.getElementById("personal-info");
     const gradesSection = document.getElementById("grades-section");
     infoDiv.innerHTML = `
         <h2>Personal Information</h2>
-        <p><strong>Name:</strong> ${studentData.firstName} ${studentData.lastName}</p>
-        <p><strong>Username:</strong> ${studentData.username}</p>
-        <p><strong>Department:</strong> ${studentData.department}</p>
-        <p><strong>Class:</strong> ${studentData.class}</p>
-        <p><strong>Courses:</strong> ${studentData.courses.join(", ")}</p>
+        <p><strong>Name:</strong> ${freshData.firstName} ${freshData.lastName}</p>
+        <p><strong>Username:</strong> ${freshData.username}</p>
+        <p><strong>Department:</strong> ${freshData.department}</p>
+        <p><strong>Class:</strong> ${freshData.class}</p>
+        <p><strong>Courses:</strong> ${(freshData.courses || []).join(", ")}</p>
     `;
     if (gradesSection) {
         gradesSection.style.display = "none";
@@ -45,12 +62,13 @@ function showPersonalInfo() {
 }
 
 function showMyCourses() {
+    const freshData = JSON.parse(sessionStorage.getItem('loggedStudent')) || studentData;
     const infoDiv = document.getElementById("personal-info");
     const gradesSection = document.getElementById("grades-section");
     infoDiv.innerHTML = `
         <h2>My Courses</h2>
         <ul>
-            ${studentData.courses.map(course => `<li>${course}</li>`).join('')}
+            ${(freshData.courses || []).map(course => `<li>${course}</li>`).join('')}
         </ul>
     `;
     if (gradesSection) {

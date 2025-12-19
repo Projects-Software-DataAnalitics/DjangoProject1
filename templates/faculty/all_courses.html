@@ -4,7 +4,7 @@
 {% block title %}All Courses{% endblock %}
 
 {% block content %}
-    <h1>All Courses</h1>
+    <h1>All Courses In Your Department</h1>
 
     <table class="grades-table">
         <thead>
@@ -19,45 +19,52 @@
 
     <script>
         const tbody = document.getElementById("all-courses-body");
-
-        function addRow(courseName, ownerName) {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${courseName}</td>
-                <td>${ownerName}</td>
-            `;
-            tbody.appendChild(tr);
+        const facultyCoursesJson = '{{ faculty_courses_json|escapejs }}';
+        let facultyCourses = [];
+        
+        try {
+            facultyCourses = JSON.parse(facultyCoursesJson);
+        } catch (e) {
+            console.error('Error parsing faculty courses:', e);
         }
-
-        // Instructors JSON
-        fetch("{% static 'json/instructors.json' %}")
-            .then(r => r.json())
-            .then(instructors => {
-                instructors.forEach(inst => {
-                    (inst.courses || []).forEach(courseName => {
-                        addRow(courseName, inst.firstName + " " + inst.lastName);
-                    });
+        
+        if (!facultyCourses || facultyCourses.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2">No courses found in your department.</td></tr>';
+        } else {
+            facultyCourses.forEach(item => {
+                const tr = document.createElement("tr");
+                const courseName = (item.course || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const instructorName = (item.instructor || 'Unknown').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const courseSlug = (item.course || '').replace(/\s+/g, '-');
+                
+                tr.dataset.course = courseName;
+                tr.style.cursor = 'pointer';
+                tr.style.transition = 'background-color 0.2s';
+                
+                tr.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#f1f5f9';
                 });
-            })
-            .catch(() => {
-                // ignore, we'll still try faculty heads
-            })
-            .finally(() => {
-                // Faculty heads JSON
-                fetch("{% static 'json/faculty_heads.json' %}")
-                    .then(r => r.json())
-                    .then(heads => {
-                        heads.forEach(head => {
-                            (head.courses || []).forEach(courseName => {
-                                addRow(courseName, head.firstName + " " + head.lastName);
-                            });
-                        });
-                    })
-                    .catch(() => {
-                        if (!tbody.children.length) {
-                            tbody.innerHTML = `<tr><td colspan="2">Could not load courses.</td></tr>`;
-                        }
-                    });
+                tr.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = '';
+                });
+                
+                tr.addEventListener('click', function() {
+                    const url = '/faculty-head/course/' + encodeURIComponent(courseSlug) + '/learning-outcomes/';
+                    window.location.href = url;
+                });
+                
+                const courseTd = document.createElement('td');
+                courseTd.textContent = courseName;
+                const instructorTd = document.createElement('td');
+                instructorTd.textContent = instructorName;
+                tr.appendChild(courseTd);
+                tr.appendChild(instructorTd);
+                tbody.appendChild(tr);
             });
+        }
     </script>
+    
+    <p style="margin-top: 32px; font-size: 16px; color: #64748b; line-height: 1.6;">
+        Click on a course to see the learning outcomes.
+    </p>
 {% endblock %}

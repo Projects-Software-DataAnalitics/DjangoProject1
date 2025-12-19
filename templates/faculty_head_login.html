@@ -25,14 +25,15 @@
 
         <section class="login-form-container">
             <a href="{% url 'home' %}" class="back-btn">← Back</a>
-            <form id="faculty-head-login-form" class="login-form">
+            <form id="faculty-head-login-form" class="login-form" method="POST">
+                {% csrf_token %}
                 <label class="input-label" for="faculty-head-username">Username</label>
-                <input type="text" id="faculty-head-username" placeholder="Enter your username" required>
+                <input type="text" id="faculty-head-username" name="username" placeholder="Enter your username" required>
                 <label class="input-label" for="faculty-head-password">Password</label>
-                <input type="password" id="faculty-head-password" placeholder="Enter your password" required>
+                <input type="password" id="faculty-head-password" name="password" placeholder="Enter your password" required>
                 <button type="submit" class="primary-btn">Login</button>
             </form>
-            <p id="faculty-head-login-error" class="error-text"></p>
+            {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
         </section>
 
         <footer class="login-footer">© {{ now|date:'Y' }} Smart School</footer>
@@ -40,26 +41,7 @@
     </main>
 
     <script>
-        // --- Faculty Head Login ---
-        const facultyHeadForm = document.getElementById("faculty-head-login-form");
-        facultyHeadForm.addEventListener("submit", function(e) {
-            e.preventDefault();
-
-            const username = document.getElementById("faculty-head-username").value;
-            const password = document.getElementById("faculty-head-password").value;
-
-            fetch("{% static 'json/faculty_heads.json' %}")
-                .then(response => response.json())
-                .then(data => {
-                    const facultyHead = data.find(f => f.username === username && f.password === password);
-                    if(facultyHead) {
-                        sessionStorage.setItem('loggedFacultyHead', JSON.stringify(facultyHead));
-                        window.location.href = "{% url 'faculty-head' %}";
-                    } else {
-                        document.getElementById("faculty-head-login-error").textContent = "Invalid username or password!";
-                    }
-                });
-        });
+        // Form POST ile submit edilecek, JavaScript'e gerek yok
     </script>
 
 </body>
