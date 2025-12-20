@@ -4,6 +4,7 @@ import json
 import os
 
 from django.contrib.auth.models import User
+from django.contrib.auth import logout
 from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.csrf import csrf_exempt
@@ -115,7 +116,42 @@ def faculty_head_login(request):
 
 
 def student_dashboard(request):
-    return render(request, 'student.html', {'grades': None})
+    username = request.GET.get('username', '')
+    
+    courses_with_grades = []
+    if username:
+        try:
+            student = Student.objects.get(username=username)
+            grades_qs = Grade.objects.filter(student=student).select_related('course')
+            
+            students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+            try:
+                with open(students_json_path, encoding='utf-8') as f:
+                    students_data = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                students_data = []
+            
+            user_courses = []
+            for entry in students_data:
+                if entry.get('username') == username:
+                    user_courses = entry.get('courses', []) or []
+                    break
+            
+            for course_name in user_courses:
+                grade_obj = next((g for g in grades_qs if g.course.name == course_name), None)
+                courses_with_grades.append({
+                    'course_name': course_name,
+                    'midterm': grade_obj.midterm if grade_obj else None,
+                    'assignment': grade_obj.assignment if grade_obj else None,
+                    'final': grade_obj.final if grade_obj else None,
+                })
+        except Student.DoesNotExist:
+            pass
+    
+    return render(request, 'student.html', {
+        'grades': None,
+        'courses_with_grades': courses_with_grades
+    })
 
 
 def instructor_dashboard(request):
@@ -503,3 +539,56 @@ def create_learning_outcome(request):
             'instructor_courses': course_names,
         }
     )
+
+def student_profile(request):
+    return render(request, "student/profile.html")
+
+
+def student_courses(request):
+    return render(request, "student/courses.html")
+
+
+def student_grades(request):
+    username = request.GET.get('username', '')
+    
+    courses_with_grades = []
+    if username:
+        try:
+            student = Student.objects.get(username=username)
+            grades_qs = Grade.objects.filter(student=student).select_related('course')
+            
+            students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+            try:
+                with open(students_json_path, encoding='utf-8') as f:
+                    students_data = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                students_data = []
+            
+            user_courses = []
+            for entry in students_data:
+                if entry.get('username') == username:
+                    user_courses = entry.get('courses', []) or []
+                    break
+            
+            for course_name in user_courses:
+                grade_obj = next((g for g in grades_qs if g.course.name == course_name), None)
+                courses_with_grades.append({
+                    'course_name': course_name,
+                    'midterm': grade_obj.midterm if grade_obj else None,
+                    'assignment': grade_obj.assignment if grade_obj else None,
+                    'final': grade_obj.final if grade_obj else None,
+                })
+        except Student.DoesNotExist:
+            pass
+    
+    return render(request, "student/grades.html", {
+        'courses_with_grades': courses_with_grades
+    })
+
+
+def student_announcements(request):
+    return render(request, "student/announcements.html")
+
+def logout_view(request):
+    logout(request)
+    return redirect("student-login")

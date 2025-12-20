@@ -1,4 +1,3 @@
-
 function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
     const content = document.getElementById("content");
@@ -11,84 +10,55 @@ function toggleSidebar() {
     }
 }
 
-
-document.getElementById("menu-btn").addEventListener("click", toggleSidebar);
-
-
-const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
-if (!studentData) {
-    window.location.href = "/";
-}
-
-
-document.getElementById("personal-info-btn").addEventListener("click", showPersonalInfo);
-document.getElementById("my-courses-btn").addEventListener("click", showMyCourses);
-document.getElementById("grades-btn").addEventListener("click", showGrades);
-document.getElementById("announcements-btn").addEventListener("click", showAnnouncements);
-document.getElementById("logout-btn").addEventListener("click", logout);
-
-
-function showPersonalInfo() {
-    const infoDiv = document.getElementById("personal-info");
-    const gradesSection = document.getElementById("grades-section");
-    infoDiv.innerHTML = `
-        <h2>Personal Information</h2>
-        <p><strong>Name:</strong> ${studentData.firstName} ${studentData.lastName}</p>
-        <p><strong>Username:</strong> ${studentData.username}</p>
-        <p><strong>Department:</strong> ${studentData.department}</p>
-        <p><strong>Class:</strong> ${studentData.class}</p>
-        <p><strong>Courses:</strong> ${studentData.courses.join(", ")}</p>
-    `;
-    if (gradesSection) {
-        gradesSection.style.display = "none";
+document.addEventListener("DOMContentLoaded", function() {
+    const menuBtn = document.getElementById("menu-btn");
+    if (menuBtn) {
+        menuBtn.addEventListener("click", toggleSidebar);
     }
-}
 
-function showMyCourses() {
-    const infoDiv = document.getElementById("personal-info");
-    const gradesSection = document.getElementById("grades-section");
-    infoDiv.innerHTML = `
-        <h2>My Courses</h2>
-        <ul>
-            ${studentData.courses.map(course => `<li>${course}</li>`).join('')}
-        </ul>
-    `;
-    if (gradesSection) {
-        gradesSection.style.display = "none";
+    const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
+    if (!studentData) {
+        window.location.href = "/";
+        return;
     }
-}
 
-function showGrades() {
-    const infoDiv = document.getElementById("personal-info");
-    const gradesSection = document.getElementById("grades-section");
-    infoDiv.innerHTML = "";
-    if (gradesSection) {
-        gradesSection.style.display = "block";
+    const gradesLink = document.querySelector('.sidebar a[href*="grades"]');
+    if (gradesLink && studentData.username) {
+        gradesLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = new URL(gradesLink.href, window.location.origin);
+            url.searchParams.set('username', studentData.username);
+            window.location.href = url.toString();
+        });
     }
-}
 
-function showAnnouncements() {
-    const infoDiv = document.getElementById("personal-info");
-    const gradesSection = document.getElementById("grades-section");
-    infoDiv.innerHTML = "<h2>Announcements Section (coming soon)</h2>";
-    if (gradesSection) {
-        gradesSection.style.display = "none";
+    if (window.location.pathname.includes('/grades/')) {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (!urlParams.has('username') && studentData.username) {
+            urlParams.set('username', studentData.username);
+            window.location.search = urlParams.toString();
+        }
     }
-}
 
-function logout() {
-    sessionStorage.clear();
-    window.location.href = "/";
-}
+    const logoutLink = document.querySelector('.sidebar a[href*="logout"]');
+    if (logoutLink) {
+        logoutLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            sessionStorage.clear();
+            window.location.href = "/";
+        });
+    }
+});
 
 function showDetails(courseName) {
     const popup = document.getElementById("popup");
     const title = document.getElementById("popup-title");
     const content = document.getElementById("popup-content");
 
+    if (!popup || !title || !content) return;
+
     title.innerText = courseName;
 
-    // Static text
     content.innerText =
         "Grade Calculation:\n\n" +
         "Midterm Exam: 33%\n" +
@@ -104,7 +74,4 @@ function closePopup() {
         popup.style.display = "none";
     }
 }
-
-
-document.getElementById("personal-info").innerHTML = "";
 

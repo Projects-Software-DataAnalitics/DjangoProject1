@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Student Dashboard{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li>
+            <a href="{% url 'student_profile' %}">Personal Information</a>
+        </li>
+        <li>
+            <a href="{% url 'student_courses' %}">My Courses</a>
+        </li>
+        <li>
+            <a href="{% url 'student_grades' %}">Grades</a>
+        </li>
+        <li>
+            <a href="{% url 'student_announcements' %}">Announcements</a>
+        </li>
+        <li>
+            <a href="{% url 'logout' %}">Logout</a>
+        </li>
+    </ul>
+</div>
+
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
+    {% block content %}{% endblock %}
+</div>
+
+<div id="popup" class="popup-overlay" style="display: none;">
+    <div class="popup-box">
+        <h3 id="popup-title">Course Details</h3>
+        <p id="popup-content"></p>
+        <button onclick="closePopup()">Close</button>
+    </div>
+</div>
+
+<script src="{% static 'js/student.js' %}"></script>
+</body>
+</html>
+

@@ -22,23 +22,39 @@ urlpatterns = [
     path('', core_views.index, name='home'),
     path('admin/', admin.site.urls),
     path('grades/upload/', core_views.upload_grades, name='upload_grades'),
+
+    # login
     path('student-login/', core_views.student_login, name='student-login'),
     path('instructor-login/', core_views.instructor_login, name='instructor-login'),
     path('faculty-head-login/', core_views.faculty_head_login, name='faculty-head-login'),
+
+    # Dashboards
     path('student/', core_views.student_dashboard, name='student'),
     path('instructor/', core_views.instructor_dashboard, name='instructor'),
-    path('instructor/set-session/', core_views.set_instructor_session, name='set_instructor_session'),
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
-    path('student/<str:username>/', core_views.student_grades, name='student_grades'),
+
+    # Faculty head pages
+
     path('faculty-head/all-courses/', core_views.all_courses, name='all_courses'),
     path('faculty-head/my-courses/', core_views.my_courses, name='my_courses'),
     path('faculty-head/program-outcomes/', core_views.program_outcomes, name='program_outcomes'),
     path('faculty-head/program-outcomes/<str:course_name>/', core_views.course_program_outcomes, name='course_program_outcomes'),
     path('faculty-head/program-outcomes/create/', core_views.create_program_outcome, name='create_program_outcome'),
     path('faculty-head/course/<int:course_id>/grade/', core_views.give_grade, name='give_grade'),
+
+    # Instructor pages
     path('instructor/learning-outcomes/', core_views.learning_outcomes, name='learning_outcomes'),
     path('instructor/learning-outcomes/<str:course_name>/', core_views.course_learning_outcomes, name='course_learning_outcomes'),
     path('instructor/learning-outcomes/create/', core_views.create_learning_outcome, name='create_learning_outcome'),
     path('instructor/learning-outcomes/update/<int:outcome_id>/', core_views.update_learning_outcome, name='update_learning_outcome'),
     path('instructor/learning-outcomes/delete/<int:outcome_id>/', core_views.delete_learning_outcome, name='delete_learning_outcome'),
+    path('instructor/set-session/', core_views.set_instructor_session, name='set_instructor_session'),
+
+    # Student pages
+    path("student/profile/", core_views.student_profile, name="student_profile"),
+    path("student/courses/", core_views.student_courses, name="student_courses"),
+    path("student/grades/", core_views.student_grades, name="student_grades"),
+    path("student/announcements/", core_views.student_announcements, name="student_announcements"),
+    path("student/logout/", core_views.logout_view, name="logout"),
+
 ]
