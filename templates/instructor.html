@@ -6,14 +6,14 @@
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
-<body>
+<body data-page="{% if page %}{{ page }}{% endif %}">
 <div class="sidebar" id="sidebar">
     <ul>
-        <li id="personal-info-btn">Personal Information</li>
-        <li id="my-courses-btn">My Courses</li>
-        <li id="grades-btn">Grades</li>
-        <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
-        <li id="announcements-btn">Announcements</li>
+        <li><a href="{% url 'instructor_profile' %}">Personal Information</a></li>
+        <li><a href="{% url 'instructor_my_courses' %}">My Courses</a></li>
+        <li><a href="{% url 'instructor_grades' %}">Grades</a></li>
+        <li><a href="{% url 'learning_outcomes' %}">Learning Outcomes</a></li>
+        <li><a href="{% url 'instructor_announcements' %}">Announcements</a></li>
         <li id="logout-btn">Logout</li>
     </ul>
     </div>
@@ -21,7 +21,9 @@
 <div class="content" id="content">
     <button class="menu-btn" id="menu-btn">☰</button>
     {% block content %}
+    {% if show_welcome %}
     <h1>Welcome Instructor</h1>
+    {% endif %}
     <div id="personal-info"></div>
     {% endblock %}
     </div>
@@ -30,6 +32,7 @@
     {% csrf_token %}
 </form>
 
+<script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
 <script src="{% static 'js/instructor.js' %}"></script>
 </body>
 </html>

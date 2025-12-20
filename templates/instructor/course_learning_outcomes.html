@@ -44,16 +44,51 @@
             {% csrf_token %}
             <input type="hidden" id="username" name="username">
             <input type="hidden" name="course_name" value="{{ course_name }}">
-            <div style="margin-bottom: 16px;">
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                    Learning Outcome Text
+                </label>
                 <textarea
                     id="outcome-text"
                     name="text"
                     rows="4"
                     placeholder="Enter learning outcome..."
                     required
-                    style="width: 100%; padding: 16px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 16px;"
+                    style="width: 100%; padding: 16px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 16px; transition: border-color 0.2s;"
+                    onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff';"
+                    onblur="this.style.borderColor='#cbd5e1'; this.style.background='#f8fafc';"
                 ></textarea>
             </div>
+            
+            {% if program_outcomes %}
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 12px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                    Link to Program Outcomes <span style="color: #6b7280; font-weight: 400;">(Select one or more)</span>
+                </label>
+                <div id="program-outcomes-selection" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; padding: 4px;">
+                    {% for po in program_outcomes %}
+                    <label class="program-outcome-card" style="display: flex; align-items: start; padding: 14px; border: 2px solid #e2e8f0; border-radius: 10px; background: #ffffff; cursor: pointer; transition: all 0.2s; position: relative;" 
+                           onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
+                           onmouseout="if(!this.querySelector('input[type=checkbox]').checked) { this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'; }">
+                        <input type="checkbox" name="program_outcomes" value="{{ po.id }}" 
+                               style="margin-right: 12px; margin-top: 2px; width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6;"
+                               onchange="if(this.checked) { this.closest('label').style.borderColor='#3b82f6'; this.closest('label').style.background='#eff6ff'; this.closest('label').style.boxShadow='0 2px 8px rgba(59,130,246,0.2)'; } else { this.closest('label').style.borderColor='#e2e8f0'; this.closest('label').style.background='#ffffff'; this.closest('label').style.boxShadow='none'; }">
+                        <span style="flex: 1; font-size: 14px; line-height: 1.5; color: #1e293b;">{{ po.text }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <p style="margin-top: 8px; font-size: 12px; color: #64748b; font-style: italic;">
+                    Select the program outcomes this learning outcome contributes to.
+                </p>
+            </div>
+            {% else %}
+            <div style="margin-bottom: 20px; padding: 16px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #94a3b8;">
+                <p style="margin: 0; font-size: 14px; color: #475569;">
+                    <strong>No program outcomes available.</strong> Program outcomes must be created by your department head first.
+                </p>
+            </div>
+            {% endif %}
+            
             <div style="display: flex; gap: 12px;">
                 <button type="submit" class="primary-btn" style="padding: 12px 24px; font-size: 16px;">
                     Save
@@ -75,6 +110,14 @@
                             <p id="outcome-text-{{ forloop.counter0 }}" style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500;">
                                 {{ outcome.text }}
                             </p>
+                            {% if outcome.related_program_outcomes %}
+                            <div style="margin: 8px 0; display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to:</span>
+                                <a href="{% url 'learning_outcome_detail' outcome.id %}" onclick="event.stopPropagation(); return true;" style="font-size: 13px; color: #3b82f6; font-weight: 500; text-decoration: none; cursor: pointer; display: inline-block; padding: 6px 12px; background: #eff6ff; border-radius: 6px; transition: all 0.2s;" onmouseover="this.style.background='#dbeafe'; this.style.textDecoration='underline';" onmouseout="this.style.background='#eff6ff'; this.style.textDecoration='none';">
+                                    {{ outcome.related_program_outcomes|length }} Program Outcome{{ outcome.related_program_outcomes|length|pluralize }}
+                                </a>
+                            </div>
+                            {% endif %}
                             <p style="margin: 0; font-size: 14px; color: #6b7280;">
                                 Created by <strong>{{ outcome.created_by }}</strong> on {{ outcome.created_at }}
                             </p>
@@ -121,6 +164,14 @@
                     createFormContainer.style.display = createFormContainer.style.display === 'none' ? 'block' : 'none';
                     if (createFormContainer.style.display === 'block') {
                         document.getElementById('outcome-text').focus();
+                        document.querySelectorAll('.program-outcome-card').forEach(card => {
+                            const checkbox = card.querySelector('input[type=checkbox]');
+                            if (checkbox && !checkbox.checked) {
+                                card.style.borderColor = '#e2e8f0';
+                                card.style.background = '#ffffff';
+                                card.style.boxShadow = 'none';
+                            }
+                        });
                     }
                 });
             }
@@ -129,6 +180,11 @@
                 cancelFormBtn.addEventListener('click', function() {
                     createFormContainer.style.display = 'none';
                     createForm.reset();
+                    document.querySelectorAll('.program-outcome-card').forEach(card => {
+                        card.style.borderColor = '#e2e8f0';
+                        card.style.background = '#ffffff';
+                        card.style.boxShadow = 'none';
+                    });
                 });
             }
 

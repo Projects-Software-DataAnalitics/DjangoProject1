@@ -10,52 +10,98 @@ function toggleSidebar() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", function() {
-    const menuBtn = document.getElementById("menu-btn");
-    if (menuBtn) {
-        menuBtn.addEventListener("click", toggleSidebar);
-    }
 
-    const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
-    if (!studentData) {
-        window.location.href = "/";
-        return;
-    }
+document.getElementById("menu-btn").addEventListener("click", toggleSidebar);
 
-    const gradesLink = document.querySelector('.sidebar a[href*="grades"]');
-    if (gradesLink && studentData.username) {
-        gradesLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            const url = new URL(gradesLink.href, window.location.origin);
-            url.searchParams.set('username', studentData.username);
-            window.location.href = url.toString();
+
+let studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
+if (!studentData) {
+    window.location.href = "/";
+} else {
+    const jsonPathElement = document.getElementById('student-json-path');
+    const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/students.json';
+    
+    fetch(jsonPath)
+        .then(response => response.json())
+        .then(data => {
+            const currentStudent = data.find(s => s.username === studentData.username);
+            if (currentStudent) {
+                sessionStorage.setItem('loggedStudent', JSON.stringify(currentStudent));
+                window.studentData = currentStudent;
+                studentData = currentStudent;
+            }
+        })
+        .catch(() => {
         });
-    }
+}
 
-    if (window.location.pathname.includes('/grades/')) {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (!urlParams.has('username') && studentData.username) {
-            urlParams.set('username', studentData.username);
-            window.location.search = urlParams.toString();
-        }
-    }
 
-    const logoutLink = document.querySelector('.sidebar a[href*="logout"]');
-    if (logoutLink) {
-        logoutLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            sessionStorage.clear();
-            window.location.href = "/";
-        });
+document.getElementById("personal-info-btn").addEventListener("click", showPersonalInfo);
+document.getElementById("my-courses-btn").addEventListener("click", showMyCourses);
+document.getElementById("grades-btn").addEventListener("click", showGrades);
+document.getElementById("announcements-btn").addEventListener("click", showAnnouncements);
+document.getElementById("logout-btn").addEventListener("click", logout);
+
+
+function showPersonalInfo() {
+    const freshData = JSON.parse(sessionStorage.getItem('loggedStudent')) || studentData;
+    const infoDiv = document.getElementById("personal-info");
+    const gradesSection = document.getElementById("grades-section");
+    infoDiv.innerHTML = `
+        <h2>Personal Information</h2>
+        <p><strong>Name:</strong> ${freshData.firstName} ${freshData.lastName}</p>
+        <p><strong>Username:</strong> ${freshData.username}</p>
+        <p><strong>Department:</strong> ${freshData.department}</p>
+        <p><strong>Class:</strong> ${freshData.class}</p>
+        <p><strong>Courses:</strong> ${(freshData.courses || []).join(", ")}</p>
+    `;
+    if (gradesSection) {
+        gradesSection.style.display = "none";
     }
-});
+}
+
+function showMyCourses() {
+    const freshData = JSON.parse(sessionStorage.getItem('loggedStudent')) || studentData;
+    const infoDiv = document.getElementById("personal-info");
+    const gradesSection = document.getElementById("grades-section");
+    infoDiv.innerHTML = `
+        <h2>My Courses</h2>
+        <ul>
+            ${(freshData.courses || []).map(course => `<li>${course}</li>`).join('')}
+        </ul>
+    `;
+    if (gradesSection) {
+        gradesSection.style.display = "none";
+    }
+}
+
+function showGrades() {
+    const infoDiv = document.getElementById("personal-info");
+    const gradesSection = document.getElementById("grades-section");
+    infoDiv.innerHTML = "";
+    if (gradesSection) {
+        gradesSection.style.display = "block";
+    }
+}
+
+function showAnnouncements() {
+    const infoDiv = document.getElementById("personal-info");
+    const gradesSection = document.getElementById("grades-section");
+    infoDiv.innerHTML = "<h2>Announcements Section (coming soon)</h2>";
+    if (gradesSection) {
+        gradesSection.style.display = "none";
+    }
+}
+
+function logout() {
+    sessionStorage.clear();
+    window.location.href = "/";
+}
 
 function showDetails(courseName) {
     const popup = document.getElementById("popup");
     const title = document.getElementById("popup-title");
     const content = document.getElementById("popup-content");
-
-    if (!popup || !title || !content) return;
 
     title.innerText = courseName;
 
@@ -75,3 +121,5 @@ function closePopup() {
     }
 }
 
+
+document.getElementById("personal-info").innerHTML = "";

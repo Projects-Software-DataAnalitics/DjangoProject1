@@ -15,20 +15,18 @@
     </section>
 
     <script>
-        const facultyHeadRaw = sessionStorage.getItem("loggedFacultyHead");
-        if (!facultyHeadRaw) {
-        } else {
-            const facultyHead = JSON.parse(facultyHeadRaw);
-
-            const infoDiv = document.getElementById("personal-info");
-            infoDiv.innerHTML = `
-                <h2>Personal Information</h2>
-                <p><strong>Name:</strong> ${facultyHead.firstName} ${facultyHead.lastName}</p>
-                <p><strong>Username:</strong> ${facultyHead.username}</p>
-                <p><strong>Department:</strong> ${facultyHead.department || "N/A"}</p>
-                <p><strong>Faculty:</strong> ${facultyHead.faculty || "N/A"}</p>
-                <p><strong>Courses:</strong> ${(facultyHead.courses || []).join(", ") || "N/A"}</p>
-            `;
+        const facultyHeadData = {{ faculty_head|safe }};
+        const facultyHead = facultyHeadData;
+        
+        const infoDiv = document.getElementById("personal-info");
+        infoDiv.innerHTML = `
+            <h2>Personal Information</h2>
+            <p><strong>Name:</strong> ${facultyHead.firstName || ''} ${facultyHead.lastName || ''}</p>
+            <p><strong>Username:</strong> ${facultyHead.username || ''}</p>
+            <p><strong>Department:</strong> ${facultyHead.department || "N/A"}</p>
+            <p><strong>Faculty:</strong> ${facultyHead.faculty || "N/A"}</p>
+            <p><strong>Courses:</strong> ${(facultyHead.courses || []).join(", ") || "N/A"}</p>
+        `;
 
             const welcomeTitle = document.getElementById("welcome-title");
             const profileSection = document.getElementById("profile");
@@ -180,6 +178,5 @@
             });
 
             fhRefreshStatus(null);
-        }
     </script>
 {% endblock %}

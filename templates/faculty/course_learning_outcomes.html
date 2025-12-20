@@ -1,0 +1,41 @@
+{% extends "faculty/base.html" %}
+{% load static %}
+
+{% block title %}Learning Outcomes - {{ course_name }}{% endblock %}
+
+{% block content %}
+    <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ course_name }}</h1>
+    
+    <div style="margin-top: 32px;">
+        <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes</h2>
+        {% if outcomes_data %}
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                {% for outcome in outcomes_data %}
+                    <li style="background: #f8fafc; padding: 16px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <div style="flex: 1;">
+                            <p style="margin: 0 0 8px 0; font-size: 18px; color: #0f172a; font-weight: 500; line-height: 1.5;">
+                                {{ outcome.text }}
+                            </p>
+                            <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                                Created by <strong>{{ outcome.created_by }}</strong> on {{ outcome.created_at }}
+                            </p>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div style="background: #f8fafc; padding: 32px; border-radius: 8px; text-align: center; border: 1px dashed #cbd5e1;">
+                <p style="margin: 0; font-size: 16px; color: #6b7280;">
+                    No learning outcomes have been added yet for this course.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+    
+    <div style="margin-top: 32px;">
+        <a href="{% url 'all_courses' %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+            ← Back to All Courses
+        </a>
+    </div>
+{% endblock %}
+

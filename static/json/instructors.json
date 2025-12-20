@@ -4,14 +4,18 @@
         "lastName": "Doe",
         "username": "john.doe",
         "password": "1234",
-        "courses": ["Mathematics"]
+        "faculty": "Engineering",
+        "department": "Electrical Engineering",
+        "courses": ["Advanced Algorithms", "Research Methods", "Academic Leadership"]
     },
     {
         "firstName": "Emily",
         "lastName": "Smith",
         "username": "emily.smith",
         "password": "5678",
-        "courses": ["Physics"]
+        "faculty": "Engineering",
+        "department": "Computer Engineering",
+        "courses": ["Algorithm Design", "Machine Learning", "Data Structures"]
     }
 ]
 
