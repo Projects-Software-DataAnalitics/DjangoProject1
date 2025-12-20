@@ -1,75 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Student Dashboard</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-</head>
-<body>
-<!-- Sidebar -->
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li id="personal-info-btn">Personal Information</li>
-        <li id="my-courses-btn">My Courses</li>
-        <li id="grades-btn">Grades</li>
-        <li id="announcements-btn">Announcements</li>
-        <li id="logout-btn">Logout</li>
-    </ul>
-    </div>
+{% extends "student_base.html" %}
+{% load static %}
 
-<!-- Main content -->
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    <h1>Welcome Student</h1>
-    <div id="personal-info"></div>
-    <div id="grades-section" style="display: none;">
-        {% if courses_with_grades %}
-        <section class="grades-section">
-            <h2>Your Grades</h2>
-            <table class="grades-table">
-                <thead>
-                    <tr>
-                        <th>Course</th>
-                        <th>Midterm</th>
-                        <th>Assignment</th>
-                        <th>Final</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for item in courses_with_grades %}
-                    <tr>
-                        <td>{{ item.course_name }}</td>
-                        <td>{% if item.midterm is not None %}{{ item.midterm }}{% else %}-{% endif %}</td>
-                        <td>{% if item.assignment is not None %}{{ item.assignment }}{% else %}-{% endif %}</td>
-                        <td>{% if item.final is not None %}{{ item.final }}{% else %}-{% endif %}</td>
-                        <td>
-                            <button onclick="showDetails('{{ item.course_name }}')">
-                                Show Details
-                            </button>
-                        </td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </section>
-        {% elif grades is not None %}
-            <p class="no-grades-message">No grades available yet.</p>
-        {% endif %}
-    </div>
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<h1>Welcome Student</h1>
+<div id="personal-info"></div>
+<div id="grades-section" style="display: none;">
+    {% if courses_with_grades %}
+    <section class="grades-section">
+        <h2>Your Grades</h2>
+        <table class="grades-table">
+            <thead>
+                <tr>
+                    <th>Course</th>
+                    <th>Midterm</th>
+                    <th>Assignment</th>
+                    <th>Final</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for item in courses_with_grades %}
+                <tr>
+                    <td>{{ item.course_name }}</td>
+                    <td>{% if item.midterm is not None %}{{ item.midterm }}{% else %}-{% endif %}</td>
+                    <td>{% if item.assignment is not None %}{{ item.assignment }}{% else %}-{% endif %}</td>
+                    <td>{% if item.final is not None %}{{ item.final }}{% else %}-{% endif %}</td>
+                    <td>
+                        <button onclick="showDetails('{{ item.course_name }}')">
+                            Show Details
+                        </button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% elif grades is not None %}
+        <p class="no-grades-message">No grades available yet.</p>
+    {% endif %}
 </div>
-
-<div id="popup" class="popup-overlay" style="display: none;">
-    <div class="popup-box">
-        <h3 id="popup-title">Course Details</h3>
-        <p id="popup-content"></p>
-        <button onclick="closePopup()">Close</button>
-    </div>
-</div>
-
-<script src="{% static 'js/student.js' %}"></script>
-</body>
-</html>
+{% endblock %}
 
 

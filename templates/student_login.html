@@ -54,8 +54,7 @@
                     const student = data.find(s => s.username === username && s.password === password);
                     if(student) {
                         sessionStorage.setItem('loggedStudent', JSON.stringify(student));
-                        const encodedUsername = encodeURIComponent(student.username);
-                        window.location.href = `/student/${encodedUsername}/`;
+                        window.location.href = `/student/`;
                     } else {
                         document.getElementById("student-login-error").textContent = "Invalid username or password!";
                     }

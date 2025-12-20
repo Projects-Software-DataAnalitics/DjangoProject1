@@ -1,0 +1,22 @@
+{% extends "student_base.html" %}
+{% load static %}
+
+{% block title %}Personal Information{% endblock %}
+
+{% block content %}
+<h1>Personal Information</h1>
+<div id="personal-info"></div>
+<script>
+    const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
+    if (studentData) {
+        const infoDiv = document.getElementById("personal-info");
+        infoDiv.innerHTML = `
+            <p><strong>Name:</strong> ${studentData.firstName} ${studentData.lastName}</p>
+            <p><strong>Username:</strong> ${studentData.username}</p>
+            <p><strong>Department:</strong> ${studentData.department}</p>
+            <p><strong>Class:</strong> ${studentData.class}</p>
+            <p><strong>Courses:</strong> ${studentData.courses.join(", ")}</p>
+        `;
+    }
+</script>
+{% endblock %}
