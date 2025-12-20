@@ -226,7 +226,7 @@ def instructor_required(view_func):
         
         if not username:
             from django.shortcuts import redirect
-            return redirect('instructor')
+            return redirect('instructor-login')
         
         user, created = User.objects.get_or_create(username=username)
         if created:
