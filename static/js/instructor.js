@@ -1,6 +1,3 @@
-const menuBtn = document.getElementById("menu-btn");
-menuBtn.addEventListener("click", toggleSidebar);
-
 function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
     const content = document.getElementById("content");
@@ -12,6 +9,13 @@ function toggleSidebar() {
         content.style.marginLeft = "200px";
     }
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    const menuBtn = document.getElementById("menu-btn");
+    if (menuBtn) {
+        menuBtn.addEventListener("click", toggleSidebar);
+    }
+});
 
 let instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
 if (!instructorData) {
@@ -53,18 +57,23 @@ function getCsrfToken() {
     return cookieMatch ? cookieMatch[1] : null;
 }
 
-document.getElementById("logout-btn").addEventListener("click", logout);
-
-const pageType = document.body.dataset.page || '';
-if (pageType === 'profile') {
-    showPersonalInfo();
-} else if (pageType === 'my_courses') {
-    showMyCourses();
-} else if (pageType === 'grades') {
-    showGrades();
-} else if (pageType === 'announcements') {
-    showAnnouncements();
-}
+document.addEventListener("DOMContentLoaded", function() {
+    const logoutBtn = document.getElementById("logout-btn");
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", logout);
+    }
+    
+    const pageType = document.body.dataset.page || '';
+    if (pageType === 'profile') {
+        showPersonalInfo();
+    } else if (pageType === 'my_courses') {
+        showMyCourses();
+    } else if (pageType === 'grades') {
+        showGrades();
+    } else if (pageType === 'announcements') {
+        showAnnouncements();
+    }
+});
 
 function showPersonalInfo() {
     const infoDiv = document.getElementById("personal-info");
@@ -373,6 +382,11 @@ function logout() {
     window.location.href = "/";
 }
 
-document.getElementById("personal-info").innerHTML = "";
+document.addEventListener("DOMContentLoaded", function() {
+    const personalInfo = document.getElementById("personal-info");
+    if (personalInfo) {
+        personalInfo.innerHTML = "";
+    }
+});
 
 

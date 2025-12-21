@@ -38,8 +38,8 @@
         Select a course to set the learning outcomes and link them to program outcomes.
     </p>
 
-    <div style="margin-top: 12px; margin-bottom: 28px;">
-        <table class="grades-table">
+    <div style="margin-top: 12px; margin-bottom: 28px; margin-left: 8px; width: 50%;">
+        <table class="grades-table" style="width: 100%;">
             <thead>
             <tr>
                 <th>My Courses</th>
@@ -123,16 +123,16 @@
 <script>
     (function() {
         document.getElementById("personal-info-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor' %}";
+            window.location.href = "{% url 'instructor_profile' %}";
         });
         document.getElementById("my-courses-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor' %}";
+            window.location.href = "{% url 'instructor_my_courses' %}";
         });
         document.getElementById("grades-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor' %}";
+            window.location.href = "{% url 'instructor_grades' %}";
         });
         document.getElementById("announcements-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor' %}";
+            window.location.href = "{% url 'instructor_announcements' %}";
         });
         document.getElementById("logout-btn").addEventListener("click", function() {
             sessionStorage.clear();
