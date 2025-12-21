@@ -142,36 +142,41 @@ def faculty_head_login(request):
                 'error': 'Invalid username or password.'
             })
         
-        # Django User oluştur veya al
+        from .models import UserProfile, Faculty
+        
+        first_name = faculty_head.get('firstName') or faculty_head.get('first_name', '')
+        last_name = faculty_head.get('lastName') or faculty_head.get('last_name', '')
+        
         user, created = User.objects.get_or_create(
             username=username,
-            defaults={'first_name': faculty_head.get('first_name', ''), 'last_name': faculty_head.get('last_name', '')}
+            defaults={'first_name': first_name, 'last_name': last_name}
         )
         
         if created:
             user.set_unusable_password()
             user.save()
         
-        # UserProfile oluştur veya güncelle (role='faculty_head' olarak)
-        from .models import UserProfile, Faculty
         profile, _ = UserProfile.objects.get_or_create(
             user=user,
             defaults={'role': 'faculty_head'}
         )
         
-        # Eğer profile daha önceden başka role ile oluşturulmuşsa, role'ü güncelle
         if profile.role != 'faculty_head':
             profile.role = 'faculty_head'
             profile.save()
         
-        # Eğer faculty varsa, atama yap (faculty_id'yi JSON'dan al veya slug'tan bul)
         if faculty_head.get('faculty'):
+            faculty_name = faculty_head['faculty']
+            faculty_slug = faculty_name.lower().replace(' ', '-')
             try:
-                faculty = Faculty.objects.get(slug=faculty_head['faculty'])
-                profile.faculty = faculty
-                profile.save()
+                faculty = Faculty.objects.get(slug=faculty_slug)
             except Faculty.DoesNotExist:
-                pass
+                faculty, _ = Faculty.objects.get_or_create(
+                    slug=faculty_slug,
+                    defaults={'name': faculty_name}
+                )
+            profile.faculty = faculty
+            profile.save()
         
         # Django authentication
         auth_login(request, user)
@@ -265,7 +270,7 @@ def instructor_grades(request):
 
 @instructor_required
 def instructor_announcements(request):
-    return render(request, 'instructor.html', {'show_welcome': False, 'page': 'announcements'})
+    return render(request, 'instructor/announcements.html')
 
 
 @csrf_exempt
@@ -284,7 +289,6 @@ def faculty_head_dashboard(request):
     profile = getattr(request.user, 'profile', None)
     faculty = profile.faculty if profile else None
     
-    # JSON'dan faculty head bilgisini oku
     faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
     faculty_head_data = {}
     try:
@@ -298,7 +302,7 @@ def faculty_head_dashboard(request):
         pass
     
     context = {
-        'faculty_head': faculty_head_data,
+        'faculty_head': json.dumps(faculty_head_data),
         'user': request.user,
     }
     return render(request, 'faculty_head.html', context)
@@ -459,11 +463,12 @@ def program_outcomes(request):
         pass
     
     if not faculty and faculty_name_from_json:
+        faculty_slug = faculty_name_from_json.lower().replace(' ', '-')
         try:
-            faculty = Faculty.objects.get(slug=faculty_name_from_json.lower())
+            faculty = Faculty.objects.get(slug=faculty_slug)
         except Faculty.DoesNotExist:
             faculty, _ = Faculty.objects.get_or_create(
-                slug=faculty_name_from_json.lower(),
+                slug=faculty_slug,
                 defaults={'name': faculty_name_from_json}
             )
         if profile:
@@ -837,6 +842,26 @@ def faculty_head_course_learning_outcomes(request, course_name):
 def give_grade(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     return render(request, 'faculty/give_grade.html', {'course': course})
+
+@faculty_head_required
+def faculty_head_grades(request):
+    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+    faculty_head_data = {}
+    try:
+        with open(faculty_heads_json_path, encoding='utf-8') as f:
+            faculty_heads_list = json.load(f)
+            for fh in faculty_heads_list:
+                if fh.get('username') == request.user.username:
+                    faculty_head_data = fh
+                    break
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    context = {
+        'faculty_head': json.dumps(faculty_head_data),
+        'user': request.user,
+    }
+    return render(request, 'faculty/faculty_head_grades.html', context)
 
 
 @instructor_required
@@ -1285,4 +1310,8 @@ def student_announcements(request):
 
 def logout_view(request):
     logout(request)
-    return redirect("student-login")
+    return redirect("home")
+
+def faculty_head_logout(request):
+    logout(request)
+    return redirect("home")

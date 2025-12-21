@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Announcements</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script>
+        (function() {
+            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
+            if (!instructorData) {
+                window.location.href = "/";
+                return;
+            }
+        })();
+    </script>
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li id="personal-info-btn">Personal Information</li>
+        <li id="my-courses-btn">My Courses</li>
+        <li id="grades-btn">Grades</li>
+        <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
+        <li id="announcements-btn">Announcements</li>
+        <li id="logout-btn">Logout</li>
+    </ul>
+</div>
+
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
+    <div style="margin-left: 0; margin-top: 10px;">
+        <h1 style="font-size: 32px; margin: 0;">Announcements</h1>
+    </div>
+
+    <div id="announcements-content" style="margin-top: 24px;">
+    </div>
+</div>
+
+<script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
+<script src="{% static 'js/instructor.js' %}"></script>
+<script>
+    (function() {
+        document.getElementById("personal-info-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_profile' %}";
+        });
+        document.getElementById("my-courses-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_my_courses' %}";
+        });
+        document.getElementById("grades-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_grades' %}";
+        });
+        document.getElementById("announcements-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_announcements' %}";
+        });
+        document.getElementById("logout-btn").addEventListener("click", function() {
+            sessionStorage.clear();
+            window.location.href = "/";
+        });
+    })();
+</script>
+</body>
+</html>
+

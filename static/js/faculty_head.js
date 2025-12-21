@@ -1,8 +1,3 @@
-const menuBtn = document.getElementById("menu-btn");
-if (menuBtn) {
-    menuBtn.addEventListener("click", toggleSidebar);
-}
-
 function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
     const content = document.getElementById("content");
@@ -16,6 +11,13 @@ function toggleSidebar() {
         content.style.marginLeft = "200px";
     }
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    const menuBtn = document.getElementById("menu-btn");
+    if (menuBtn) {
+        menuBtn.addEventListener("click", toggleSidebar);
+    }
+});
 
 // Basit kontrol: faculty head login yapılmamışsa ana sayfaya yönlendir
 const facultyHeadDataRaw = sessionStorage.getItem("loggedFacultyHead");

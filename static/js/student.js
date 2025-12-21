@@ -10,10 +10,6 @@ function toggleSidebar() {
     }
 }
 
-
-document.getElementById("menu-btn").addEventListener("click", toggleSidebar);
-
-
 let studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
 if (!studentData) {
     window.location.href = "/";
@@ -35,12 +31,17 @@ if (!studentData) {
         });
 }
 
-
-document.getElementById("personal-info-btn").addEventListener("click", showPersonalInfo);
-document.getElementById("my-courses-btn").addEventListener("click", showMyCourses);
-document.getElementById("grades-btn").addEventListener("click", showGrades);
-document.getElementById("announcements-btn").addEventListener("click", showAnnouncements);
-document.getElementById("logout-btn").addEventListener("click", logout);
+document.addEventListener("DOMContentLoaded", function() {
+    const menuBtn = document.getElementById("menu-btn");
+    if (menuBtn) {
+        menuBtn.addEventListener("click", toggleSidebar);
+    }
+    
+    const personalInfo = document.getElementById("personal-info");
+    if (personalInfo && !personalInfo.innerHTML.trim()) {
+        personalInfo.innerHTML = "";
+    }
+});
 
 
 function showPersonalInfo() {
@@ -122,4 +123,3 @@ function closePopup() {
 }
 
 
-document.getElementById("personal-info").innerHTML = "";

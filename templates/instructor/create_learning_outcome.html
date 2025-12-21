@@ -106,6 +106,26 @@
     </script>
 
 <script src="{% static 'js/instructor.js' %}"></script>
+<script>
+    (function() {
+        document.getElementById("personal-info-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_profile' %}";
+        });
+        document.getElementById("my-courses-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_my_courses' %}";
+        });
+        document.getElementById("grades-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_grades' %}";
+        });
+        document.getElementById("announcements-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_announcements' %}";
+        });
+        document.getElementById("logout-btn").addEventListener("click", function() {
+            sessionStorage.clear();
+            window.location.href = "/";
+        });
+    })();
+</script>
 </div>
 </body>
 </html>

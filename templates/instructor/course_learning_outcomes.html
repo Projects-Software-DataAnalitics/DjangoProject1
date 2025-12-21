@@ -30,6 +30,10 @@
 <div class="content" id="content">
     <button class="menu-btn" id="menu-btn">☰</button>
     <div style="margin-left: 0; margin-top: 10px;">
+        <a href="{% url 'learning_outcomes' %}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: #3b82f6; font-size: 16px; font-weight: 500; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#3b82f6';">
+            <span style="font-size: 20px;">←</span>
+            <span>Go back</span>
+        </a>
         <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ course_name }}</h1>
     </div>
 
@@ -102,7 +106,7 @@
     </div>
 
     <div style="margin-top: 32px;">
-        <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes</h2>
+        <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes of {{ course_name }}</h2>
         {% if outcomes_data %}
             <ul style="list-style: none; padding: 0; margin: 0;">
                 {% for outcome in outcomes_data %}
@@ -390,6 +394,26 @@
     </script>
 
 <script src="{% static 'js/instructor.js' %}"></script>
+<script>
+    (function() {
+        document.getElementById("personal-info-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_profile' %}";
+        });
+        document.getElementById("my-courses-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_my_courses' %}";
+        });
+        document.getElementById("grades-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_grades' %}";
+        });
+        document.getElementById("announcements-btn").addEventListener("click", function() {
+            window.location.href = "{% url 'instructor_announcements' %}";
+        });
+        document.getElementById("logout-btn").addEventListener("click", function() {
+            sessionStorage.clear();
+            window.location.href = "/";
+        });
+    })();
+</script>
 </div>
 </body>
 </html>

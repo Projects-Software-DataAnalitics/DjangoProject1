@@ -7,14 +7,18 @@
 <h1>My Courses</h1>
 <div id="courses-list"></div>
 <script>
-    const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
-    if (studentData) {
-        const coursesDiv = document.getElementById("courses-list");
-        coursesDiv.innerHTML = `
-            <ul>
-                ${studentData.courses.map(course => `<li>${course}</li>`).join('')}
-            </ul>
-        `;
-    }
+    (function() {
+        const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
+        if (studentData) {
+            const coursesDiv = document.getElementById("courses-list");
+            if (coursesDiv && studentData.courses) {
+                coursesDiv.innerHTML = `
+                    <ul>
+                        ${studentData.courses.map(course => `<li>${course}</li>`).join('')}
+                    </ul>
+                `;
+            }
+        }
+    })();
 </script>
 {% endblock %}
