@@ -110,10 +110,44 @@ def index(request):
 
 
 def student_login(request):
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '').strip()
+        
+        user = authenticate(request, username=username, password=password)
+        if user:
+            try:
+                student = Student.objects.get(user=user)
+                auth_login(request, user)
+                return JsonResponse({'status': 'success', 'username': username})
+            except Student.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'User is not a student'}, status=403)
+        else:
+            return JsonResponse({'status': 'error', 'message': 'Invalid username or password'}, status=401)
+    
     return render(request, 'student_login.html')
 
 
 def instructor_login(request):
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '').strip()
+        
+        user = authenticate(request, username=username, password=password)
+        if user:
+            try:
+                profile = user.profile
+                if profile.role == 'instructor':
+                    auth_login(request, user)
+                    request.session['instructor_username'] = username
+                    return JsonResponse({'status': 'success', 'username': username})
+                else:
+                    return JsonResponse({'status': 'error', 'message': 'User is not an instructor'}, status=403)
+            except AttributeError:
+                return JsonResponse({'status': 'error', 'message': 'User profile not found'}, status=403)
+        else:
+            return JsonResponse({'status': 'error', 'message': 'Invalid username or password'}, status=401)
+    
     return render(request, 'instructor_login.html')
 
 
@@ -122,22 +156,22 @@ def faculty_head_login(request):
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
         
-        # JSON dosyasından faculty head'leri oku
-        faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-        try:
-            with open(faculty_heads_json_path, encoding='utf-8') as f:
-                faculty_heads_data = json.load(f)
-        except (OSError, json.JSONDecodeError):
-            faculty_heads_data = []
-        
-        # Kullanıcı JSON'da varsa ve şifre doğru ise
-        faculty_head = None
-        for fh in faculty_heads_data:
-            if fh.get('username') == username and fh.get('password') == password:
-                faculty_head = fh
-                break
-        
-        if not faculty_head:
+        user = authenticate(request, username=username, password=password)
+        if user:
+            try:
+                profile = user.profile
+                if profile.role == 'faculty_head':
+                    auth_login(request, user)
+                    return redirect('faculty-head')
+                else:
+                    return render(request, 'faculty_head_login.html', {
+                        'error': 'User is not a faculty head.'
+                    })
+            except AttributeError:
+                return render(request, 'faculty_head_login.html', {
+                    'error': 'User profile not found.'
+                })
+        else:
             return render(request, 'faculty_head_login.html', {
                 'error': 'Invalid username or password.'
             })

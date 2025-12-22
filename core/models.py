@@ -20,6 +20,8 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     faculty = models.ForeignKey(Faculty, null=True, blank=True, on_delete=models.SET_NULL)
+    department = models.CharField(max_length=200, blank=True)
+    courses = models.ManyToManyField('Course', blank=True, related_name='user_profiles')
 
     def __str__(self):
         return f"{self.user.username} ({self.role})"
@@ -28,17 +30,25 @@ class UserProfile(models.Model):
 class Student(models.Model):
     username = models.CharField(max_length=100, unique=True)
     student_id = models.CharField(max_length=20, unique=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
+    department = models.CharField(max_length=200, blank=True)
+    year = models.IntegerField(null=True, blank=True)  # Sadece sınıf numarası: 1, 2, 3, 4
+    user = models.OneToOneField(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='student_profile')
 
     def __str__(self):
         return self.username
 
 class Course(models.Model):
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20)
-    instructor = models.ForeignKey(User, on_delete=models.CASCADE)
+    code = models.CharField(max_length=20, blank=True)
+    instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='instructor_courses')
+    department = models.CharField(max_length=200, blank=True)
 
     def __str__(self):
-        return f"{self.code} - {self.name}"
+        if self.code:
+            return f"{self.code} - {self.name}"
+        return self.name
 
 class Grade(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)

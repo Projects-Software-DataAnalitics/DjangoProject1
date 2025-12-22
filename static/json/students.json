@@ -1,21 +1,26 @@
 [
   {
-    "firstName": "Alice",
-    "lastName": "Johnson",
-    "username": "alice.johnson",
+    "firstName": "Nehir Irem",
+    "lastName": "Celik",
+    "username": "nehir.celik",
     "password": "12345",
+    "student_id": "231401047",
     "department": "Computer Engineering",
-    "class": "2A",
-    "courses": ["Mathematics", "Physics", "Programming"]
+    "faculty": "Engineering",
+    "year": 3,
+    "courses": ["Data Systems", "Computer Architecture", "Algorithms"]
   },
   {
-    "firstName": "Bob Michael",
-    "lastName": "Smith",
-    "username": "bob.smith",
+    "firstName": "Mina",
+    "lastName": "Ozdamar",
+    "username": "mina.ozdamar",
     "password": "abcde",
-    "department": "Electrical Engineering",
-    "class": "3B",
-    "courses": ["Circuits", "Electromagnetics", "Algorithms"]
+    "student_id": "231401021",
+    "department": "Computer Engineering",
+    "faculty": "Engineering",
+    "year": 4,
+    "courses": ["Operating Systems", "Software"]
   }
 ]
+
 
