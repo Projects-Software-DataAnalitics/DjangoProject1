@@ -33,8 +33,257 @@
         <h1 style="font-size: 32px; margin: 0;">Announcements</h1>
     </div>
 
-    <div id="announcements-content" style="margin-top: 24px;">
+    <div id="announcements-content" style="margin-top: 24px; max-width: 800px;">
+        <!-- Tab Headers -->
+        <div style="display: flex; gap: 24px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
+            <button id="tab-send" class="tab-button active" style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">
+                Send Message
+            </button>
+            <button id="tab-received" class="tab-button" style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
+                Messages Received
+            </button>
+            <button id="tab-sent" class="tab-button" style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
+                Messages Send
+            </button>
+        </div>
+
+        <!-- Send Message Tab -->
+        <div id="content-send" class="tab-content" style="display: block;">
+            <div style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+                <form method="post">
+                    {% csrf_token %}
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                            Subject (Optional)
+                        </label>
+                        <input
+                            type="text"
+                            name="subject"
+                            placeholder="Enter subject (default: No Topic)"
+                            style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;"
+                        >
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                            To (Optional - leave empty for everyone)
+                        </label>
+                        <select name="receiver" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px;">
+                            <option value="">Everyone</option>
+                            {% for recipient in recipients %}
+                                <option value="{{ recipient.username }}">{{ recipient.name }} ({{ recipient.role }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                            Message
+                        </label>
+                        <textarea
+                            name="message"
+                            rows="4"
+                            required
+                            placeholder="Enter your message..."
+                            style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 14px;"
+                        ></textarea>
+                    </div>
+                    <button type="submit" class="primary-btn" style="padding: 12px 24px; font-size: 16px;">
+                        Send Message
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Messages Received Tab -->
+        <div id="content-received" class="tab-content" style="display: none;">
+            <div style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+                <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Received</h2>
+                {% if received_messages %}
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        {% for ann in received_messages %}
+                            <div class="message-item" data-ann-id="{{ ann.id }}" style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.2s;" 
+                                 onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
+                                 onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 16px;">
+                                            {{ ann.subject }}
+                                        </div>
+                                        <div style="font-size: 14px; color: #64748b; margin-bottom: 4px;">
+                                            From: {{ ann.sender }}
+                                        </div>
+                                        <div style="font-size: 12px; color: #94a3b8;">
+                                            {{ ann.created_at }}
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #10b981; color: #ffffff; height: fit-content;">
+                                        Received
+                                    </span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="color: #64748b; text-align: center; padding: 40px;">No received messages yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Messages Sent Tab -->
+        <div id="content-sent" class="tab-content" style="display: none;">
+            <div style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+                <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Send</h2>
+                {% if sent_messages %}
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        {% for ann in sent_messages %}
+                            <div class="message-item" data-ann-id="{{ ann.id }}" style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #eff6ff; cursor: pointer; transition: all 0.2s;"
+                                 onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
+                                 onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 16px;">
+                                            {{ ann.subject }}
+                                        </div>
+                                        <div style="font-size: 14px; color: #64748b; margin-bottom: 4px;">
+                                            To: {{ ann.receiver }}
+                                        </div>
+                                        <div style="font-size: 12px; color: #94a3b8;">
+                                            {{ ann.created_at }}
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #3b82f6; color: #ffffff; height: fit-content;">
+                                        Sent
+                                    </span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="color: #64748b; text-align: center; padding: 40px;">No sent messages yet.</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
+
+    <!-- Message Popup -->
+    <div id="message-popup" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(15,23,42,0.25); position: relative;">
+            <button id="close-popup" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;"
+                    onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a';"
+                    onmouseout="this.style.background='none'; this.style.color='#64748b';">
+                ×
+            </button>
+            <div id="popup-content">
+                <!-- Popup content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Message data
+        const messagesData = {
+            {% for ann in all_announcements %}
+            {{ ann.id }}: {
+                subject: "{{ ann.subject|escapejs }}",
+                message: "{{ ann.message|escapejs }}",
+                sender: "{{ ann.sender|escapejs }}",
+                receiver: "{{ ann.receiver|escapejs }}",
+                created_at: "{{ ann.created_at|escapejs }}",
+                is_sent: {{ ann.is_sent|yesno:"true,false" }}
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        };
+
+        // Tab switching functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabs = {
+                'tab-send': 'content-send',
+                'tab-received': 'content-received',
+                'tab-sent': 'content-sent'
+            };
+
+            function switchTab(activeTabId) {
+                // Hide all content
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                
+                // Reset all tab buttons
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.style.color = '#64748b';
+                    btn.style.borderBottomColor = 'transparent';
+                    btn.classList.remove('active');
+                });
+                
+                // Show active content
+                const activeContentId = tabs[activeTabId];
+                document.getElementById(activeContentId).style.display = 'block';
+                
+                // Update active tab button
+                const activeBtn = document.getElementById(activeTabId);
+                activeBtn.style.color = '#3b82f6';
+                activeBtn.style.borderBottomColor = '#3b82f6';
+                activeBtn.classList.add('active');
+            }
+
+            // Add click handlers for tabs
+            Object.keys(tabs).forEach(tabId => {
+                document.getElementById(tabId).addEventListener('click', function() {
+                    switchTab(tabId);
+                });
+            });
+
+            // Message item click handlers
+            document.querySelectorAll('.message-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const annId = this.getAttribute('data-ann-id');
+                    const message = messagesData[annId];
+                    if (message) {
+                        showMessagePopup(message);
+                    }
+                });
+            });
+
+            // Close popup
+            document.getElementById('close-popup').addEventListener('click', function() {
+                document.getElementById('message-popup').style.display = 'none';
+            });
+
+            // Close popup when clicking outside
+            document.getElementById('message-popup').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.style.display = 'none';
+                }
+            });
+        });
+
+        function showMessagePopup(message) {
+            const popupContent = document.getElementById('popup-content');
+            const direction = message.is_sent ? 'To' : 'From';
+            const person = message.is_sent ? message.receiver : message.sender;
+            const badgeColor = message.is_sent ? '#3b82f6' : '#10b981';
+            const badgeText = message.is_sent ? 'Sent' : 'Received';
+            
+            popupContent.innerHTML = `
+                <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #0f172a; padding-right: 40px;">${message.subject}</h2>
+                <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-size: 14px; color: #64748b;">
+                            ${direction}: <span style="font-weight: 600; color: #0f172a;">${person}</span>
+                        </div>
+                        <span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: ${badgeColor}; color: #ffffff;">
+                            ${badgeText}
+                        </span>
+                    </div>
+                    <div style="font-size: 12px; color: #94a3b8;">
+                        ${message.created_at}
+                    </div>
+                </div>
+                <div style="color: #1e293b; line-height: 1.6; white-space: pre-wrap; font-size: 15px;">${message.message}</div>
+            `;
+            
+            document.getElementById('message-popup').style.display = 'flex';
+        }
+    </script>
 </div>
 
 <script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
