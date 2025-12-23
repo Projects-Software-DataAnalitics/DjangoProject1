@@ -355,7 +355,7 @@ def instructor_grades(request):
 
 @instructor_required
 def instructor_announcements(request):
-    return render(request, 'instructor/announcements.html')
+    return render(request, 'instructor/instructor_announcements.html')
 
 
 @csrf_exempt
@@ -1446,11 +1446,14 @@ def student_grades(request):
 
 
 def student_announcements(request):
-    return render(request, "student/announcements.html")
+    return render(request, "student/student_announcement.html")
 
 def logout_view(request):
     logout(request)
     return redirect("home")
+
+def faculty_head_announcements(request):
+    return render(request, "faculty/faculty_announcements.html")
 
 def faculty_head_logout(request):
     logout(request)

@@ -1,55 +1,11 @@
 {% extends "student_base.html" %}
 {% load static %}
 
-{% block title %}Student Dashboard{% endblock %}
+{% block title %}Student Main Page{% endblock %}
 
 {% block content %}
 <h1>Welcome Student</h1>
 <div id="personal-info"></div>
-<div id="grades-section" style="display: none;">
-    {% if courses_with_grades %}
-    <section class="grades-section">
-        <h2>Your Grades</h2>
-        <table class="grades-table">
-            <thead>
-                <tr>
-                    <th>Course</th>
-                    <th>Midterm</th>
-                    <th>Assignment</th>
-                    <th>Final</th>
-                    <th>Details</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for item in courses_with_grades %}
-                <tr>
-                    <td>{{ item.course_name }}</td>
-                    <td>{% if item.midterm is not None %}{{ item.midterm }}{% else %}-{% endif %}</td>
-                    <td>{% if item.assignment is not None %}{{ item.assignment }}{% else %}-{% endif %}</td>
-                    <td>{% if item.final is not None %}{{ item.final }}{% else %}-{% endif %}</td>
-                    <td>
-                        <button onclick="showDetails('{{ item.course_name }}')">
-                            Show Details
-                        </button>
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </section>
-    {% elif grades is not None %}
-        <p class="no-grades-message">No grades available yet.</p>
-    {% endif %}
-</div>
-
-<div id="popup" class="popup-overlay" style="display: none;">
-    <div class="popup-box">
-        <h3 id="popup-title">Course Details</h3>
-        <p id="popup-content"></p>
-        <button onclick="closePopup()">Close</button>
-    </div>
-</div>
-
 <script id="student-json-path" data-path="{% static 'json/students.json' %}"></script>
 <script src="{% static 'js/student.js' %}"></script>
 {% endblock %}
