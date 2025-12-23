@@ -9,6 +9,7 @@ from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.db import connection
 from .models import Grade, Student, Course, ProgramOutcome
 
 User = get_user_model()
@@ -355,7 +356,165 @@ def instructor_grades(request):
 
 @instructor_required
 def instructor_announcements(request):
-    return render(request, 'instructor/instructor_announcements.html')
+    from .models import Announcement, UserProfile
+    instructor_user = request.instructor_user
+    
+    instructors = User.objects.filter(profile__role='instructor').select_related('profile')
+    faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
+    
+    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+    
+    instructors_map = {}
+    try:
+        with open(instructors_json_path, encoding='utf-8') as f:
+            instructors_data = json.load(f)
+            for inst in instructors_data:
+                username = inst.get('username')
+                first_name = inst.get('firstName', '')
+                last_name = inst.get('lastName', '')
+                full_name = (first_name + ' ' + last_name).strip()
+                if full_name:
+                    instructors_map[username] = full_name
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    faculty_heads_map = {}
+    try:
+        with open(faculty_heads_json_path, encoding='utf-8') as f:
+            faculty_heads_data = json.load(f)
+            for fh in faculty_heads_data:
+                username = fh.get('username')
+                first_name = fh.get('firstName', '')
+                last_name = fh.get('lastName', '')
+                full_name = (first_name + ' ' + last_name).strip()
+                if full_name:
+                    faculty_heads_map[username] = full_name
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    if request.method == 'POST':
+        message = (request.POST.get('message') or '').strip()
+        subject = (request.POST.get('subject') or '').strip()
+        receiver_username = (request.POST.get('receiver') or '').strip()
+        
+        if message:
+            if not subject:
+                subject = 'No Topic'
+            
+            receiver_id = None
+            receiver_role = None
+            if receiver_username:
+                try:
+                    receiver = User.objects.get(username=receiver_username)
+                    receiver_id = receiver.id
+                    profile = getattr(receiver, 'profile', None)
+                    if profile:
+                        receiver_role = profile.role
+                except User.DoesNotExist:
+                    pass
+            
+            from datetime import datetime
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO core_announcement (sender_id, receiver_id, subject, message, sender_role, receiver_role, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, [instructor_user.id, receiver_id, subject, message, 'instructor', receiver_role, datetime.now()])
+            
+            return redirect('instructor_announcements')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT 
+                a.id, a.subject, a.message, a.sender_role, a.receiver_role, a.created_at,
+                a.sender_id, a.receiver_id,
+                sender.username as sender_username, sender.first_name as sender_first_name, sender.last_name as sender_last_name,
+                receiver.username as receiver_username, receiver.first_name as receiver_first_name, receiver.last_name as receiver_last_name
+            FROM core_announcement a
+            INNER JOIN auth_user sender ON a.sender_id = sender.id
+            LEFT JOIN auth_user receiver ON a.receiver_id = receiver.id
+            WHERE a.sender_id = %s OR a.receiver_id = %s
+            ORDER BY a.created_at DESC
+        """, [instructor_user.id, instructor_user.id])
+        
+        rows = cursor.fetchall()
+        all_announcements = []
+        for row in rows:
+            ann_id, subject, message, sender_role, receiver_role, created_at, sender_id, receiver_id, sender_username, sender_first_name, sender_last_name, receiver_username, receiver_first_name, receiver_last_name = row
+            all_announcements.append({
+                'id': ann_id,
+                'subject': subject,
+                'message': message,
+                'sender_id': sender_id,
+                'receiver_id': receiver_id,
+                'sender_username': sender_username,
+                'sender_first_name': sender_first_name,
+                'sender_last_name': sender_last_name,
+                'receiver_username': receiver_username,
+                'receiver_first_name': receiver_first_name,
+                'receiver_last_name': receiver_last_name,
+                'sender_role': sender_role,
+                'receiver_role': receiver_role,
+                'created_at': created_at,
+            })
+    
+    announcements_data = []
+    for ann in all_announcements:
+        sender_full_name = f"{ann['sender_first_name']} {ann['sender_last_name']}".strip() if ann['sender_first_name'] or ann['sender_last_name'] else ''
+        sender_name = instructors_map.get(ann['sender_username']) or faculty_heads_map.get(ann['sender_username']) or sender_full_name or ann['sender_username']
+        
+        receiver_name = "Everyone"
+        receiver_username = None
+        if ann['receiver_id']:
+            receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
+            receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
+            receiver_username = ann['receiver_username']
+        
+        created_at_str = ann['created_at']
+        if isinstance(created_at_str, str):
+            from datetime import datetime
+            try:
+                created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
+            except:
+                try:
+                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                except:
+                    created_at_dt = datetime.now()
+            created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
+        else:
+            created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
+        
+        announcements_data.append({
+            'id': ann['id'],
+            'subject': ann['subject'],
+            'message': ann['message'],
+            'sender': sender_name,
+            'sender_username': ann['sender_username'],
+            'receiver': receiver_name,
+            'receiver_username': receiver_username,
+            'is_sent': ann['sender_id'] == instructor_user.id,
+            'created_at': created_at_formatted,
+        })
+    
+    recipients = []
+    for inst in instructors:
+        if inst.username != instructor_user.username:
+            name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
+            recipients.append({'username': inst.username, 'name': name, 'role': 'instructor'})
+    
+    for fh in faculty_heads:
+        name = faculty_heads_map.get(fh.username) or fh.get_full_name() or fh.username
+        recipients.append({'username': fh.username, 'name': name, 'role': 'faculty_head'})
+    
+    sent_messages = [ann for ann in announcements_data if ann['is_sent']]
+    received_messages = [ann for ann in announcements_data if not ann['is_sent']]
+    
+    return render(request, 'instructor/instructor_announcements.html', {
+        'all_announcements': announcements_data,
+        'sent_messages': sent_messages,
+        'received_messages': received_messages,
+        'recipients': recipients,
+    })
 
 
 @csrf_exempt
@@ -395,58 +554,6 @@ def faculty_head_profile(request):
         'page': 'profile',
         'profile': profile_data
     })
-
-@faculty_head_required
-def faculty_head_grades(request):
-    profile = getattr(request.user, 'profile', None)
-    
-    courses = []
-    if profile:
-        courses = [course.name for course in profile.courses.all()]
-    
-    return render(request, 'faculty_head.html', {
-        'show_welcome': False,
-        'page': 'grades',
-        'faculty_head_courses': courses
-    })
-
-
-def student_grades(request, username):
-    student = get_object_or_404(Student, username=username)
-    grades_qs = Grade.objects.filter(student=student).select_related('course')
-
-    courses_with_grades = []
-    students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
-    try:
-        with open(students_json_path, encoding='utf-8') as f:
-            students_data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        students_data = []
-
-    user_courses = []
-    for entry in students_data:
-        if entry.get('username') == username:
-            user_courses = entry.get('courses', []) or []
-            break
-
-    for course_name in user_courses:
-        grade_obj = next((g for g in grades_qs if g.course.name == course_name), None)
-        courses_with_grades.append({
-            'course_name': course_name,
-            'midterm': grade_obj.midterm if grade_obj else None,
-            'assignment': grade_obj.assignment if grade_obj else None,
-            'final': grade_obj.final if grade_obj else None,
-        })
-
-    return render(
-        request,
-        'student.html',
-        {
-            'student': student,
-            'grades': grades_qs,
-            'courses_with_grades': courses_with_grades,
-        }
-    )
 
 @faculty_head_required
 def all_courses(request):
@@ -1452,8 +1559,168 @@ def logout_view(request):
     logout(request)
     return redirect("home")
 
+@faculty_head_required
 def faculty_head_announcements(request):
-    return render(request, "faculty/faculty_announcements.html")
+    from .models import Announcement, UserProfile
+    faculty_head_user = request.user
+
+    instructors = User.objects.filter(profile__role='instructor').select_related('profile')
+    faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
+    
+
+    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+    
+    instructors_map = {}
+    try:
+        with open(instructors_json_path, encoding='utf-8') as f:
+            instructors_data = json.load(f)
+            for inst in instructors_data:
+                username = inst.get('username')
+                first_name = inst.get('firstName', '')
+                last_name = inst.get('lastName', '')
+                full_name = (first_name + ' ' + last_name).strip()
+                if full_name:
+                    instructors_map[username] = full_name
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    faculty_heads_map = {}
+    try:
+        with open(faculty_heads_json_path, encoding='utf-8') as f:
+            faculty_heads_data = json.load(f)
+            for fh in faculty_heads_data:
+                username = fh.get('username')
+                first_name = fh.get('firstName', '')
+                last_name = fh.get('lastName', '')
+                full_name = (first_name + ' ' + last_name).strip()
+                if full_name:
+                    faculty_heads_map[username] = full_name
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    if request.method == 'POST':
+        message = (request.POST.get('message') or '').strip()
+        subject = (request.POST.get('subject') or '').strip()
+        receiver_username = (request.POST.get('receiver') or '').strip()
+        
+        if message:
+            if not subject:
+                subject = 'No Topic'
+            
+            receiver_id = None
+            receiver_role = None
+            if receiver_username:
+                try:
+                    receiver = User.objects.get(username=receiver_username)
+                    receiver_id = receiver.id
+                    profile = getattr(receiver, 'profile', None)
+                    if profile:
+                        receiver_role = profile.role
+                except User.DoesNotExist:
+                    pass
+            
+            from datetime import datetime
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO core_announcement (sender_id, receiver_id, subject, message, sender_role, receiver_role, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, [faculty_head_user.id, receiver_id, subject, message, 'faculty_head', receiver_role, datetime.now()])
+            
+            return redirect('faculty-head-announcements')
+    
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT 
+                a.id, a.subject, a.message, a.sender_role, a.receiver_role, a.created_at,
+                a.sender_id, a.receiver_id,
+                sender.username as sender_username, sender.first_name as sender_first_name, sender.last_name as sender_last_name,
+                receiver.username as receiver_username, receiver.first_name as receiver_first_name, receiver.last_name as receiver_last_name
+            FROM core_announcement a
+            INNER JOIN auth_user sender ON a.sender_id = sender.id
+            LEFT JOIN auth_user receiver ON a.receiver_id = receiver.id
+            WHERE a.sender_id = %s OR a.receiver_id = %s
+            ORDER BY a.created_at DESC
+        """, [faculty_head_user.id, faculty_head_user.id])
+        
+        rows = cursor.fetchall()
+        all_announcements = []
+        for row in rows:
+            ann_id, subject, message, sender_role, receiver_role, created_at, sender_id, receiver_id, sender_username, sender_first_name, sender_last_name, receiver_username, receiver_first_name, receiver_last_name = row
+            all_announcements.append({
+                'id': ann_id,
+                'subject': subject,
+                'message': message,
+                'sender_id': sender_id,
+                'receiver_id': receiver_id,
+                'sender_username': sender_username,
+                'sender_first_name': sender_first_name,
+                'sender_last_name': sender_last_name,
+                'receiver_username': receiver_username,
+                'receiver_first_name': receiver_first_name,
+                'receiver_last_name': receiver_last_name,
+                'sender_role': sender_role,
+                'receiver_role': receiver_role,
+                'created_at': created_at,
+            })
+    
+    announcements_data = []
+    for ann in all_announcements:
+        sender_full_name = f"{ann['sender_first_name']} {ann['sender_last_name']}".strip() if ann['sender_first_name'] or ann['sender_last_name'] else ''
+        sender_name = instructors_map.get(ann['sender_username']) or faculty_heads_map.get(ann['sender_username']) or sender_full_name or ann['sender_username']
+        
+        receiver_name = "Everyone"
+        receiver_username = None
+        if ann['receiver_id']:
+            receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
+            receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
+            receiver_username = ann['receiver_username']
+        
+        created_at_str = ann['created_at']
+        if isinstance(created_at_str, str):
+            from datetime import datetime
+            try:
+                created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
+            except:
+                try:
+                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                except:
+                    created_at_dt = datetime.now()
+            created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
+        else:
+            created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
+        
+        announcements_data.append({
+            'id': ann['id'],
+            'subject': ann['subject'],
+            'message': ann['message'],
+            'sender': sender_name,
+            'sender_username': ann['sender_username'],
+            'receiver': receiver_name,
+            'receiver_username': receiver_username,
+            'is_sent': ann['sender_id'] == faculty_head_user.id,
+            'created_at': created_at_formatted,
+        })
+    
+    recipients = []
+    for inst in instructors:
+        name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
+        recipients.append({'username': inst.username, 'name': name, 'role': 'instructor'})
+    
+    for fh in faculty_heads:
+        if fh.username != faculty_head_user.username:
+            name = faculty_heads_map.get(fh.username) or fh.get_full_name() or fh.username
+            recipients.append({'username': fh.username, 'name': name, 'role': 'faculty_head'})
+    
+    sent_messages = [ann for ann in announcements_data if ann['is_sent']]
+    received_messages = [ann for ann in announcements_data if not ann['is_sent']]
+    
+    return render(request, "faculty/faculty_announcements.html", {
+        'all_announcements': announcements_data,
+        'sent_messages': sent_messages,
+        'received_messages': received_messages,
+        'recipients': recipients,
+    })
 
 def faculty_head_logout(request):
     logout(request)

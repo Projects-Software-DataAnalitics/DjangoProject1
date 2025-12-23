@@ -73,3 +73,24 @@ class ProgramOutcome(models.Model):
 
     def __str__(self):
         return self.text
+
+class Announcement(models.Model):
+    ROLE_CHOICES = [
+        ('instructor', 'Instructor'),
+        ('faculty_head', 'Faculty Head'),
+    ]
+    
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_announcements')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='received_announcements')
+    subject = models.CharField(max_length=200, default='No Topic')
+    message = models.TextField()
+    sender_role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    receiver_role = models.CharField(max_length=20, choices=ROLE_CHOICES, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        receiver_name = self.receiver.username if self.receiver else "Everyone"
+        return f"{self.sender.username} -> {receiver_name}: {self.subject}"

@@ -41,7 +41,6 @@ urlpatterns = [
     path('faculty-head/grades/', core_views.faculty_head_grades, name='faculty-head-grades'),
     path('faculty-head/announcements/', core_views.faculty_head_announcements, name='faculty-head-announcements'),
     path('faculty-head/profile/', core_views.faculty_head_profile, name='faculty_head_profile'),
-    path('faculty-head/grades/', core_views.faculty_head_grades, name='faculty_head_grades'),
 
     # Faculty head pages
 
@@ -64,7 +63,6 @@ urlpatterns = [
     path('instructor/learning-outcomes/create/', core_views.create_learning_outcome, name='create_learning_outcome'),
     path('instructor/learning-outcomes/update/<int:outcome_id>/', core_views.update_learning_outcome, name='update_learning_outcome'),
     path('instructor/learning-outcomes/delete/<int:outcome_id>/', core_views.delete_learning_outcome, name='delete_learning_outcome'),
-    path('instructor/set-session/', core_views.set_instructor_session, name='set_instructor_session'),
 
     # Student pages
     path("student/profile/", core_views.student_profile, name="student_profile"),
