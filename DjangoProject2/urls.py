@@ -37,6 +37,8 @@ urlpatterns = [
     path('instructor/announcements/', core_views.instructor_announcements, name='instructor_announcements'),
     path('instructor/set-session/', core_views.set_instructor_session, name='set_instructor_session'),
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
+    path('faculty-head/profile/', core_views.faculty_head_profile, name='faculty_head_profile'),
+    path('faculty-head/grades/', core_views.faculty_head_grades, name='faculty_head_grades'),
 
     # Faculty head pages
 

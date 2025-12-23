@@ -24,7 +24,110 @@
     {% if show_welcome %}
     <h1>Welcome Instructor</h1>
     {% endif %}
+    {% if page == 'my_courses' and courses %}
+    <h1>My Courses</h1>
+    <table class="courses-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+            <tr style="background-color: #0b5fff; color: white;">
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Instructor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for course in courses %}
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ course.name }}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ course.instructor }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% elif page == 'my_courses' %}
+    <h1>My Courses</h1>
+    <p style="margin-top: 20px; color: #666;">No courses assigned yet.</p>
+    {% elif page == 'profile' and profile %}
+    <h1>Personal Information</h1>
+    <table class="profile-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <tbody>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd; width: 200px;">Name</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.name }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Username</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.username }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Department</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.department|default:"-" }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Faculty</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.faculty }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Courses</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.courses|join:", "|default:"No courses assigned" }}</td>
+            </tr>
+        </tbody>
+    </table>
+    {% elif page == 'profile' %}
+    <h1>Personal Information</h1>
+    <p style="margin-top: 20px; color: #666;">No profile information available.</p>
+    {% elif page == 'grades' %}
     <div id="personal-info"></div>
+    <script>
+        const instructorCourses = {% if instructor_courses %}{{ instructor_courses|safe }}{% else %}[]{% endif %};
+        if (typeof showGrades === 'function') {
+            const infoDiv = document.getElementById("personal-info");
+            const coursesOptions = (instructorCourses || []).map(course => 
+                `<option value="${course}">${course}</option>`
+            ).join('');
+            
+            infoDiv.innerHTML = `
+                <h2>Grades</h2>
+                <div style="margin-top: 24px;">
+                    <label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
+                    <select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
+                        <option value="">-- Select a course --</option>
+                        ${coursesOptions}
+                    </select>
+                </div>
+                <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
+                <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
+            `;
+            
+            const courseSelect = document.getElementById("course-select");
+            if (courseSelect) {
+                courseSelect.addEventListener("change", function() {
+                    const selectedCourse = this.value;
+                    const fileUploadSection = document.getElementById("file-upload-section");
+                    
+                    if (selectedCourse) {
+                        fileUploadSection.style.display = "block";
+                        if (typeof updateFileUploadSection === 'function') {
+                            updateFileUploadSection(selectedCourse);
+                        }
+                        if (typeof refreshUploadStatus === 'function') {
+                            refreshUploadStatus(selectedCourse);
+                        }
+                    } else {
+                        fileUploadSection.style.display = "none";
+                        if (typeof refreshUploadStatus === 'function') {
+                            refreshUploadStatus(null);
+                        }
+                    }
+                });
+            }
+            
+            if (typeof refreshUploadStatus === 'function') {
+                refreshUploadStatus(null);
+            }
+        }
+    </script>
+    {% else %}
+    <div id="personal-info"></div>
+    {% endif %}
     {% endblock %}
     </div>
 

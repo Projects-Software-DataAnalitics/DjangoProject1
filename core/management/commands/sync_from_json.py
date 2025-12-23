@@ -81,6 +81,11 @@ class Command(BaseCommand):
                 student.user = user
                 student.save()
             
+            for course_name in student_data.get('courses', []):
+                course_obj = Course.objects.filter(name=course_name).first()
+                if course_obj:
+                    student.courses.add(course_obj)
+            
             self.stdout.write(self.style.SUCCESS(f'Synced student: {username}'))
         
         for instructor_data in instructors_data:
@@ -171,31 +176,57 @@ class Command(BaseCommand):
             
             self.stdout.write(self.style.SUCCESS(f'Synced faculty head: {username}'))
         
+        course_instructor_map = {}
+        for instructor_data in instructors_data:
+            username = instructor_data.get('username')
+            if username:
+                try:
+                    user = User.objects.get(username=username)
+                    for course_name in instructor_data.get('courses', []):
+                        if course_name not in course_instructor_map:
+                            course_instructor_map[course_name] = user
+                except User.DoesNotExist:
+                    pass
+        
+        for faculty_head_data in faculty_heads_data:
+            username = faculty_head_data.get('username')
+            if username:
+                try:
+                    user = User.objects.get(username=username)
+                    for course_name in faculty_head_data.get('courses', []):
+                        if course_name not in course_instructor_map:
+                            course_instructor_map[course_name] = user
+                except User.DoesNotExist:
+                    pass
+        
         default_instructor = UserProfile.objects.filter(role='instructor').first()
-        default_instructor_user = default_instructor.user if default_instructor else None
+        default_instructor_user = default_instructor.user if default_instructor else User.objects.first()
         
         for course_name in sorted(all_courses.keys()):
             department = instructors_data[0].get('department', '') if instructors_data else (
                 faculty_heads_data[0].get('department', '') if faculty_heads_data else ''
             )
             
+            instructor_user = course_instructor_map.get(course_name, default_instructor_user)
+            
             course, created = Course.objects.get_or_create(
                 name=course_name,
                 defaults={
                     'code': '',
                     'department': department,
-                    'instructor': default_instructor_user if default_instructor_user else User.objects.first(),
+                    'instructor': instructor_user,
                 }
             )
             
             if not created:
                 course.department = department
+                course.instructor = instructor_user
                 course.save()
             
             for profile in all_courses[course_name]:
                 profile.courses.add(course)
             
-            self.stdout.write(self.style.SUCCESS(f'Synced course: {course_name}'))
+            self.stdout.write(self.style.SUCCESS(f'Synced course: {course_name} (instructor: {instructor_user.username})'))
         
         self.stdout.write(self.style.SUCCESS('\nSync completed successfully!'))
 

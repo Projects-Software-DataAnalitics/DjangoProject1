@@ -5,18 +5,37 @@
 
 {% block content %}
 <h1>Personal Information</h1>
-<div id="personal-info"></div>
-<script>
-    const studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
-    if (studentData) {
-        const infoDiv = document.getElementById("personal-info");
-        infoDiv.innerHTML = `
-            <p><strong>Name:</strong> ${studentData.firstName} ${studentData.lastName}</p>
-            <p><strong>Username:</strong> ${studentData.username}</p>
-            <p><strong>Department:</strong> ${studentData.department}</p>
-            <p><strong>Class:</strong> ${studentData.class}</p>
-            <p><strong>Courses:</strong> ${studentData.courses.join(", ")}</p>
-        `;
-    }
-</script>
+
+{% if profile %}
+<table class="profile-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <tbody>
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd; width: 200px;">Name</td>
+            <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.name }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Username</td>
+            <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.username }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Student ID</td>
+            <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.student_id }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Year</td>
+            <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.year|default:"-" }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Department</td>
+            <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.department|default:"-" }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Courses</td>
+            <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.courses|join:", "|default:"No courses assigned" }}</td>
+        </tr>
+    </tbody>
+</table>
+{% else %}
+<p style="margin-top: 20px; color: #666;">No profile information available.</p>
+{% endif %}
 {% endblock %}

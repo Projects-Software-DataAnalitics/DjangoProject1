@@ -287,15 +287,66 @@ def instructor_dashboard(request):
 
 @instructor_required
 def instructor_profile(request):
-    return render(request, 'instructor.html', {'show_welcome': False, 'page': 'profile'})
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    courses = []
+    if profile:
+        courses = [course.name for course in profile.courses.all()]
+    
+    profile_data = {
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'username': instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+        'courses': courses,
+    }
+    
+    return render(request, 'instructor.html', {
+        'show_welcome': False,
+        'page': 'profile',
+        'profile': profile_data
+    })
 
 @instructor_required
+@instructor_required
 def instructor_my_courses(request):
-    return render(request, 'instructor.html', {'show_welcome': False, 'page': 'my_courses'})
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    courses_data = []
+    if profile:
+        courses = profile.courses.all().select_related('instructor')
+        for course in courses:
+            instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+            courses_data.append({
+                'id': course.id,
+                'name': course.name,
+                'code': course.code,
+                'instructor': instructor_name,
+                'department': course.department,
+            })
+    
+    return render(request, 'instructor.html', {
+        'show_welcome': False,
+        'page': 'my_courses',
+        'courses': courses_data
+    })
 
 @instructor_required
 def instructor_grades(request):
-    return render(request, 'instructor.html', {'show_welcome': False, 'page': 'grades'})
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    courses = []
+    if profile:
+        courses = [course.name for course in profile.courses.all()]
+    
+    return render(request, 'instructor.html', {
+        'show_welcome': False,
+        'page': 'grades',
+        'instructor_courses': courses
+    })
 
 @instructor_required
 def instructor_announcements(request):
@@ -315,27 +366,44 @@ def set_instructor_session(request):
 
 @faculty_head_required
 def faculty_head_dashboard(request):
+    return render(request, 'faculty_head.html', {'show_welcome': True})
+
+@faculty_head_required
+def faculty_head_profile(request):
     profile = getattr(request.user, 'profile', None)
     faculty = profile.faculty if profile else None
     
-    # JSON'dan faculty head bilgisini oku
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_head_data = {}
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    faculty_head_data = fh
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    courses = []
+    if profile:
+        courses = [course.name for course in profile.courses.all()]
     
-    context = {
-        'faculty_head': faculty_head_data,
-        'user': request.user,
+    profile_data = {
+        'name': f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
+        'username': request.user.username,
+        'department': profile.department if profile else '-',
+        'faculty': faculty.name if faculty else '-',
+        'courses': courses,
     }
-    return render(request, 'faculty_head.html', context)
+    
+    return render(request, 'faculty_head.html', {
+        'show_welcome': False,
+        'page': 'profile',
+        'profile': profile_data
+    })
+
+@faculty_head_required
+def faculty_head_grades(request):
+    profile = getattr(request.user, 'profile', None)
+    
+    courses = []
+    if profile:
+        courses = [course.name for course in profile.courses.all()]
+    
+    return render(request, 'faculty_head.html', {
+        'show_welcome': False,
+        'page': 'grades',
+        'faculty_head_courses': courses
+    })
 
 
 def student_grades(request, username):
@@ -451,23 +519,24 @@ def all_courses(request):
     return render(request, 'faculty/all_courses.html', context)
 
 @faculty_head_required
-@faculty_head_required
 def my_courses(request):
-    # JSON'dan faculty head bilgisini oku
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_head_data = {}
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    faculty_head_data = fh
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    profile = getattr(request.user, 'profile', None)
+    
+    courses_data = []
+    if profile:
+        courses = profile.courses.all().select_related('instructor')
+        for course in courses:
+            instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+            courses_data.append({
+                'id': course.id,
+                'name': course.name,
+                'code': course.code,
+                'instructor': instructor_name,
+                'department': course.department,
+            })
     
     context = {
-        'faculty_head': faculty_head_data,
+        'courses': courses_data,
     }
     return render(request, 'faculty/my_courses.html', context)
 
@@ -1269,45 +1338,81 @@ def create_learning_outcome(request):
     )
 
 def student_profile(request):
-    return render(request, "student/profile.html")
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        courses = student.courses.all()
+        courses_list = [course.name for course in courses]
+        
+        profile_data = {
+            'name': f"{student.first_name} {student.last_name}".strip() or student.username,
+            'username': student.username,
+            'student_id': student.student_id,
+            'department': student.department,
+            'year': student.year,
+            'courses': courses_list,
+        }
+    except Student.DoesNotExist:
+        profile_data = {
+            'name': request.user.get_full_name() or request.user.username,
+            'username': request.user.username,
+            'student_id': '-',
+            'department': '-',
+            'year': '-',
+            'courses': [],
+        }
+    
+    return render(request, "student/profile.html", {'profile': profile_data})
 
 
 def student_courses(request):
-    return render(request, "student/courses.html")
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        courses = student.courses.all().select_related('instructor')
+        
+        courses_data = []
+        for course in courses:
+            instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+            courses_data.append({
+                'id': course.id,
+                'name': course.name,
+                'code': course.code,
+                'instructor': instructor_name,
+                'department': course.department,
+            })
+    except Student.DoesNotExist:
+        courses_data = []
+    
+    return render(request, "student/courses.html", {
+        'courses': courses_data
+    })
 
 
 def student_grades(request):
-    username = request.GET.get('username', '')
+    if not request.user.is_authenticated:
+        return redirect('student-login')
     
-    courses_with_grades = []
-    if username:
-        try:
-            student = Student.objects.get(username=username)
-            grades_qs = Grade.objects.filter(student=student).select_related('course')
-            
-            students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
-            try:
-                with open(students_json_path, encoding='utf-8') as f:
-                    students_data = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                students_data = []
-            
-            user_courses = []
-            for entry in students_data:
-                if entry.get('username') == username:
-                    user_courses = entry.get('courses', []) or []
-                    break
-            
-            for course_name in user_courses:
-                grade_obj = next((g for g in grades_qs if g.course.name == course_name), None)
-                courses_with_grades.append({
-                    'course_name': course_name,
-                    'midterm': grade_obj.midterm if grade_obj else None,
-                    'assignment': grade_obj.assignment if grade_obj else None,
-                    'final': grade_obj.final if grade_obj else None,
-                })
-        except Student.DoesNotExist:
-            pass
+    try:
+        student = Student.objects.get(user=request.user)
+        courses = student.courses.all()
+        grades_qs = Grade.objects.filter(student=student).select_related('course')
+        
+        courses_with_grades = []
+        for course in courses:
+            grade_obj = grades_qs.filter(course=course).first()
+            courses_with_grades.append({
+                'course_name': course.name,
+                'midterm': grade_obj.midterm if grade_obj else None,
+                'assignment': grade_obj.assignment if grade_obj else None,
+                'final': grade_obj.final if grade_obj else None,
+            })
+    except Student.DoesNotExist:
+        courses_with_grades = []
     
     return render(request, "student/grades.html", {
         'courses_with_grades': courses_with_grades

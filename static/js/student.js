@@ -1,7 +1,9 @@
 function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
     const content = document.getElementById("content");
-    if (sidebar.style.width === "200px") {
+    if (!sidebar || !content) return;
+    
+    if (sidebar.style.width === "200px" || sidebar.style.width === "") {
         sidebar.style.width = "0";          
         content.style.marginLeft = "0";     
     } else {
@@ -10,29 +12,21 @@ function toggleSidebar() {
     }
 }
 
-
-document.getElementById("menu-btn").addEventListener("click", toggleSidebar);
+const menuBtn = document.getElementById("menu-btn");
+if (menuBtn) {
+    menuBtn.addEventListener("click", toggleSidebar);
+}
 
 
 let studentData = JSON.parse(sessionStorage.getItem('loggedStudent'));
 if (!studentData) {
-    window.location.href = "/";
-} else {
-    const jsonPathElement = document.getElementById('student-json-path');
-    const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/students.json';
-    
-    fetch(jsonPath)
-        .then(response => response.json())
-        .then(data => {
-            const currentStudent = data.find(s => s.username === studentData.username);
-            if (currentStudent) {
-                sessionStorage.setItem('loggedStudent', JSON.stringify(currentStudent));
-                window.studentData = currentStudent;
-                studentData = currentStudent;
-            }
-        })
-        .catch(() => {
-        });
+    const currentUser = document.body.dataset.username;
+    if (currentUser) {
+        studentData = { username: currentUser };
+        sessionStorage.setItem('loggedStudent', JSON.stringify(studentData));
+    } else {
+        window.location.href = "/";
+    }
 }
 
 

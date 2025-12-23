@@ -33,8 +33,9 @@ class Student(models.Model):
     first_name = models.CharField(max_length=100, blank=True)
     last_name = models.CharField(max_length=100, blank=True)
     department = models.CharField(max_length=200, blank=True)
-    year = models.IntegerField(null=True, blank=True)  # Sadece sınıf numarası: 1, 2, 3, 4
+    year = models.IntegerField(null=True, blank=True)
     user = models.OneToOneField(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='student_profile')
+    courses = models.ManyToManyField('Course', blank=True, related_name='students')
 
     def __str__(self):
         return self.username
