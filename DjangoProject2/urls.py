@@ -39,6 +39,7 @@ urlpatterns = [
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
     path('faculty-head/logout/', core_views.faculty_head_logout, name='faculty-head-logout'),
     path('faculty-head/grades/', core_views.faculty_head_grades, name='faculty-head-grades'),
+    path('faculty-head/announcements/', core_views.faculty_head_announcements, name='faculty-head-announcements'),
 
     # Faculty head pages
 
