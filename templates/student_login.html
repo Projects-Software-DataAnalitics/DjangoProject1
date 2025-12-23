@@ -26,6 +26,7 @@
         <section class="login-form-container">
             <a href="{% url 'home' %}" class="back-btn">← Back</a>
             <form id="student-login-form" class="login-form">
+                {% csrf_token %}
                 <label class="input-label" for="student-username">Username</label>
                 <input type="text" id="student-username" placeholder="Enter your username" required>
                 <label class="input-label" for="student-password">Password</label>
@@ -40,25 +41,49 @@
     </main>
 
     <script>
-        // --- Student Login ---
+        function getCsrfToken() {
+            const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
+            return cookieMatch ? cookieMatch[1] : null;
+        }
+
         const studentForm = document.getElementById("student-login-form");
         studentForm.addEventListener("submit", function(e) {
             e.preventDefault();
 
             const username = document.getElementById("student-username").value;
             const password = document.getElementById("student-password").value;
+            const errorElement = document.getElementById("student-login-error");
 
-            fetch("{% static 'json/students.json' %}")
-                .then(response => response.json())
-                .then(data => {
-                    const student = data.find(s => s.username === username && s.password === password);
-                    if(student) {
-                        sessionStorage.setItem('loggedStudent', JSON.stringify(student));
-                        window.location.href = `/student/`;
-                    } else {
-                        document.getElementById("student-login-error").textContent = "Invalid username or password!";
-                    }
-                });
+            if (!username || !password) {
+                errorElement.textContent = "Please enter both username and password!";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            fetch("{% url 'student-login' %}", {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    sessionStorage.setItem('loggedStudent', JSON.stringify({username: username}));
+                    window.location.href = `/student/`;
+                } else {
+                    errorElement.textContent = data.message || "Invalid username or password!";
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                errorElement.textContent = "Login failed. Please try again.";
+            });
         });
     </script>
 

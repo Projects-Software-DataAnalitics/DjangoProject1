@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Program Outcomes</title>
-    {% load static %}
+{% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
@@ -213,8 +213,8 @@
                         `;
                         document.body.appendChild(form);
                         form.submit();
+                        });
                     });
-                });
             });
 
             const modal = document.createElement('div');
@@ -278,7 +278,7 @@
                 btn.addEventListener('click', function() {
                     pendingDeleteId = this.dataset.outcomeId;
                     modal.style.display = 'flex';
-                });
+            });
             });
 
         })();
