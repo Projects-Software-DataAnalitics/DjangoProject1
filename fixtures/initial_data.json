@@ -1,0 +1,174 @@
+[
+  {
+    "model": "auth.user",
+    "pk": 1,
+    "fields": {
+      "username": "nehir.celik",
+      "first_name": "Nehir Irem",
+      "last_name": "Celik",
+      "password": "pbkdf2_sha256$600000$dummy$dummy=",
+      "is_active": true
+    }
+  },
+  {
+    "model": "core.student",
+    "pk": 1,
+    "fields": {
+      "username": "nehir.celik",
+      "student_id": "231401047",
+      "first_name": "Nehir Irem",
+      "last_name": "Celik",
+      "department": "Computer Engineering",
+      "year": 3,
+      "user": 1
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 2,
+    "fields": {
+      "username": "mina.ozdamar",
+      "first_name": "Mina",
+      "last_name": "Ozdamar",
+      "password": "pbkdf2_sha256$600000$dummy$dummy=",
+      "is_active": true
+    }
+  },
+  {
+    "model": "core.student",
+    "pk": 2,
+    "fields": {
+      "username": "mina.ozdamar",
+      "student_id": "231401021",
+      "first_name": "Mina",
+      "last_name": "Ozdamar",
+      "department": "Computer Engineering",
+      "year": 4,
+      "user": 2
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 3,
+    "fields": {
+      "username": "emily.smith",
+      "first_name": "Dr. Emily",
+      "last_name": "Smith",
+      "password": "pbkdf2_sha256$600000$dummy$dummy=",
+      "is_active": true
+    }
+  },
+  {
+    "model": "core.userprofile",
+    "pk": 3,
+    "fields": {
+      "user": 3,
+      "role": "instructor",
+      "department": "Computer Engineering",
+      "faculty": 1,
+      "courses": [
+        1,
+        2
+      ]
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 4,
+    "fields": {
+      "username": "john.doe",
+      "first_name": "Prof. John",
+      "last_name": "Doe",
+      "password": "pbkdf2_sha256$600000$dummy$dummy=",
+      "is_active": true
+    }
+  },
+  {
+    "model": "core.userprofile",
+    "pk": 4,
+    "fields": {
+      "user": 4,
+      "role": "instructor",
+      "department": "Computer Engineering",
+      "faculty": 1,
+      "courses": [
+        4
+      ]
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 5,
+    "fields": {
+      "username": "ahmet.bulut",
+      "first_name": "Prof. Dr. Ahmet",
+      "last_name": "Bulut",
+      "password": "pbkdf2_sha256$600000$dummy$dummy=",
+      "is_active": true
+    }
+  },
+  {
+    "model": "core.userprofile",
+    "pk": 5,
+    "fields": {
+      "user": 5,
+      "role": "faculty_head",
+      "department": "Computer Engineering",
+      "faculty": 1,
+      "courses": [
+        3,
+        5
+      ]
+    }
+  },
+  {
+    "model": "core.course",
+    "pk": 1,
+    "fields": {
+      "name": "Algorithms",
+      "code": "",
+      "department": "Computer Engineering",
+      "instructor": 3
+    }
+  },
+  {
+    "model": "core.course",
+    "pk": 2,
+    "fields": {
+      "name": "Computer Architecture",
+      "code": "",
+      "department": "Computer Engineering",
+      "instructor": 3
+    }
+  },
+  {
+    "model": "core.course",
+    "pk": 3,
+    "fields": {
+      "name": "Data Systems",
+      "code": "",
+      "department": "Computer Engineering",
+      "instructor": 3
+    }
+  },
+  {
+    "model": "core.course",
+    "pk": 4,
+    "fields": {
+      "name": "Operating Systems",
+      "code": "",
+      "department": "Computer Engineering",
+      "instructor": 3
+    }
+  },
+  {
+    "model": "core.course",
+    "pk": 5,
+    "fields": {
+      "name": "Software",
+      "code": "",
+      "department": "Computer Engineering",
+      "instructor": 3
+    }
+  }
+]

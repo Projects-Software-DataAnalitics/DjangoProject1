@@ -63,46 +63,31 @@
                 return;
             }
 
-            fetch("{% static 'json/instructors.json' %}")
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to load instructor data');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const instructor = data.find(i => i.username === username && i.password === password);
-                    if(instructor) {
-                        sessionStorage.setItem('loggedInstructor', JSON.stringify(instructor));
-                        
-                        const csrfToken = getCsrfToken();
-                        fetch("{% url 'set_instructor_session' %}", {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                                'X-CSRFToken': csrfToken || ''
-                            },
-                            body: `username=${encodeURIComponent(username)}`
-                        })
-                        .then(response => {
-                            if (response.ok) {
-                                window.location.href = "{% url 'instructor' %}";
-                            } else {
-                                errorElement.textContent = "Login failed. Please try again.";
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error setting session:', error);
-                            errorElement.textContent = "Login failed. Please try again.";
-                        });
-                    } else {
-                        errorElement.textContent = "Invalid username or password!";
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    errorElement.textContent = "Error loading instructor data. Please try again.";
-                });
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            fetch("{% url 'instructor-login' %}", {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    sessionStorage.setItem('loggedInstructor', JSON.stringify({username: username}));
+                    window.location.href = "{% url 'instructor' %}";
+                } else {
+                    errorElement.textContent = data.message || "Invalid username or password!";
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                errorElement.textContent = "Login failed. Please try again.";
+            });
         });
     </script>
 

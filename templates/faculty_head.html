@@ -3,56 +3,168 @@
 {% block title %}Faculty Head Dashboard{% endblock %}
 
 {% block content %}
-    <h1 id="welcome-title">Welcome Faculty Head</h1>
-
-    <section id="profile" style="margin-top: 16px; margin-bottom: 24px; display: none;">
-        <div id="personal-info"></div>
-    </section>
-
+    {% if show_welcome %}
+    <h1>Welcome Faculty Head</h1>
+    {% endif %}
+    
+    {% if page == 'profile' and profile %}
+    <h1>Personal Information</h1>
+    <table class="profile-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <tbody>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd; width: 200px;">Name</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.name }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Username</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.username }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Department</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.department|default:"-" }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Faculty</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.faculty }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Courses</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.courses|join:", "|default:"No courses assigned" }}</td>
+            </tr>
+        </tbody>
+    </table>
+    {% elif page == 'profile' %}
+    <h1>Personal Information</h1>
+    <p style="margin-top: 20px; color: #666;">No profile information available.</p>
+    {% elif page == 'grades' %}
+    <div id="personal-info"></div>
     <script>
-        let facultyHead = {};
-        try {
-            facultyHead = {{ faculty_head|safe }};
-        } catch (e) {
-            console.error('Error parsing faculty head data:', e);
-            facultyHead = {};
+        const facultyHeadCourses = {% if faculty_head_courses %}{{ faculty_head_courses|safe }}{% else %}[]{% endif %};
+        const infoDiv = document.getElementById("personal-info");
+        const coursesOptions = (facultyHeadCourses || []).map(course => 
+            `<option value="${course}">${course}</option>`
+        ).join('');
+        
+        infoDiv.innerHTML = `
+            <h2>Grades</h2>
+            <div style="margin-top: 24px;">
+                <label for="fh-course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
+                <select id="fh-course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
+                    <option value="">-- Select a course --</option>
+                    ${coursesOptions}
+                </select>
+            </div>
+            <div id="fh-file-upload-section" style="margin-top: 24px; display: none;"></div>
+            <div id="fh-upload-status" class="upload-status" style="margin-top: 16px;"></div>
+        `;
+        
+        const fhCourseSelect = document.getElementById("fh-course-select");
+        const fhFileUploadSection = document.getElementById("fh-file-upload-section");
+        const fhStatusEl = document.getElementById("fh-upload-status");
+        
+        function fhStorageKey(course) {
+            const username = '{{ request.user.username }}';
+            return `uploadedGrades_fh_${username}_${course}`;
         }
         
-        const infoDiv = document.getElementById("personal-info");
-        infoDiv.innerHTML = `
-            <h2>Personal Information</h2>
-            <p><strong>Name:</strong> ${facultyHead.firstName || ''} ${facultyHead.lastName || ''}</p>
-            <p><strong>Username:</strong> ${facultyHead.username || ''}</p>
-            <p><strong>Department:</strong> ${facultyHead.department || "N/A"}</p>
-            <p><strong>Faculty:</strong> ${facultyHead.faculty || "N/A"}</p>
-            <p><strong>Courses:</strong> ${(facultyHead.courses || []).join(", ") || "N/A"}</p>
-        `;
-
-            const welcomeTitle = document.getElementById("welcome-title");
-            const profileSection = document.getElementById("profile");
-
-            function hideWelcome() {
-                if (welcomeTitle) {
-                    welcomeTitle.style.display = "none";
-                }
+        function fhRefreshStatus(course) {
+            if (!course) {
+                fhStatusEl.textContent = "";
+                fhStatusEl.style.color = "#475569";
+                return;
             }
-
-            if (window.location.hash === "#profile") {
-                hideWelcome();
-                profileSection.style.display = "block";
+            const stored = localStorage.getItem(fhStorageKey(course));
+            if (stored) {
+                const info = JSON.parse(stored);
+                const uploadedAt = new Date(info.timestamp).toLocaleString();
+                fhStatusEl.textContent = `Latest upload (${info.filename}) on ${uploadedAt}`;
+                fhStatusEl.style.color = "#15803d";
+            } else {
+                fhStatusEl.textContent = "No CSV uploaded for this course yet.";
+                fhStatusEl.style.color = "#475569";
             }
-
-            window.addEventListener("hashchange", function() {
-                hideWelcome();
-                if (window.location.hash === "#profile") {
-                    profileSection.style.display = "block";
+        }
+        
+        function fhUploadGradesFile(file, course) {
+            if (!course) {
+                fhStatusEl.textContent = "Please select a course.";
+                fhStatusEl.style.color = "#b91c1c";
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append("csv_file", file);
+            
+            fhStatusEl.textContent = "Uploading...";
+            fhStatusEl.style.color = "#0f172a";
+            
+            function getCsrfToken() {
+                const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
+                return cookieMatch ? cookieMatch[1] : null;
+            }
+            
+            fetch("/grades/upload/", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCsrfToken() || ""
+                },
+                body: formData,
+                credentials: "same-origin"
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "ok") {
+                    localStorage.setItem(
+                        fhStorageKey(course),
+                        JSON.stringify({ filename: file.name, timestamp: Date.now() })
+                    );
+                    fhStatusEl.textContent = `Grades uploaded successfully for ${course}.`;
+                    fhStatusEl.style.color = "#15803d";
+                    fhRefreshStatus(course);
+                } else {
+                    fhStatusEl.textContent = data.error || "Upload failed.";
+                    fhStatusEl.style.color = "#b91c1c";
                 }
+            })
+            .catch(() => {
+                fhStatusEl.textContent = "Upload error.";
+                fhStatusEl.style.color = "#b91c1c";
             });
-
-            document.querySelectorAll('.sidebar a').forEach(link => {
-                link.addEventListener('click', function() {
-                    hideWelcome();
+        }
+        
+        function updateFileUploadSection(course) {
+            fhFileUploadSection.innerHTML = `
+                <label for="fh-csv-file-input" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Upload CSV File</label>
+                <input type="file" id="fh-csv-file-input" accept=".csv" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc;">
+                <p style="margin-top: 8px; color: #475569; font-size: 13px;">Expected columns: student_username, course_name, midterm, assignment, final</p>
+            `;
+            
+            const input = document.getElementById("fh-csv-file-input");
+            if (input) {
+                input.addEventListener("change", function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        fhUploadGradesFile(file, course);
+                    }
                 });
+            }
+        }
+        
+        if (fhCourseSelect) {
+            fhCourseSelect.addEventListener("change", function() {
+                const selectedCourse = this.value;
+                if (selectedCourse) {
+                    fhFileUploadSection.style.display = "block";
+                    updateFileUploadSection(selectedCourse);
+                    fhRefreshStatus(selectedCourse);
+                } else {
+                    fhFileUploadSection.style.display = "none";
+                    fhRefreshStatus(null);
+                }
             });
+        }
+        
+        fhRefreshStatus(null);
     </script>
+    {% endif %}
 {% endblock %}

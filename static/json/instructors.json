@@ -1,21 +1,20 @@
 [
-    {
-        "firstName": "John",
-        "lastName": "Doe",
-        "username": "john.doe",
-        "password": "1234",
-        "faculty": "Engineering",
-        "department": "Electrical Engineering",
-        "courses": ["Advanced Algorithms", "Research Methods", "Academic Leadership"]
-    },
-    {
-        "firstName": "Emily",
-        "lastName": "Smith",
-        "username": "emily.smith",
-        "password": "5678",
-        "faculty": "Engineering",
-        "department": "Computer Engineering",
-        "courses": ["Algorithm Design", "Machine Learning", "Data Structures"]
-    }
+  {
+    "firstName": "Dr. Emily",
+    "lastName": "Smith",
+    "username": "emily.smith",
+    "password": "5678",
+    "faculty": "Engineering",
+    "department": "Computer Engineering",
+    "courses": ["Algorithms", "Computer Architecture"]
+  },
+  {
+    "firstName": "Prof. John",
+    "lastName": "Doe",
+    "username": "john.doe",
+    "password": "1234",
+    "faculty": "Engineering",
+    "department": "Computer Engineering",
+    "courses": ["Operating Systems"]
+  }
 ]
-
