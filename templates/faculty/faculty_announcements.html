@@ -27,25 +27,28 @@
                 {% csrf_token %}
                 <div style="margin-bottom: 16px;">
                     <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                        Subject (Optional)
+                        Topic:
                     </label>
                     <input
                         type="text"
                         name="subject"
-                        placeholder="Enter subject (default: No Topic)"
+                        placeholder="No Topic"
                         style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;"
                     >
                 </div>
                 <div style="margin-bottom: 16px;">
                     <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                        To (Optional - leave empty for everyone)
+                        Send To:
                     </label>
-                    <select name="receiver" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px;">
-                        <option value="">Everyone</option>
+                    <select name="receiver" id="receiver-select" required style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px;">
+                        <option value="" selected>No one is selected</option>
                         {% for recipient in recipients %}
                             <option value="{{ recipient.username }}">{{ recipient.name }} ({{ recipient.role }})</option>
                         {% endfor %}
                     </select>
+                    <div id="receiver-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
+                        You need to choose a reciever.
+                    </div>
                 </div>
                 <div style="margin-bottom: 16px;">
                     <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
@@ -53,13 +56,17 @@
                     </label>
                     <textarea
                         name="message"
+                        id="message-textarea"
                         rows="4"
                         required
                         placeholder="Enter your message..."
                         style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 14px;"
                     ></textarea>
+                    <div id="message-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
+                        You need to add a text.
+                    </div>
                 </div>
-                <button type="submit" class="primary-btn" style="padding: 12px 24px; font-size: 16px;">
+                <button type="submit" id="send-message-btn" class="primary-btn" disabled style="padding: 12px 24px; font-size: 16px; background-color: #94a3b8; color: #ffffff; cursor: not-allowed; opacity: 0.6;">
                     Send Message
                 </button>
             </form>
@@ -227,6 +234,73 @@
                 this.style.display = 'none';
             }
         });
+
+        // Button enable/disable functionality
+        function updateSendButton() {
+            const receiverSelect = document.getElementById('receiver-select');
+            const messageTextarea = document.getElementById('message-textarea');
+            const sendButton = document.getElementById('send-message-btn');
+            
+            if (!receiverSelect || !messageTextarea || !sendButton) return;
+            
+            const isReceiverSelected = receiverSelect.value && receiverSelect.value !== '';
+            const isMessageFilled = messageTextarea.value && messageTextarea.value.trim() !== '';
+            
+            if (isReceiverSelected && isMessageFilled) {
+                // Enable button - blue
+                sendButton.disabled = false;
+                sendButton.style.backgroundColor = '#3b82f6';
+                sendButton.style.color = '#ffffff';
+                sendButton.style.cursor = 'pointer';
+                sendButton.style.opacity = '1';
+            } else {
+                // Disable button - gray
+                sendButton.disabled = true;
+                sendButton.style.backgroundColor = '#94a3b8';
+                sendButton.style.color = '#ffffff';
+                sendButton.style.cursor = 'not-allowed';
+                sendButton.style.opacity = '0.6';
+            }
+        }
+
+        // Form validation for send message
+        const sendMessageForm = document.querySelector('#content-send form');
+        if (sendMessageForm) {
+            const receiverSelect = document.getElementById('receiver-select');
+            const messageTextarea = document.getElementById('message-textarea');
+            
+            // Initialize button state
+            updateSendButton();
+            
+            // Update button on receiver change
+            if (receiverSelect) {
+                receiverSelect.addEventListener('change', updateSendButton);
+            }
+            
+            // Update button on message input
+            if (messageTextarea) {
+                messageTextarea.addEventListener('input', updateSendButton);
+                messageTextarea.addEventListener('keyup', updateSendButton);
+            }
+            
+            sendMessageForm.addEventListener('submit', function(e) {
+                // Check if receiver is selected (not "No one is selected")
+                if (!receiverSelect.value || receiverSelect.value === '') {
+                    e.preventDefault();
+                    alert('Please select a recipient to send the message.');
+                    receiverSelect.focus();
+                    return false;
+                }
+                
+                // Check if message is not empty
+                if (!messageTextarea.value || messageTextarea.value.trim() === '') {
+                    e.preventDefault();
+                    alert('Please enter a message.');
+                    messageTextarea.focus();
+                    return false;
+                }
+            });
+        }
     });
 
     function showMessagePopup(message) {

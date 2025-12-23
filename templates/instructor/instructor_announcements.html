@@ -54,25 +54,42 @@
                     {% csrf_token %}
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                            Subject (Optional)
+                            Topic:
                         </label>
                         <input
                             type="text"
                             name="subject"
-                            placeholder="Enter subject (default: No Topic)"
+                            placeholder="No Topic"
                             style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;"
                         >
                     </div>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                            To (Optional - leave empty for everyone)
+                            Send To:
                         </label>
-                        <select name="receiver" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px;">
-                            <option value="">Everyone</option>
+                        <div id="receiver-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 8px;">
+                            <label style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin-bottom: 4px; transition: background-color 0.2s;" 
+                                   onmouseover="this.style.backgroundColor='#e2e8f0';" 
+                                   onmouseout="this.style.backgroundColor='transparent';">
+                                <input type="checkbox" class="receiver-checkbox" value="" checked style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer; accent-color: #3b82f6;">
+                                <span style="font-size: 14px; color: #0f172a;">No one is selected</span>
+                            </label>
                             {% for recipient in recipients %}
-                                <option value="{{ recipient.username }}">{{ recipient.name }} ({{ recipient.role }})</option>
+                            <label style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin-bottom: 4px; transition: background-color 0.2s;" 
+                                   onmouseover="this.style.backgroundColor='#e2e8f0';" 
+                                   onmouseout="this.style.backgroundColor='transparent';">
+                                <input type="checkbox" class="receiver-checkbox" value="{{ recipient.username }}" data-name="{{ recipient.name }}" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer; accent-color: #3b82f6;">
+                                <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }} ({{ recipient.role }})</span>
+                            </label>
                             {% endfor %}
-                        </select>
+                        </div>
+                        <div id="selected-receivers" style="margin-top: 8px; font-size: 14px; color: #64748b; min-height: 20px;">
+                            <span style="font-weight: 600; color: #0f172a;">To: </span><span id="selected-names">No one is selected</span>
+                        </div>
+                        <input type="hidden" name="receivers" id="receivers-input" value="">
+                        <div id="receiver-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
+                            You need to choose a reciever.
+                        </div>
                     </div>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
@@ -80,13 +97,17 @@
                         </label>
                         <textarea
                             name="message"
+                            id="message-textarea"
                             rows="4"
                             required
                             placeholder="Enter your message..."
                             style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 14px;"
                         ></textarea>
+                        <div id="message-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
+                            You need to add a text.
+                        </div>
                     </div>
-                    <button type="submit" class="primary-btn" style="padding: 12px 24px; font-size: 16px;">
+                    <button type="submit" id="send-message-btn" class="primary-btn" disabled style="padding: 12px 24px; font-size: 16px; background-color: #94a3b8; color: #ffffff; cursor: not-allowed; opacity: 0.6;">
                         Send Message
                     </button>
                 </form>
@@ -254,6 +275,154 @@
                     this.style.display = 'none';
                 }
             });
+
+            // Update selected receivers display
+            function updateSelectedReceivers() {
+                const checkboxes = document.querySelectorAll('.receiver-checkbox:checked');
+                const selectedNames = [];
+                const selectedUsernames = [];
+                
+                checkboxes.forEach(checkbox => {
+                    if (checkbox.value === '') {
+                        // "No one is selected" is checked
+                        return;
+                    }
+                    selectedUsernames.push(checkbox.value);
+                    selectedNames.push(checkbox.getAttribute('data-name'));
+                });
+                
+                const selectedNamesSpan = document.getElementById('selected-names');
+                const receiversInput = document.getElementById('receivers-input');
+                
+                if (selectedNames.length > 0) {
+                    selectedNamesSpan.textContent = selectedNames.join(', ');
+                    receiversInput.value = selectedUsernames.join(',');
+                } else {
+                    selectedNamesSpan.textContent = 'No one is selected';
+                    receiversInput.value = '';
+                }
+                
+                updateSendButton();
+            }
+
+            // Button enable/disable functionality
+            function updateSendButton() {
+                const checkboxes = document.querySelectorAll('.receiver-checkbox:checked');
+                const messageTextarea = document.getElementById('message-textarea');
+                const sendButton = document.getElementById('send-message-btn');
+                const receiverError = document.getElementById('receiver-error');
+                const messageError = document.getElementById('message-error');
+                
+                if (!messageTextarea || !sendButton) return;
+                
+                // Check if any receiver (other than "No one is selected") is selected
+                let isReceiverSelected = false;
+                checkboxes.forEach(checkbox => {
+                    if (checkbox.value !== '') {
+                        isReceiverSelected = true;
+                    }
+                });
+                
+                const isMessageFilled = messageTextarea.value && messageTextarea.value.trim() !== '';
+                
+                if (isReceiverSelected && isMessageFilled) {
+                    // Enable button - blue
+                    sendButton.disabled = false;
+                    sendButton.style.backgroundColor = '#3b82f6';
+                    sendButton.style.color = '#ffffff';
+                    sendButton.style.cursor = 'pointer';
+                    sendButton.style.opacity = '1';
+                    
+                    // Hide error messages
+                    if (receiverError) receiverError.style.display = 'none';
+                    if (messageError) messageError.style.display = 'none';
+                } else {
+                    // Disable button - gray
+                    sendButton.disabled = true;
+                    sendButton.style.backgroundColor = '#94a3b8';
+                    sendButton.style.color = '#ffffff';
+                    sendButton.style.cursor = 'not-allowed';
+                    sendButton.style.opacity = '0.6';
+                    
+                    // Show error messages
+                    if (!isReceiverSelected && receiverError) {
+                        receiverError.style.display = 'block';
+                    } else if (receiverError) {
+                        receiverError.style.display = 'none';
+                    }
+                    
+                    if (!isMessageFilled && messageError) {
+                        messageError.style.display = 'block';
+                    } else if (messageError) {
+                        messageError.style.display = 'none';
+                    }
+                }
+            }
+
+            // Form validation for send message
+            const sendMessageForm = document.querySelector('#content-send form');
+            if (sendMessageForm) {
+                const messageTextarea = document.getElementById('message-textarea');
+                const receiverCheckboxes = document.querySelectorAll('.receiver-checkbox');
+                
+                // Handle checkbox changes
+                receiverCheckboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        if (this.value === '') {
+                            // "No one is selected" checkbox
+                            if (this.checked) {
+                                // Uncheck all other checkboxes
+                                receiverCheckboxes.forEach(cb => {
+                                    if (cb !== this) {
+                                        cb.checked = false;
+                                    }
+                                });
+                            }
+                        } else {
+                            // Other checkboxes - uncheck "No one is selected"
+                            const noOneCheckbox = document.querySelector('.receiver-checkbox[value=""]');
+                            if (noOneCheckbox) {
+                                noOneCheckbox.checked = false;
+                            }
+                        }
+                        updateSelectedReceivers();
+                    });
+                });
+                
+                // Initialize button state and selected receivers display
+                updateSelectedReceivers();
+                
+                // Update button on message input
+                if (messageTextarea) {
+                    messageTextarea.addEventListener('input', updateSendButton);
+                    messageTextarea.addEventListener('keyup', updateSendButton);
+                }
+                
+                sendMessageForm.addEventListener('submit', function(e) {
+                    // Check if any receiver (other than "No one is selected") is selected
+                    const selectedCheckboxes = document.querySelectorAll('.receiver-checkbox:checked');
+                    let hasReceiver = false;
+                    selectedCheckboxes.forEach(checkbox => {
+                        if (checkbox.value !== '') {
+                            hasReceiver = true;
+                        }
+                    });
+                    
+                    if (!hasReceiver) {
+                        e.preventDefault();
+                        alert('Please select a recipient to send the message.');
+                        return false;
+                    }
+                    
+                    // Check if message is not empty
+                    if (!messageTextarea.value || messageTextarea.value.trim() === '') {
+                        e.preventDefault();
+                        alert('Please enter a message.');
+                        messageTextarea.focus();
+                        return false;
+                    }
+                });
+            }
         });
 
         function showMessagePopup(message) {
