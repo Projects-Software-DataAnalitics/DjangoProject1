@@ -234,19 +234,12 @@ function showGrades() {
             const courseSelect = document.getElementById("course-select");
             courseSelect.addEventListener("change", function() {
                 const selectedCourse = this.value;
-                const fileUploadSection = document.getElementById("file-upload-section");
                 
                 if (selectedCourse) {
-                    fileUploadSection.style.display = "block";
-                    updateFileUploadSection(selectedCourse);
-                    refreshUploadStatus(selectedCourse);
-                } else {
-                    fileUploadSection.style.display = "none";
-                    refreshUploadStatus(null);
+                    // Yeni not yönetim sayfasına yönlendir
+                    window.location.href = `/instructor/grades/${encodeURIComponent(selectedCourse)}/`;
                 }
             });
-
-            refreshUploadStatus(null);
         })
         .catch(() => {
             const freshData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
@@ -271,19 +264,12 @@ function showGrades() {
             const courseSelect = document.getElementById("course-select");
             courseSelect.addEventListener("change", function() {
                 const selectedCourse = this.value;
-                const fileUploadSection = document.getElementById("file-upload-section");
                 
                 if (selectedCourse) {
-                    fileUploadSection.style.display = "block";
-                    updateFileUploadSection(selectedCourse);
-                    refreshUploadStatus(selectedCourse);
-                } else {
-                    fileUploadSection.style.display = "none";
-                    refreshUploadStatus(null);
+                    // Yeni not yönetim sayfasına yönlendir
+                    window.location.href = `/instructor/grades/${encodeURIComponent(selectedCourse)}/`;
                 }
             });
-
-            refreshUploadStatus(null);
         });
 }
 

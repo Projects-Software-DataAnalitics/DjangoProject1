@@ -55,9 +55,24 @@ class Grade(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
 
-    midterm = models.FloatField()
-    assignment = models.FloatField()
-    final = models.FloatField()
+    # Eski alanlar (geriye dönük uyumluluk için)
+    midterm = models.FloatField(null=True, blank=True)
+    assignment = models.FloatField(null=True, blank=True)
+    final = models.FloatField(null=True, blank=True)
+    
+    # Yeni dinamik notlar sistemi: {"1. Vize": 85, "Final": 90, "Proje": 95}
+    grades = models.JSONField(default=dict, blank=True)
+    
+    # Kesinleştirme için
+    is_finalized = models.BooleanField(default=False)
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    
+    # CSV dosya bilgisi
+    uploaded_file_name = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ['student', 'course']
 
     def __str__(self):
         return f"{self.student.username} - {self.course.name}"
