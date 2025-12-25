@@ -15,6 +15,35 @@
     "password": "1234",
     "faculty": "Engineering",
     "department": "Computer Engineering",
-    "courses": ["Operating Systems"]
+    "courses": ["Operating Systems","Data Systems"]
+  },
+  {
+    "firstName": "Barış",
+    "lastName": "Arslan",
+    "username": "baris.arslan",
+    "password": "barisarslan",
+    "faculty": "Engineering",
+    "department": "Computer Engineering",
+    "courses": ["Software"]
+  },
+  {
+    "firstName": "Cengiz ",
+    "lastName": "Riva",
+    "username": "cengiz.riva",
+    "password": "cengizriva",
+    "faculty": "Engineering",
+    "department": "Electircal Engineering",
+    "courses": ["Embedded Systems"]
+  },
+  {
+    "firstName": "Kadir ",
+    "lastName": "Uslu",
+    "username": "kadir.uslu",
+    "password": "kadiruslu",
+    "faculty": "Engineering",
+    "department": "Electircal Engineering",
+    "courses": ["Electronics"]
   }
+
 ]
+

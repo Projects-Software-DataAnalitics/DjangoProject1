@@ -19,7 +19,29 @@
     "department": "Computer Engineering",
     "faculty": "Engineering",
     "year": 4,
-    "courses": ["Operating Systems", "Software"]
+    "courses": ["Operating Systems", "Software","Embedded Systems"]
+  },
+  {
+    "firstName": "Pinar",
+    "lastName": "Cetin",
+    "username": "pinar.cetin",
+    "password": "9876",
+    "student_id": "221401039",
+    "department": "Electrical Engineering",
+    "faculty": "Engineering",
+    "year": 3,
+    "courses": ["Embedded Systems", "Electronics"]
+  },
+  {
+    "firstName": "Ross",
+    "lastName": "Lynch",
+    "username": "ross.lynch",
+    "password": "rosslynch",
+    "student_id": "220103050",
+    "department": "Electrical Engineering",
+    "faculty": "Engineering",
+    "year": 3,
+    "courses": ["Embedded Systems", "Electronics"]
   }
 ]
 
