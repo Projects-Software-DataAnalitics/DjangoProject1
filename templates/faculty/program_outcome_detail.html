@@ -4,6 +4,12 @@
 {% block title %}Program Outcome Detail{% endblock %}
 
 {% block content %}
+    <div style="margin-top: 16px; margin-bottom: 24px;">
+        <a href="{% url 'program_outcomes' %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+            ← Back to Program Outcomes
+        </a>
+    </div>
+    
     <h1 style="font-size: 28px; color: #0f172a; margin-bottom: 32px;">Program Outcome</h1>
     
     <div style="background: #f8fafc; padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-bottom: 32px;">
@@ -36,11 +42,5 @@
             <p style="font-size: 16px; color: #64748b; margin: 0;">This program outcome is not linked to any learning outcomes.</p>
         </div>
         {% endif %}
-    </div>
-    
-    <div style="margin-top: 32px;">
-        <a href="{% url 'program_outcomes' %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
-            ← Back to Program Outcomes
-        </a>
     </div>
 {% endblock %}

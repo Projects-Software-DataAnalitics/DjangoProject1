@@ -1,25 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Program Outcomes</title>
+{% extends "faculty/base.html" %}
 {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-</head>
-<body>
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li><a href="{% url 'faculty-head' %}#profile">Profile</a></li>
-        <li><a href="{% url 'faculty-head' %}#grades-section">Grades</a></li>
-        <li><a href="{% url 'all_courses' %}">All Courses</a></li>
-        <li><a href="{% url 'my_courses' %}">My Courses</a></li>
-        <li><a href="{% url 'program_outcomes' %}">Program Outcomes</a></li>
-        <li><a href="{% url 'faculty-head-logout' %}">Logout</a></li>
-    </ul>
-</div>
 
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
+{% block title %}Program Outcomes{% endblock %}
+
+{% block content %}
     <div style="margin-left: 0; margin-top: 10px;">
         <h1 style="font-size: 32px; margin: 0 0 8px 0;">Program Outcomes</h1>
     </div>
@@ -70,7 +54,7 @@
                             {% if outcome.linked_learning_outcomes %}
                             <div style="margin: 8px 0; display: flex; align-items: center; gap: 8px;">
                                 <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to:</span>
-                                <a href="{% url 'program_outcome_detail' outcome.id %}" style="font-size: 13px; color: #3b82f6; font-weight: 500; text-decoration: none; cursor: pointer; display: inline-block; padding: 6px 12px; background: #eff6ff; border-radius: 6px; transition: all 0.2s;" onmouseover="this.style.background='#dbeafe'; this.style.textDecoration='underline';" onmouseout="this.style.background='#eff6ff'; this.style.textDecoration='none';">
+                                <a href="{% url 'program_outcome_detail' outcome.id %}" style="font-size: 13px; color: #ffffff; font-weight: 500; text-decoration: none; cursor: pointer; display: inline-block; padding: 8px 16px; background: #2563eb; border-radius: 6px; transition: all 0.2s; border: none;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
                                     {{ outcome.linked_learning_outcomes|length }} Learning Outcome{{ outcome.linked_learning_outcomes|length|pluralize }}
                                 </a>
                             </div>
@@ -283,8 +267,4 @@
 
         })();
     </script>
-
-<script src="{% static 'js/faculty_head.js' %}"></script>
-</div>
-</body>
-</html>
+{% endblock %}

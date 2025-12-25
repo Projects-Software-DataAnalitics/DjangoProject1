@@ -46,8 +46,14 @@ urlpatterns = [
     # Faculty head pages
 
     path('faculty-head/all-courses/', core_views.all_courses, name='all_courses'),
-    path('faculty-head/course/<str:course_name>/learning-outcomes/', core_views.faculty_head_course_learning_outcomes, name='faculty_head_course_learning_outcomes'),
     path('faculty-head/my-courses/', core_views.my_courses, name='my_courses'),
+    path('faculty-head/learning-outcomes/', core_views.faculty_head_learning_outcomes, name='faculty_head_learning_outcomes'),
+    path('faculty-head/course/<str:course_name>/learning-outcomes/', core_views.faculty_head_course_learning_outcomes, name='faculty_head_course_learning_outcomes'),
+    path('faculty-head/courses/<int:course_id>/learning-outcomes/<int:outcome_id>/', core_views.faculty_head_learning_outcome_detail, name='faculty_head_learning_outcome_detail'),
+    path('faculty-head/courses/<int:course_id>/learning-outcomes/<int:outcome_id>/graph/', core_views.faculty_head_learning_outcome_graph, name='faculty_head_learning_outcome_graph'),
+    path('faculty-head/learning-outcomes/detail/<int:outcome_id>/unlink/<int:program_outcome_id>/', core_views.faculty_head_unlink_program_outcome, name='faculty_head_unlink_program_outcome'),
+    path('faculty-head/learning-outcomes/detail/<int:outcome_id>/link/', core_views.faculty_head_link_program_outcomes, name='faculty_head_link_program_outcomes'),
+    path('faculty-head/learning-outcomes/update/<int:outcome_id>/', core_views.faculty_head_update_learning_outcome, name='faculty_head_update_learning_outcome'),
     path('faculty-head/program-outcomes/', core_views.program_outcomes, name='program_outcomes'),
     path('faculty-head/program-outcomes/detail/<int:outcome_id>/', core_views.program_outcome_detail, name='program_outcome_detail'),
     path('faculty-head/program-outcomes/update/<int:outcome_id>/', core_views.update_program_outcome, name='update_program_outcome'),
@@ -58,7 +64,8 @@ urlpatterns = [
     # Instructor pages
     path('instructor/learning-outcomes/', core_views.learning_outcomes, name='learning_outcomes'),
     path('instructor/learning-outcomes/<str:course_name>/', core_views.course_learning_outcomes, name='course_learning_outcomes'),
-    path('instructor/learning-outcomes/detail/<int:outcome_id>/', core_views.learning_outcome_detail, name='learning_outcome_detail'),
+    path('instructor/courses/<int:course_id>/learning-outcomes/<int:outcome_id>/', core_views.learning_outcome_detail, name='learning_outcome_detail'),
+    path('instructor/courses/<int:course_id>/learning-outcomes/<int:outcome_id>/graph/', core_views.learning_outcome_graph, name='learning_outcome_graph'),
     path('instructor/learning-outcomes/detail/<int:outcome_id>/unlink/<int:program_outcome_id>/', core_views.unlink_program_outcome, name='unlink_program_outcome'),
     path('instructor/learning-outcomes/detail/<int:outcome_id>/link/', core_views.link_program_outcomes, name='link_program_outcomes'),
     path('instructor/learning-outcomes/create/', core_views.create_learning_outcome, name='create_learning_outcome'),
@@ -69,8 +76,13 @@ urlpatterns = [
     # Student pages
     path("student/profile/", core_views.student_profile, name="student_profile"),
     path("student/courses/", core_views.student_courses, name="student_courses"),
+    path("student/courses/<int:course_id>/learning-outcomes/", core_views.student_course_learning_outcomes, name="student_course_learning_outcomes"),
     path("student/grades/", core_views.student_grades, name="student_grades"),
     path("student/announcements/", core_views.student_announcements, name="student_announcements"),
+    path("student/program-outcomes/", core_views.student_program_outcomes, name="student_program_outcomes"),
     path("student/logout/", core_views.logout_view, name="logout"),
+    
+    # Instructor program outcomes
+    path("instructor/program-outcomes/", core_views.instructor_program_outcomes, name="instructor_program_outcomes"),
 
 ]

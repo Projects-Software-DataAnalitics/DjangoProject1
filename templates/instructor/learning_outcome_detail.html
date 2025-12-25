@@ -5,6 +5,10 @@
     <title>Learning Outcome Detail</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
     <script>
         (function() {
             const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
@@ -22,6 +26,7 @@
         <li><a href="{% url 'instructor_my_courses' %}">My Courses</a></li>
         <li><a href="{% url 'instructor_grades' %}">Grades</a></li>
         <li><a href="{% url 'learning_outcomes' %}">Learning Outcomes</a></li>
+        <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
         <li><a href="{% url 'instructor_announcements' %}">Announcements</a></li>
         <li id="logout-btn">Logout</li>
     </ul>
@@ -29,47 +34,100 @@
 
 <div class="content" id="content">
     <div style="max-width: 900px; margin: 0 auto; padding: 24px;">
-        <h1 style="font-size: 28px; color: #0f172a; margin-bottom: 32px;">Learning Outcome</h1>
-        
-        <div style="background: #f8fafc; padding: 24px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-bottom: 32px;">
-            <p style="font-size: 18px; color: #0f172a; font-weight: 500; margin: 0; line-height: 1.6;">
-                {{ outcome.text }}
-            </p>
-        </div>
-        
-        <div style="margin-top: 40px;">
-            <h2 style="font-size: 22px; color: #0f172a; margin-bottom: 24px;">Linked Program Outcomes</h2>
-            
-            {% if program_outcomes %}
-            <div style="display: flex; flex-direction: column; gap: 16px;">
-                {% for po in program_outcomes %}
-                <div style="display: flex; align-items: center; gap: 12px; background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                    <div style="flex: 1;">
-                        <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.5;">
-                            {{ po.text }}
-                        </p>
-                    </div>
-                    <button class="delete-po-btn" data-po-id="{{ po.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Unlink Program Outcome">🗑️</button>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
-                <p style="font-size: 16px; color: #64748b; margin: 0;">This learning outcome is not linked to any program outcomes.</p>
-            </div>
-            {% endif %}
-            
-            <div style="margin-top: 16px; display: flex; justify-content: center;">
-                <button id="add-po-btn" style="background: #ffffff; border: 2px solid #e2e8f0; padding: 20px; border-radius: 10px; cursor: pointer; font-size: 24px; color: #3b82f6; width: 100%; max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;" onmouseover="this.style.borderColor='#3b82f6'; this.style.background='#eff6ff';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.background='#ffffff';">
-                    +
-                </button>
-            </div>
-        </div>
-        
-        <div style="margin-top: 32px;">
-            <a href="{% url 'course_learning_outcomes' course_name=course_name_slug %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+        <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 24px;">
+            {% if is_faculty_head %}
+            <a href="{% url 'faculty_head_course_learning_outcomes' course_name=course_name_slug %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
                 ← Back to Learning Outcomes
             </a>
+            {% else %}
+            <a href="{% url 'course_learning_outcomes' course_name=course_name_slug %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+                ← Back to Learning Outcomes
+            </a>
+            {% endif %}
+        </div>
+        
+        <!-- Toggle -->
+        <div style="display: flex; gap: 0; margin-bottom: 32px; background: #e2e8f0; padding: 4px; border-radius: 12px; width: fit-content; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <button id="create-toggle-btn" class="toggle-btn active" style="padding: 12px 32px; border: none; border-radius: 8px; background: #3b82f6; color: white; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(59,130,246,0.3);">
+                Details
+            </button>
+            <button id="graph-toggle-btn" class="toggle-btn" onclick="window.location.href='{% url 'learning_outcome_graph' course.id outcome.id %}'" style="padding: 12px 32px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">
+                Graph
+            </button>
+        </div>
+        
+        <!-- Create Mode (default, always visible) -->
+        <div id="create-mode">
+            <!-- Learning Outcome Text (editable textarea, always visible) -->
+            <div style="margin-bottom: 32px; position: relative;">
+                <label style="display: block; margin-bottom: 8px; font-size: 22px; font-weight: 600; color: #0f172a;">
+                    Learning Outcome Text
+                </label>
+                <div style="position: relative;">
+                    <form id="update-lo-form" method="POST" action="{% url 'update_learning_outcome' outcome.id %}" style="display: none;">
+                        {% csrf_token %}
+                        <textarea
+                            id="lo-text"
+                            name="text"
+                            rows="4"
+                            required
+                            style="width: 100%; padding: 16px; padding-right: 120px; border-radius: 10px; border: 1px solid #cbd5e1; background: #ffffff; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 16px; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6';"
+                            onblur="this.style.borderColor='#cbd5e1';"
+                        >{{ outcome.text }}</textarea>
+                        <div style="position: absolute; top: 16px; right: 16px; display: flex; gap: 8px;">
+                            <button type="submit" id="save-lo-btn" style="background: #3b82f6; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; padding: 8px 16px; box-shadow: 0 2px 4px rgba(59,130,246,0.3);">
+                                Save
+                            </button>
+                            <button type="button" id="cancel-edit-lo-btn" style="background: #6b7280; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; padding: 8px 16px;">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                    <div id="lo-display" style="position: relative; width: 100%; padding: 16px; padding-right: 50px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 16px; line-height: 1.6; color: #1e293b;">
+                        {{ outcome.text }}
+                    </div>
+                    {% if not is_faculty_head %}
+                    <button id="edit-lo-btn" style="position: absolute; top: 16px; right: 16px; background: none; border: none; cursor: pointer; font-size: 20px; color: #3b82f6; padding: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.color='#2563eb'; this.style.transform='scale(1.1)';" onmouseout="this.style.color='#3b82f6'; this.style.transform='scale(1)';" title="Edit Learning Outcome">
+                        ✏️
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Linked Program Outcomes -->
+            <div style="margin-top: 40px;">
+                <h2 style="font-size: 22px; color: #0f172a; margin-bottom: 24px;">Linked Program Outcomes</h2>
+                
+                {% if program_outcomes %}
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    {% for po in program_outcomes %}
+                    <div style="display: flex; align-items: center; gap: 12px; background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <div style="flex: 1;">
+                            <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.5;">
+                                {{ po.text }}
+                            </p>
+                        </div>
+                        {% if not is_faculty_head %}
+                        <button class="delete-po-btn" data-po-id="{{ po.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Unlink Program Outcome">🗑️</button>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
+                    <p style="font-size: 16px; color: #64748b; margin: 0;">This learning outcome is not linked to any program outcomes.</p>
+                </div>
+                {% endif %}
+                
+                {% if not is_faculty_head %}
+                <div style="margin-top: 16px; display: flex; justify-content: center;">
+                    <button id="add-po-btn" style="background: #ffffff; border: 2px solid #e2e8f0; padding: 20px; border-radius: 10px; cursor: pointer; font-size: 24px; color: #3b82f6; width: 100%; max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;" onmouseover="this.style.borderColor='#3b82f6'; this.style.background='#eff6ff';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.background='#ffffff';">
+                        +
+                    </button>
+                </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
@@ -127,6 +185,32 @@
             window.location.href = "/";
         });
 
+        const editLoBtn = document.getElementById('edit-lo-btn');
+        const loDisplay = document.getElementById('lo-display');
+        const updateLoForm = document.getElementById('update-lo-form');
+        const loText = document.getElementById('lo-text');
+        const cancelEditLoBtn = document.getElementById('cancel-edit-lo-btn');
+        const originalText = '{{ outcome.text|escapejs }}';
+        const isFacultyHead = {{ is_faculty_head|yesno:"true,false" }};
+        
+        if (editLoBtn && loDisplay && updateLoForm && !isFacultyHead) {
+            editLoBtn.addEventListener('click', function() {
+                loDisplay.style.display = 'none';
+                editLoBtn.style.display = 'none';
+                updateLoForm.style.display = 'block';
+                loText.focus();
+            });
+        }
+        
+        if (cancelEditLoBtn && loDisplay && updateLoForm && editLoBtn && !isFacultyHead) {
+            cancelEditLoBtn.addEventListener('click', function() {
+                loText.value = originalText;
+                updateLoForm.style.display = 'none';
+                loDisplay.style.display = 'block';
+                editLoBtn.style.display = 'flex';
+            });
+        }
+
         const deleteModal = document.createElement('div');
         deleteModal.id = 'delete-po-modal';
         deleteModal.style.position = 'fixed';
@@ -156,6 +240,7 @@
 
         let pendingDeletePoId = null;
         const outcomeId = {{ outcome.id }};
+        const courseId = {{ course.id }};
 
         const confirmDeletePoBtn = deleteModal.querySelector('#confirm-delete-po-btn');
         const cancelDeletePoBtn = deleteModal.querySelector('#cancel-delete-po-btn');
@@ -173,30 +258,31 @@
             window.location.href = `/instructor/learning-outcomes/detail/${outcomeId}/unlink/${pendingDeletePoId}/`;
         });
 
-        document.querySelectorAll('.delete-po-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                pendingDeletePoId = this.dataset.poId;
-                deleteModal.style.display = 'flex';
-            });
-        });
-
-        const addPoBtn = document.getElementById('add-po-btn');
-        const addPoModal = document.getElementById('add-po-modal');
-
-        if (addPoBtn && addPoModal) {
-            addPoBtn.addEventListener('click', function() {
-                addPoModal.style.display = 'flex';
-            });
-
-            const cancelAddPoBtn = addPoModal.querySelector('#cancel-add-po-btn') || addPoModal.querySelector('#close-add-po-btn');
-            if (cancelAddPoBtn) {
-                cancelAddPoBtn.addEventListener('click', function() {
-                    addPoModal.style.display = 'none';
+        if (!isFacultyHead) {
+            document.querySelectorAll('.delete-po-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    pendingDeletePoId = this.dataset.poId;
+                    deleteModal.style.display = 'flex';
                 });
+            });
+
+            const addPoBtn = document.getElementById('add-po-btn');
+            const addPoModal = document.getElementById('add-po-modal');
+
+            if (addPoBtn && addPoModal) {
+                addPoBtn.addEventListener('click', function() {
+                    addPoModal.style.display = 'flex';
+                });
+
+                const cancelAddPoBtn = addPoModal.querySelector('#cancel-add-po-btn') || addPoModal.querySelector('#close-add-po-btn');
+                if (cancelAddPoBtn) {
+                    cancelAddPoBtn.addEventListener('click', function() {
+                        addPoModal.style.display = 'none';
+                    });
+                }
             }
         }
     })();
 </script>
 </body>
 </html>
-

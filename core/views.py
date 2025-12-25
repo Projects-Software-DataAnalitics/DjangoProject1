@@ -212,7 +212,6 @@ def faculty_head_login(request):
             profile.faculty = faculty
             profile.save()
         
-        # Django authentication
         auth_login(request, user)
         return redirect('faculty-head')
     
@@ -510,9 +509,18 @@ def all_courses(request):
     
     for course_name, instructors in sorted(course_instructor_map.items()):
         instructor_display = ', '.join(instructors) if instructors else 'Unknown'
+        
+        course = Course.objects.filter(name=course_name).first()
+        first_learning_outcome = None
+        if course:
+            learning_outcomes = ProgramOutcome.objects.filter(course_name=course_name).order_by('-created_at')
+            first_learning_outcome = learning_outcomes.first()
+        
         faculty_courses_with_instructors.append({
             'course': course_name,
-            'instructor': instructor_display
+            'instructor': instructor_display,
+            'course_id': course.id if course else None,
+            'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
         })
     
     import json as json_module
@@ -532,12 +540,18 @@ def my_courses(request):
         courses = profile.courses.all().select_related('instructor')
         for course in courses:
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+            
+            first_learning_outcome = None
+            learning_outcomes = ProgramOutcome.objects.filter(course_name=course.name).order_by('-created_at')
+            first_learning_outcome = learning_outcomes.first()
+            
             courses_data.append({
                 'id': course.id,
                 'name': course.name,
                 'code': course.code,
                 'instructor': instructor_name,
                 'department': course.department,
+                'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
             })
     
     context = {
@@ -620,14 +634,18 @@ def program_outcomes(request):
                 creator_name = faculty_heads_map.get(creator_username) or o.created_by.get_full_name() or creator_username
                 
                 linked_learning_outcomes = []
+                seen_course_instructor = set()
                 for lo in o.learning_outcomes.all():
                     lo_creator_username = lo.created_by.username
                     lo_creator_name = instructors_map.get(lo_creator_username) or lo.created_by.get_full_name() or lo_creator_username
-                    linked_learning_outcomes.append({
-                        'text': lo.text,
-                        'course': lo.course_name,
-                        'instructor': lo_creator_name,
-                    })
+                    course_instructor_key = (lo.course_name, lo_creator_name)
+                    if course_instructor_key not in seen_course_instructor:
+                        seen_course_instructor.add(course_instructor_key)
+                        linked_learning_outcomes.append({
+                            'text': lo.text,
+                            'course': lo.course_name,
+                            'instructor': lo_creator_name,
+                        })
                 
                 outcomes_data.append({
                     'id': o.id,
@@ -650,14 +668,18 @@ def program_outcomes(request):
                 creator_name = faculty_heads_map.get(creator_username) or o.created_by.get_full_name() or creator_username
                 
                 linked_learning_outcomes = []
+                seen_course_instructor = set()
                 for lo in o.learning_outcomes.all():
                     lo_creator_username = lo.created_by.username
                     lo_creator_name = instructors_map.get(lo_creator_username) or lo.created_by.get_full_name() or lo_creator_username
-                    linked_learning_outcomes.append({
-                        'text': lo.text,
-                        'course': lo.course_name,
-                        'instructor': lo_creator_name,
-                    })
+                    course_instructor_key = (lo.course_name, lo_creator_name)
+                    if course_instructor_key not in seen_course_instructor:
+                        seen_course_instructor.add(course_instructor_key)
+                        linked_learning_outcomes.append({
+                            'text': lo.text,
+                            'course': lo.course_name,
+                            'instructor': lo_creator_name,
+                        })
                 
                 outcomes_data.append({
                     'id': o.id,
@@ -711,14 +733,18 @@ def program_outcomes(request):
         creator_name = faculty_heads_map.get(creator_username) or o.created_by.get_full_name() or creator_username
         
         linked_learning_outcomes = []
+        seen_course_instructor = set()
         for lo in o.learning_outcomes.all():
             lo_creator_username = lo.created_by.username
             lo_creator_name = instructors_map.get(lo_creator_username) or lo.created_by.get_full_name() or lo_creator_username
-            linked_learning_outcomes.append({
-                'text': lo.text,
-                'course': lo.course_name,
-                'instructor': lo_creator_name,
-            })
+            course_instructor_key = (lo.course_name, lo_creator_name)
+            if course_instructor_key not in seen_course_instructor:
+                seen_course_instructor.add(course_instructor_key)
+                linked_learning_outcomes.append({
+                    'text': lo.text,
+                    'course': lo.course_name,
+                    'instructor': lo_creator_name,
+                })
         
         outcomes_data.append({
             'id': o.id,
@@ -881,21 +907,102 @@ def create_program_outcome(request):
     })
 
 @faculty_head_required
+def faculty_head_learning_outcomes(request):
+    """Show learning outcomes for faculty head's own courses"""
+    profile = getattr(request.user, 'profile', None)
+    courses = []
+    if profile:
+        courses = profile.courses.all()
+    
+    course_names = [course.name for course in courses]
+    
+    outcomes_qs = ProgramOutcome.objects.filter(
+        course_name__in=course_names
+    ).select_related('created_by').order_by('-created_at')
+    
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_name = o.created_by.get_full_name() or o.created_by.username
+        outcomes_data.append({
+            'text': o.text,
+            'course': o.course_name or '',
+            'created_by': creator_name,
+            'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+        })
+    
+    return render(
+        request,
+        'faculty/learning_outcomes.html',
+        {
+            'outcomes_data': outcomes_data,
+            'faculty_head_courses': course_names,
+        }
+    )
+
+@faculty_head_required
 def faculty_head_course_learning_outcomes(request, course_name):
-    """Show learning outcomes for a specific course (for faculty head)"""
+    """Show and create learning outcomes for a specific course (for faculty head)"""
+    course_name_slug = course_name
     course_name = course_name.replace('-', ' ')
     
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_head_department = None
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    faculty_head_department = fh.get('department')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    profile = getattr(request.user, 'profile', None)
+    if profile:
+        faculty_head_courses = profile.courses.all()
+        course = None
+        for c in faculty_head_courses:
+            if c.name.lower() == course_name.lower():
+                course = c
+                break
+        if not course:
+            course = Course.objects.filter(name__iexact=course_name).first()
+            if course and profile:
+                profile.courses.add(course)
+        if not course:
+            return HttpResponseForbidden("You don't have access to this course.")
+        course_id = course.id
+        course_name = course.name
+    else:
+        course = Course.objects.filter(name__iexact=course_name).first()
+        if not course:
+            return HttpResponseForbidden("You don't have access to this course.")
+        course_id = course.id
+        course_name = course.name
+    
+    from .models import Faculty
+    faculty = None
+    if profile:
+        faculty = profile.faculty
+    
+    program_outcomes = []
+    if faculty:
+        program_outcomes_qs = ProgramOutcome.objects.filter(
+            faculty=faculty,
+            course_name=''
+        ).select_related('created_by').order_by('created_at')
+        for po in program_outcomes_qs:
+            program_outcomes.append({
+                'id': po.id,
+                'text': po.text,
+            })
+    
+    if request.method == 'POST':
+        text = (request.POST.get('text') or '').strip()
+        if text:
+            learning_outcome = ProgramOutcome.objects.create(
+                text=text,
+                course_name=course_name,
+                created_by=request.user
+            )
+            selected_program_outcome_ids = request.POST.getlist('program_outcomes')
+            if selected_program_outcome_ids:
+                program_outcomes_to_link = ProgramOutcome.objects.filter(
+                    id__in=selected_program_outcome_ids,
+                    faculty=faculty,
+                    course_name=''
+                )
+                learning_outcome.related_program_outcomes.set(program_outcomes_to_link)
+        course_name_slug = course_name.replace(' ', '-')
+        return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
     
     outcomes_qs = ProgramOutcome.objects.filter(
         course_name=course_name
@@ -916,31 +1023,227 @@ def faculty_head_course_learning_outcomes(request, course_name):
     except (OSError, json.JSONDecodeError):
         pass
     
+    faculty_heads_map = {}
+    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+    try:
+        with open(faculty_heads_json_path, encoding='utf-8') as f:
+            faculty_heads_list = json.load(f)
+            for fh in faculty_heads_list:
+                username = fh.get('username')
+                first_name = fh.get('firstName', '')
+                last_name = fh.get('lastName', '')
+                full_name = (first_name + ' ' + last_name).strip()
+                if full_name:
+                    faculty_heads_map[username] = full_name
+    except (OSError, json.JSONDecodeError):
+        pass
+    
     outcomes_data = []
     for o in outcomes_qs:
         creator_username = o.created_by.username
-        creator_name = instructors_map.get(creator_username) or o.created_by.get_full_name() or creator_username
+        creator_name = faculty_heads_map.get(creator_username) or instructors_map.get(creator_username) or o.created_by.get_full_name() or creator_username
         related_program_outcomes = o.related_program_outcomes.all()
-        outcomes_data.append(
-            {
-                'id': o.id,
-                'text': o.text,
-                'course': o.course_name or '',
-                'created_by': creator_name,
-                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
-                'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
-            }
-        )
+        outcomes_data.append({
+            'id': o.id,
+            'text': o.text,
+            'course': o.course_name or '',
+            'created_by': creator_name,
+            'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+            'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
+        })
+    
+    if not course_id:
+        return HttpResponseForbidden("You don't have access to this course.")
     
     return render(
         request,
         'faculty/course_learning_outcomes.html',
         {
             'course_name': course_name,
+            'course_id': course_id,
             'outcomes_data': outcomes_data,
+            'program_outcomes': program_outcomes,
         }
     )
 
+@faculty_head_required
+def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
+    """Show detail page for a learning outcome with linked program outcomes (for faculty head)"""
+    profile = getattr(request.user, 'profile', None)
+    course = get_object_or_404(Course, id=course_id)
+    if profile:
+        if course not in profile.courses.all():
+            profile.courses.add(course)
+    
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+    
+    from .models import Faculty
+    faculty = None
+    if profile:
+        faculty = profile.faculty
+    
+    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+    
+    program_outcomes_data = []
+    for po in related_program_outcomes:
+        program_outcomes_data.append({
+            'id': po.id,
+            'text': po.text,
+        })
+    
+    available_program_outcomes = []
+    if faculty:
+        available_program_outcomes_qs = ProgramOutcome.objects.filter(
+            faculty=faculty,
+            course_name=''
+        ).exclude(id__in=[po.id for po in related_program_outcomes]).select_related('created_by').order_by('created_at')
+        for po in available_program_outcomes_qs:
+            available_program_outcomes.append({
+                'id': po.id,
+                'text': po.text,
+            })
+    
+    course_name_slug = outcome.course_name.replace(' ', '-')
+    
+    return render(
+        request,
+        'faculty/learning_outcome_detail.html',
+        {
+            'outcome': outcome,
+            'course': course,
+            'program_outcomes': program_outcomes_data,
+            'available_program_outcomes': available_program_outcomes,
+            'course_name_slug': course_name_slug,
+        }
+    )
+
+@faculty_head_required
+def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
+    """Show graph view for learning outcome (for faculty head)"""
+    profile = getattr(request.user, 'profile', None)
+    if profile:
+        course = profile.courses.filter(id=course_id).first()
+        if not course:
+            return HttpResponseForbidden("You don't have access to this course.")
+    else:
+        course = get_object_or_404(Course, id=course_id)
+    
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+    
+    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+    
+    program_outcomes_data = []
+    for po in related_program_outcomes:
+        program_outcomes_data.append({
+            'id': po.id,
+            'text': po.text,
+        })
+    
+    course_name_slug = outcome.course_name.replace(' ', '-')
+    
+    return render(
+        request,
+        'faculty/learning_outcome_graph.html',
+        {
+            'outcome': outcome,
+            'course': course,
+            'program_outcomes': program_outcomes_data,
+            'course_name_slug': course_name_slug,
+        }
+    )
+
+
+@faculty_head_required
+def faculty_head_update_learning_outcome(request, outcome_id):
+    """Update a learning outcome (for faculty head)"""
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
+    
+    if request.method == 'POST':
+        text = (request.POST.get('text') or '').strip()
+        if text:
+            outcome.text = text
+            outcome.save()
+        profile = getattr(request.user, 'profile', None)
+        if profile:
+            course = None
+            for c in profile.courses.all():
+                if c.name.lower() == outcome.course_name.lower():
+                    course = c
+                    break
+            if not course:
+                course = Course.objects.filter(name__iexact=outcome.course_name).first()
+                if course and profile:
+                    profile.courses.add(course)
+            course_id = course.id if course else None
+            if course_id:
+                return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
+        course_name_slug = outcome.course_name.replace(' ', '-')
+        return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
+    
+    return JsonResponse({'text': outcome.text})
+
+@faculty_head_required
+def faculty_head_unlink_program_outcome(request, outcome_id, program_outcome_id):
+    """Unlink a program outcome from a learning outcome (for faculty head)"""
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
+    program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
+    
+    outcome.related_program_outcomes.remove(program_outcome)
+    
+    profile = getattr(request.user, 'profile', None)
+    if profile:
+        course = None
+        for c in profile.courses.all():
+            if c.name.lower() == outcome.course_name.lower():
+                course = c
+                break
+        if not course:
+            course = Course.objects.filter(name__iexact=outcome.course_name).first()
+            if course and profile:
+                profile.courses.add(course)
+        course_id = course.id if course else None
+        if course_id:
+            return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
+    course_name_slug = outcome.course_name.replace(' ', '-')
+    return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
+
+@faculty_head_required
+def faculty_head_link_program_outcomes(request, outcome_id):
+    """Link program outcomes to a learning outcome (for faculty head)"""
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
+    
+    if request.method == 'POST':
+        selected_program_outcome_ids = request.POST.getlist('program_outcomes')
+        if selected_program_outcome_ids:
+            profile = getattr(request.user, 'profile', None)
+            faculty = None
+            if profile:
+                faculty = profile.faculty
+            
+            if faculty:
+                program_outcomes_to_link = ProgramOutcome.objects.filter(
+                    id__in=selected_program_outcome_ids,
+                    faculty=faculty,
+                    course_name=''
+                )
+                outcome.related_program_outcomes.add(*program_outcomes_to_link)
+    
+    profile = getattr(request.user, 'profile', None)
+    if profile:
+        course = None
+        for c in profile.courses.all():
+            if c.name.lower() == outcome.course_name.lower():
+                course = c
+                break
+        if not course:
+            course = Course.objects.filter(name__iexact=outcome.course_name).first()
+            if course and profile:
+                profile.courses.add(course)
+        course_id = course.id if course else None
+        if course_id:
+            return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
+    course_name_slug = outcome.course_name.replace(' ', '-')
+    return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
 
 @faculty_head_required
 def give_grade(request, course_id):
@@ -1096,6 +1399,9 @@ def course_learning_outcomes(request, course_name):
         course_name=course_name
     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
     
+    course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
+    course_id = course.id if course else None
+    
     outcomes_data = []
     for o in outcomes_qs:
         creator_name = o.created_by.get_full_name() or o.created_by.username
@@ -1116,6 +1422,7 @@ def course_learning_outcomes(request, course_name):
         'instructor/course_learning_outcomes.html',
         {
             'course_name': course_name,
+            'course_id': course_id,
             'outcomes_data': outcomes_data,
             'program_outcomes': program_outcomes,
         }
@@ -1135,42 +1442,79 @@ def update_learning_outcome(request, outcome_id):
         if text:
             outcome.text = text
             outcome.save()
-        course_name_slug = outcome.course_name.replace(' ', '-')
-        return redirect('course_learning_outcomes', course_name=course_name_slug)
+        course = Course.objects.filter(name=outcome.course_name, instructor=instructor_user).first()
+        course_id = course.id if course else None
+        if course_id:
+            return redirect('learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
+        else:
+            course_name_slug = outcome.course_name.replace(' ', '-')
+            return redirect('course_learning_outcomes', course_name=course_name_slug)
     
     return JsonResponse({'text': outcome.text})
 
 
-@instructor_required
-def learning_outcome_detail(request, outcome_id):
+def learning_outcome_detail(request, course_id, outcome_id):
     """Show detail page for a learning outcome with linked program outcomes"""
-    instructor_user = request.instructor_user
-    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, created_by=instructor_user)
-    
-    instructor_department = None
-    instructor_faculty = None
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                if inst.get('username') == instructor_user.username:
-                    instructor_department = inst.get('department')
-                    instructor_faculty = inst.get('faculty')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    from .models import Faculty
+    is_faculty_head = False
+    instructor_user = None
     faculty = None
-    if instructor_faculty:
-        try:
-            faculty = Faculty.objects.get(slug=instructor_faculty.lower())
-        except Faculty.DoesNotExist:
-            faculty, _ = Faculty.objects.get_or_create(
-                slug=instructor_faculty.lower(),
-                defaults={'name': instructor_faculty}
-            )
+    
+    if request.user.is_authenticated:
+        profile = getattr(request.user, 'profile', None)
+        if profile and profile.role == 'faculty_head':
+            is_faculty_head = True
+            course = get_object_or_404(Course, id=course_id)
+            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+            faculty = profile.faculty if profile else None
+        else:
+            if not hasattr(request, 'instructor_user'):
+                username = request.session.get('instructor_username')
+                if not username:
+                    from django.shortcuts import redirect
+                    return redirect('instructor-login')
+                user, created = User.objects.get_or_create(username=username)
+                if created:
+                    user.set_unusable_password()
+                    user.save()
+                from .models import UserProfile
+                profile, profile_created = UserProfile.objects.get_or_create(
+                    user=user,
+                    defaults={'role': 'instructor'}
+                )
+                if not profile_created and profile.role != 'instructor':
+                    profile.role = 'instructor'
+                    profile.save()
+                request.instructor_user = user
+            instructor_user = request.instructor_user
+            course = get_object_or_404(Course, id=course_id, instructor=instructor_user)
+            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name, created_by=instructor_user)
+            
+            instructor_department = None
+            instructor_faculty = None
+            instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+            try:
+                with open(instructors_json_path, encoding='utf-8') as f:
+                    instructors_data = json.load(f)
+                    for inst in instructors_data:
+                        if inst.get('username') == instructor_user.username:
+                            instructor_department = inst.get('department')
+                            instructor_faculty = inst.get('faculty')
+                            break
+            except (OSError, json.JSONDecodeError):
+                pass
+            
+            from .models import Faculty
+            if instructor_faculty:
+                try:
+                    faculty = Faculty.objects.get(slug=instructor_faculty.lower())
+                except Faculty.DoesNotExist:
+                    faculty, _ = Faculty.objects.get_or_create(
+                        slug=instructor_faculty.lower(),
+                        defaults={'name': instructor_faculty}
+                    )
+    else:
+        from django.shortcuts import redirect
+        return redirect('faculty-head-login')
     
     related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
     
@@ -1200,9 +1544,71 @@ def learning_outcome_detail(request, outcome_id):
         'instructor/learning_outcome_detail.html',
         {
             'outcome': outcome,
+            'course': course,
             'program_outcomes': program_outcomes_data,
             'available_program_outcomes': available_program_outcomes,
             'course_name_slug': course_name_slug,
+            'is_faculty_head': is_faculty_head,
+        }
+    )
+
+def learning_outcome_graph(request, course_id, outcome_id):
+    """Show graph view for learning outcome"""
+    is_faculty_head = False
+    instructor_user = None
+    
+    if request.user.is_authenticated:
+        profile = getattr(request.user, 'profile', None)
+        if profile and profile.role == 'faculty_head':
+            is_faculty_head = True
+            course = get_object_or_404(Course, id=course_id)
+            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+        else:
+            if not hasattr(request, 'instructor_user'):
+                username = request.session.get('instructor_username')
+                if not username:
+                    from django.shortcuts import redirect
+                    return redirect('instructor-login')
+                user, created = User.objects.get_or_create(username=username)
+                if created:
+                    user.set_unusable_password()
+                    user.save()
+                from .models import UserProfile
+                profile, profile_created = UserProfile.objects.get_or_create(
+                    user=user,
+                    defaults={'role': 'instructor'}
+                )
+                if not profile_created and profile.role != 'instructor':
+                    profile.role = 'instructor'
+                    profile.save()
+                request.instructor_user = user
+            instructor_user = request.instructor_user
+            course = get_object_or_404(Course, id=course_id, instructor=instructor_user)
+            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name, created_by=instructor_user)
+    else:
+        from django.shortcuts import redirect
+        return redirect('faculty-head-login')
+    
+    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+    
+    program_outcomes_data = []
+    for po in related_program_outcomes:
+        program_outcomes_data.append({
+            'id': po.id,
+            'text': po.text,
+        })
+    
+    course_name_slug = outcome.course_name.replace(' ', '-')
+    
+    return render(
+        request,
+        'instructor/learning_outcome_graph.html',
+        {
+            'outcome': outcome,
+            'course': course,
+            'program_outcomes': program_outcomes_data,
+            'course_name_slug': course_name_slug,
+            'is_faculty_head': is_faculty_head,
         }
     )
 
@@ -1216,7 +1622,13 @@ def unlink_program_outcome(request, outcome_id, program_outcome_id):
     
     outcome.related_program_outcomes.remove(program_outcome)
     
-    return redirect('learning_outcome_detail', outcome_id=outcome_id)
+    course = Course.objects.filter(name=outcome.course_name, instructor=instructor_user).first()
+    course_id = course.id if course else None
+    if course_id:
+        return redirect('learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
+    else:
+        course_name_slug = outcome.course_name.replace(' ', '-')
+        return redirect('course_learning_outcomes', course_name=course_name_slug)
 
 
 @instructor_required
@@ -1447,6 +1859,234 @@ def student_grades(request):
 
 def student_announcements(request):
     return render(request, "student/student_announcement.html")
+
+@instructor_required
+def instructor_program_outcomes(request):
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_department = profile.department if profile else None
+    
+    if profile:
+        faculty = profile.faculty
+    else:
+        faculty = None
+    
+    if faculty:
+        outcomes_qs = ProgramOutcome.objects.filter(
+            faculty=faculty, 
+            course_name=''
+        ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+    else:
+        outcomes_qs = ProgramOutcome.objects.filter(
+            course_name=''
+        ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+    
+    faculty_heads_map = {}
+    instructors_map = {}
+    
+    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+    try:
+        with open(instructors_json_path, encoding='utf-8') as f:
+            instructors_list = json.load(f)
+            for inst in instructors_list:
+                username = inst.get('username')
+                first_name = inst.get('firstName', '')
+                last_name = inst.get('lastName', '')
+                full_name = (first_name + ' ' + last_name).strip()
+                if full_name:
+                    instructors_map[username] = full_name
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+    try:
+        with open(faculty_heads_json_path, encoding='utf-8') as f:
+            faculty_heads_list = json.load(f)
+            for fh in faculty_heads_list:
+                username = fh.get('username')
+                first_name = fh.get('firstName', '')
+                last_name = fh.get('lastName', '')
+                full_name = (first_name + ' ' + last_name).strip()
+                if full_name:
+                    faculty_heads_map[username] = full_name
+    except (OSError, json.JSONDecodeError):
+        pass
+    
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_username = o.created_by.username
+        creator_name = faculty_heads_map.get(creator_username) or o.created_by.get_full_name() or creator_username
+        
+        linked_learning_outcomes = []
+        seen_course_instructor = set()
+        for lo in o.learning_outcomes.all():
+            lo_creator_username = lo.created_by.username
+            lo_creator_name = instructors_map.get(lo_creator_username) or lo.created_by.get_full_name() or lo_creator_username
+            course_instructor_key = (lo.course_name, lo_creator_name)
+            if course_instructor_key not in seen_course_instructor:
+                seen_course_instructor.add(course_instructor_key)
+                linked_learning_outcomes.append({
+                    'text': lo.text,
+                    'course': lo.course_name,
+                    'instructor': lo_creator_name,
+                })
+        
+        outcomes_data.append({
+            'id': o.id,
+            'text': o.text,
+            'created_by': creator_name,
+            'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+            'linked_learning_outcomes': linked_learning_outcomes,
+        })
+    
+    return render(request, "instructor/program_outcomes.html", {
+        'outcomes_data': outcomes_data,
+        'department': instructor_department,
+        'department': instructor_department,
+    })
+
+def student_program_outcomes(request):
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        student_department = student.department
+        
+        profile = getattr(request.user, 'profile', None)
+        faculty = profile.faculty if profile else None
+        
+        if not faculty and profile:
+            faculty = profile.faculty
+        
+        if faculty:
+            outcomes_qs = ProgramOutcome.objects.filter(
+                faculty=faculty, 
+                course_name=''
+            ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+        else:
+            outcomes_qs = ProgramOutcome.objects.filter(
+                course_name=''
+            ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+        
+        faculty_heads_map = {}
+        instructors_map = {}
+        
+        instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+        try:
+            with open(instructors_json_path, encoding='utf-8') as f:
+                instructors_list = json.load(f)
+                for inst in instructors_list:
+                    username = inst.get('username')
+                    first_name = inst.get('firstName', '')
+                    last_name = inst.get('lastName', '')
+                    full_name = (first_name + ' ' + last_name).strip()
+                    if full_name:
+                        instructors_map[username] = full_name
+        except (OSError, json.JSONDecodeError):
+            pass
+        
+        faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+        try:
+            with open(faculty_heads_json_path, encoding='utf-8') as f:
+                faculty_heads_list = json.load(f)
+                for fh in faculty_heads_list:
+                    username = fh.get('username')
+                    first_name = fh.get('firstName', '')
+                    last_name = fh.get('lastName', '')
+                    full_name = (first_name + ' ' + last_name).strip()
+                    if full_name:
+                        faculty_heads_map[username] = full_name
+        except (OSError, json.JSONDecodeError):
+            pass
+        
+        outcomes_data = []
+        for o in outcomes_qs:
+            creator_username = o.created_by.username
+            creator_name = faculty_heads_map.get(creator_username) or o.created_by.get_full_name() or creator_username
+            
+            linked_learning_outcomes = []
+            seen_course_instructor = set()
+            for lo in o.learning_outcomes.all():
+                lo_creator_username = lo.created_by.username
+                lo_creator_name = instructors_map.get(lo_creator_username) or lo.created_by.get_full_name() or lo_creator_username
+                course_instructor_key = (lo.course_name, lo_creator_name)
+                if course_instructor_key not in seen_course_instructor:
+                    seen_course_instructor.add(course_instructor_key)
+                    linked_learning_outcomes.append({
+                        'text': lo.text,
+                        'course': lo.course_name,
+                        'instructor': lo_creator_name,
+                    })
+            
+            outcomes_data.append({
+                'id': o.id,
+                'text': o.text,
+                'created_by': creator_name,
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+                'linked_learning_outcomes': linked_learning_outcomes,
+            })
+        
+    except Student.DoesNotExist:
+        outcomes_data = []
+        student_department = None
+    
+    return render(request, "student/program_outcomes.html", {
+        'outcomes_data': outcomes_data,
+        'department': student_department,
+    })
+
+def student_course_learning_outcomes(request, course_id):
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        course = get_object_or_404(Course, id=course_id)
+        
+        if course not in student.courses.all():
+            return HttpResponseForbidden("You are not enrolled in this course.")
+        
+        course_name = course.name
+        
+        outcomes_qs = ProgramOutcome.objects.filter(
+            course_name=course_name
+        ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
+        
+        instructors_map = {}
+        instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+        try:
+            with open(instructors_json_path, encoding='utf-8') as f:
+                instructors_list = json.load(f)
+                for inst in instructors_list:
+                    username = inst.get('username')
+                    first_name = inst.get('firstName', '')
+                    last_name = inst.get('lastName', '')
+                    full_name = (first_name + ' ' + last_name).strip()
+                    if full_name:
+                        instructors_map[username] = full_name
+        except (OSError, json.JSONDecodeError):
+            pass
+        
+        outcomes_data = []
+        for o in outcomes_qs:
+            creator_name = instructors_map.get(o.created_by.username) or o.created_by.get_full_name() or o.created_by.username
+            related_program_outcomes = o.related_program_outcomes.all()
+            outcomes_data.append({
+                'id': o.id,
+                'text': o.text,
+                'created_by': creator_name,
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+                'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
+            })
+        
+    except Student.DoesNotExist:
+        return redirect('student-login')
+    
+    return render(request, "student/course_learning_outcomes.html", {
+        'course_name': course_name,
+        'outcomes_data': outcomes_data,
+    })
 
 def logout_view(request):
     logout(request)

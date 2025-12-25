@@ -11,6 +11,7 @@
         <tr>
             <th>Course</th>
             <th>Instructor</th>
+            <th>Learning Outcomes</th>
         </tr>
         </thead>
         <tbody id="all-courses-body">
@@ -29,42 +30,53 @@
         }
         
         if (!facultyCourses || facultyCourses.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="2">No courses found in your department.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3">No courses found in your department.</td></tr>';
         } else {
             facultyCourses.forEach(item => {
                 const tr = document.createElement("tr");
                 const courseName = (item.course || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const instructorName = (item.instructor || 'Unknown').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const courseSlug = (item.course || '').replace(/\s+/g, '-');
-                
-                tr.dataset.course = courseName;
-                tr.style.cursor = 'pointer';
-                tr.style.transition = 'background-color 0.2s';
-                
-                tr.addEventListener('mouseenter', function() {
-                    this.style.backgroundColor = '#f1f5f9';
-                });
-                tr.addEventListener('mouseleave', function() {
-                    this.style.backgroundColor = '';
-                });
-                
-                tr.addEventListener('click', function() {
-                    const url = '/faculty-head/course/' + encodeURIComponent(courseSlug) + '/learning-outcomes/';
-                    window.location.href = url;
-                });
+                const courseId = item.course_id;
+                const firstLoId = item.first_lo_id;
                 
                 const courseTd = document.createElement('td');
                 courseTd.textContent = courseName;
+                
                 const instructorTd = document.createElement('td');
                 instructorTd.textContent = instructorName;
+                
+                const loTd = document.createElement('td');
+                if (courseId && firstLoId) {
+                    const viewLink = document.createElement('a');
+                    viewLink.href = '/faculty-head/courses/' + courseId + '/learning-outcomes/' + firstLoId + '/';
+                    viewLink.textContent = 'View';
+                    viewLink.style.display = 'inline-block';
+                    viewLink.style.padding = '8px 16px';
+                    viewLink.style.background = '#2563eb';
+                    viewLink.style.color = '#ffffff';
+                    viewLink.style.textDecoration = 'none';
+                    viewLink.style.borderRadius = '6px';
+                    viewLink.style.fontSize = '13px';
+                    viewLink.style.fontWeight = '500';
+                    viewLink.style.cursor = 'pointer';
+                    viewLink.style.transition = 'all 0.2s';
+                    viewLink.addEventListener('mouseenter', function() {
+                        this.style.background = '#1d4ed8';
+                    });
+                    viewLink.addEventListener('mouseleave', function() {
+                        this.style.background = '#2563eb';
+                    });
+                    loTd.appendChild(viewLink);
+                } else {
+                    loTd.textContent = '-';
+                    loTd.style.color = '#9ca3af';
+                }
+                
                 tr.appendChild(courseTd);
                 tr.appendChild(instructorTd);
+                tr.appendChild(loTd);
                 tbody.appendChild(tr);
             });
         }
     </script>
-    
-    <p style="margin-top: 32px; font-size: 16px; color: #64748b; line-height: 1.6;">
-        Click on a course to see the learning outcomes.
-    </p>
 {% endblock %}

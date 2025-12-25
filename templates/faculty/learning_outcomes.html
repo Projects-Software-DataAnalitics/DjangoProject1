@@ -1,0 +1,38 @@
+{% extends "faculty/base.html" %}
+{% load static %}
+
+{% block title %}Learning Outcomes{% endblock %}
+
+{% block content %}
+<div style="margin-left: 0; margin-top: 10px;">
+    <h1 style="font-size: 32px; margin: 0;">Learning Outcomes</h1>
+</div>
+
+<p style="margin-left: 0; margin-bottom: 16px; color: #64748b; font-size: 16px; line-height: 1.6;">
+    Select a course to view and manage learning outcomes and link them to program outcomes.
+</p>
+
+<div style="margin-top: 12px; margin-bottom: 28px; margin-left: 8px; width: 50%;">
+    <table class="grades-table" style="width: 100%;">
+        <thead>
+        <tr>
+            <th>My Courses</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% if faculty_head_courses %}
+            {% for course_name in faculty_head_courses %}
+            <tr style="cursor: pointer;" onclick="window.location.href='{% url 'faculty_head_course_learning_outcomes' course_name|slugify|default:course_name %}'">
+                <td>{{ course_name }}</td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td>No courses available.</td>
+            </tr>
+        {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+

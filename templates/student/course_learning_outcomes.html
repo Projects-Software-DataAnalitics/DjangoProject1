@@ -1,0 +1,56 @@
+{% extends "student_base.html" %}
+{% load static %}
+
+{% block title %}Learning Outcomes - {{ course_name }}{% endblock %}
+
+{% block content %}
+<div style="margin-left: 0; margin-top: 10px;">
+    <a href="{% url 'student_courses' %}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: #3b82f6; font-size: 16px; font-weight: 500; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#3b82f6';">
+        <span style="font-size: 20px;">←</span>
+        <span>Back to My Courses</span>
+    </a>
+    <h1 style="font-size: 32px; margin: 0 0 8px 0;">Learning Outcomes for {{ course_name }}</h1>
+</div>
+
+<div style="margin-top: 32px;">
+    {% if outcomes_data %}
+        <ul style="list-style: none; padding: 0; margin: 0;">
+            {% for outcome in outcomes_data %}
+                <li style="background: #f8fafc; padding: 16px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                    <div style="flex: 1;">
+                        <p style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500;">
+                            {{ outcome.text }}
+                        </p>
+                        {% if outcome.related_program_outcomes %}
+                        <div style="margin: 8px 0;">
+                            <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to Program Outcomes:</span>
+                            <div style="margin-top: 8px; padding-left: 16px;">
+                                {% for po in outcome.related_program_outcomes %}
+                                <div style="margin-bottom: 6px; font-size: 14px; color: #475569; padding: 8px; background: #eff6ff; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                                    {{ po.text }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <div style="margin: 8px 0; padding: 8px; background: #f1f5f9; border-radius: 6px;">
+                            <span style="font-size: 13px; color: #64748b; font-style: italic;">No program outcomes linked.</span>
+                        </div>
+                        {% endif %}
+                        <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">
+                            Created by <strong>{{ outcome.created_by }}</strong> on {{ outcome.created_at }}
+                        </p>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <div style="background: #f8fafc; padding: 32px; border-radius: 8px; text-align: center; border: 1px dashed #cbd5e1;">
+            <p style="margin: 0; font-size: 16px; color: #6b7280;">
+                No learning outcomes have been added yet for this course.
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+

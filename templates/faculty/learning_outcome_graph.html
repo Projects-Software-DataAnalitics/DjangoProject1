@@ -1,0 +1,303 @@
+{% extends "faculty/base.html" %}
+{% load static %}
+
+{% block title %}Learning Outcome Graph{% endblock %}
+
+{% block content %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    .graph-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 135px;
+        height: 100%;
+        position: relative;
+        min-height: 500px;
+    }
+    
+    .lo-column {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+    }
+    
+    .po-column {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+    }
+    
+    .po-cards-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        width: 100%;
+        max-width: 400px;
+        justify-content: center;
+    }
+    
+    .lo-card {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+        color: #ffffff;
+        padding: 28px 36px;
+        border-radius: 24px;
+        box-shadow: 0 25px 60px rgba(59, 130, 246, 0.15), 0 10px 30px rgba(59, 130, 246, 0.1);
+        max-width: 400px;
+        width: 100%;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .lo-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 30px 70px rgba(59, 130, 246, 0.2), 0 15px 35px rgba(59, 130, 246, 0.15);
+    }
+    
+    .po-card {
+        background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+        color: #ffffff;
+        padding: 28px 36px;
+        border-radius: 24px;
+        box-shadow: 0 25px 60px rgba(16, 185, 129, 0.15), 0 10px 30px rgba(16, 185, 129, 0.1);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .po-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 30px 70px rgba(16, 185, 129, 0.2), 0 15px 35px rgba(16, 185, 129, 0.15);
+    }
+    
+    .card-text {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.7;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+    }
+    
+    .section-title {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 32px 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        letter-spacing: -0.02em;
+        text-align: center;
+        width: 100%;
+    }
+    
+    .section-title.lo-title {
+        color: #3b82f6;
+    }
+    
+    .section-title.po-title {
+        color: #10b981;
+    }
+    
+    #arrows-svg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+        overflow: visible;
+    }
+    
+    .arrow-path {
+        stroke: #374151;
+        stroke-width: 2;
+        fill: none;
+        opacity: 0.6;
+    }
+    
+    @media (max-width: 768px) {
+        .graph-container {
+            grid-template-columns: 1fr;
+            gap: 40px;
+            min-height: auto;
+        }
+        
+        .lo-column,
+        .po-column {
+            justify-content: flex-start;
+        }
+    }
+</style>
+<div style="max-width: 900px; margin: 0 auto; padding: 24px;">
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 24px;">
+        <a href="{% url 'faculty_head_course_learning_outcomes' course_name=course_name_slug %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+            ← Back to Learning Outcomes
+        </a>
+    </div>
+    
+    <!-- Toggle -->
+    <div style="display: flex; gap: 0; margin-bottom: 32px; background: #e2e8f0; padding: 4px; border-radius: 12px; width: fit-content; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <button onclick="window.location.href='{% url 'faculty_head_learning_outcome_detail' course.id outcome.id %}'" style="padding: 12px 32px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">
+            Details
+        </button>
+        <button class="toggle-btn active" style="padding: 12px 32px; border: none; border-radius: 8px; background: #3b82f6; color: white; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(59,130,246,0.3);">
+            Graph
+        </button>
+    </div>
+    
+    <!-- Graph Mode -->
+    <div id="graph-mode">
+        {% if program_outcomes %}
+        <div style="background: #f8fafc; padding: 48px; border-radius: 16px; min-height: 500px; position: relative;">
+            <div class="graph-container">
+                <!-- Left Column: Learning Outcome -->
+                <div class="lo-column">
+                    <h3 class="section-title lo-title">Learning Outcome</h3>
+                    <div id="lo-card" class="lo-card">
+                        <p class="card-text">{{ outcome.text }}</p>
+                    </div>
+                </div>
+                
+                <!-- Right Column: Program Outcomes -->
+                <div class="po-column">
+                    <h3 class="section-title po-title">Program Outcomes</h3>
+                    <div class="po-cards-wrapper">
+                        {% for po in program_outcomes %}
+                        <div class="po-card" data-po-id="{{ po.id }}">
+                            <p class="card-text">{{ po.text }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- SVG Arrows Container -->
+                <svg id="arrows-svg">
+                    <defs>
+                        <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                            <path d="M 0 0 L 8 4 L 0 8 Z" fill="#374151" stroke="none" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+        {% else %}
+        <div style="background: #f8fafc; padding: 40px; border-radius: 12px; text-align: center; border: 1px dashed #cbd5e1;">
+            <p style="font-size: 16px; color: #64748b; margin: 0;">
+                This learning outcome is not linked to any program outcomes.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    (function() {
+        // Draw arrows between LO and PO cards with Bezier curves
+        function drawArrows() {
+            const loCard = document.getElementById('lo-card');
+            const poCards = document.querySelectorAll('.po-card');
+            const svg = document.getElementById('arrows-svg');
+            const container = document.querySelector('.graph-container');
+            
+            if (!loCard || !svg || poCards.length === 0 || !container) return;
+            
+            // Clear existing arrows (keep defs)
+            const defs = svg.querySelector('defs');
+            svg.innerHTML = '';
+            if (defs) {
+                svg.appendChild(defs);
+            } else {
+                const newDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.setAttribute('id', 'arrowhead');
+                marker.setAttribute('markerWidth', '8');
+                marker.setAttribute('markerHeight', '8');
+                marker.setAttribute('refX', '7');
+                marker.setAttribute('refY', '4');
+                marker.setAttribute('orient', 'auto');
+                marker.setAttribute('markerUnits', 'strokeWidth');
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
+                path.setAttribute('fill', '#374151');
+                path.setAttribute('stroke', 'none');
+                marker.appendChild(path);
+                newDefs.appendChild(marker);
+                svg.appendChild(newDefs);
+            }
+            
+            const containerRect = container.getBoundingClientRect();
+            const loRect = loCard.getBoundingClientRect();
+            
+            // Calculate LO card center point (right edge, vertical center)
+            const loStartX = loRect.right - containerRect.left;
+            const loStartY = loRect.top - containerRect.top + loRect.height / 2;
+            
+            poCards.forEach(function(poCard) {
+                const poRect = poCard.getBoundingClientRect();
+                
+                // Calculate PO card center point (left edge, vertical center)
+                const poEndX = poRect.left - containerRect.left;
+                const poEndY = poRect.top - containerRect.top + poRect.height / 2;
+                
+                // Calculate Bezier curve control points for smooth S-curve
+                const distance = poEndX - loStartX;
+                const controlPointOffset = Math.max(distance * 0.35, 80); // Adjusted for better curve
+                
+                const controlPoint1X = loStartX + controlPointOffset;
+                const controlPoint1Y = loStartY;
+                const controlPoint2X = poEndX - controlPointOffset;
+                const controlPoint2Y = poEndY;
+                
+                // Create Bezier curve path with C (cubic bezier) command
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const d = `M ${loStartX} ${loStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${poEndX} ${poEndY}`;
+                path.setAttribute('d', d);
+                path.setAttribute('class', 'arrow-path');
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', '#374151');
+                path.setAttribute('stroke-width', '2');
+                path.setAttribute('marker-end', 'url(#arrowhead)');
+                
+                svg.appendChild(path);
+            });
+        }
+        
+        // Draw arrows on load and resize with debouncing
+        let resizeTimeout;
+        function debouncedDrawArrows() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(drawArrows, 100);
+        }
+        
+        window.addEventListener('load', function() {
+            setTimeout(drawArrows, 200);
+        });
+        window.addEventListener('resize', debouncedDrawArrows);
+        
+        // Redraw arrows when content changes
+        const observer = new MutationObserver(function(mutations) {
+            let shouldRedraw = false;
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                    shouldRedraw = true;
+                }
+            });
+            if (shouldRedraw) {
+                setTimeout(drawArrows, 100);
+            }
+        });
+        
+        if (document.getElementById('graph-mode')) {
+            observer.observe(document.getElementById('graph-mode'), { 
+                childList: true, 
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+        }
+    })();
+</script>
+{% endblock %}
+
