@@ -95,10 +95,23 @@ def upload_grades(request):
             if not course:
                 return JsonResponse({'error': f'Course not found: {course_name}'}, status=400)
 
+            from django.utils import timezone
+            # CSV'den gelen notları hem eski formatta hem de yeni formatta kaydet
             Grade.objects.update_or_create(
                 student=student,
                 course=course,
-                defaults={'midterm': midterm, 'assignment': assignment, 'final': final}
+                defaults={
+                    'midterm': midterm, 
+                    'assignment': assignment, 
+                    'final': final,
+                    'grades': {
+                        'Midterm': midterm,
+                        'Assignment': assignment,
+                        'Final': final
+                    },
+                    'uploaded_file_name': csv_file.name,
+                    'uploaded_at': timezone.now()
+                }
             )
     except (KeyError, ValueError) as exc:
         return JsonResponse({'error': f'CSV hatası: {exc}'}, status=400)
@@ -343,6 +356,11 @@ def instructor_grades(request):
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
     
+    # Eğer course_name parametresi varsa, o dersin not sayfasına yönlendir
+    course_name = request.GET.get('course')
+    if course_name:
+        return redirect('instructor_course_grades', course_name=course_name)
+    
     courses = []
     if profile:
         courses = [course.name for course in profile.courses.all()]
@@ -352,6 +370,169 @@ def instructor_grades(request):
         'page': 'grades',
         'instructor_courses': courses
     })
+
+@instructor_required
+def instructor_course_grades(request, course_name):
+    """Seçilen ders için not yönetim sayfası"""
+    instructor_user = request.instructor_user
+    
+    # Dersin bu hocaya ait olduğunu kontrol et
+    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+    
+    # Bu dersi alan öğrencileri getir
+    students = Student.objects.filter(courses=course).order_by('first_name', 'last_name', 'username')
+    
+    # Debug: Öğrenci sayısını kontrol et
+    if not students.exists():
+        # Eğer hiç öğrenci yoksa, JSON dosyasından kontrol et
+        import os
+        students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+        try:
+            with open(students_json_path, encoding='utf-8') as f:
+                students_data = json.load(f)
+                # JSON'dan bu dersi alan öğrencileri bul
+                course_students = []
+                for student_data in students_data:
+                    if course_name in student_data.get('courses', []):
+                        student, created = Student.objects.get_or_create(
+                            username=student_data['username'],
+                            defaults={
+                                'student_id': student_data.get('student_id', student_data['username']),
+                                'first_name': student_data.get('firstName', ''),
+                                'last_name': student_data.get('lastName', ''),
+                                'department': student_data.get('department', ''),
+                                'year': student_data.get('year')
+                            }
+                        )
+                        if created or course not in student.courses.all():
+                            student.courses.add(course)
+                        course_students.append(student)
+                students = Student.objects.filter(id__in=[s.id for s in course_students]).order_by('first_name', 'last_name', 'username')
+        except (OSError, json.JSONDecodeError):
+            pass
+    
+    # Mevcut notları getir
+    grades = Grade.objects.filter(course=course).select_related('student')
+    grades_dict = {g.student.id: g for g in grades}
+    
+    # Öğrenciler için not bilgilerini hazırla
+    students_with_grades = []
+    for student in students:
+        grade = grades_dict.get(student.id)
+        grades_dict_data = grade.grades if grade and grade.grades else {}
+        grades_json = json.dumps(grades_dict_data)
+        students_with_grades.append({
+            'student': student,
+            'grades': grades_dict_data,  # Template'de kullanmak için dict olarak
+            'grades_json': grades_json,  # JavaScript'te kullanmak için JSON string
+            'is_finalized': grade.is_finalized if grade else False
+        })
+    
+    # CSV dosya bilgisi
+    uploaded_file = None
+    if grades.exists():
+        first_grade = grades.first()
+        if first_grade.uploaded_file_name:
+            uploaded_file = {
+                'name': first_grade.uploaded_file_name,
+                'uploaded_at': first_grade.uploaded_at
+            }
+    
+    # Kesinleştirme durumu
+    is_finalized = any(g.is_finalized for g in grades_dict.values()) if grades_dict else False
+    
+    context = {
+        'course': course,
+        'students': students,
+        'students_with_grades': students_with_grades,
+        'grades': grades_dict,
+        'uploaded_file': uploaded_file,
+        'is_finalized': is_finalized
+    }
+    
+    return render(request, 'instructor/course_grades.html', context)
+
+@csrf_exempt
+@instructor_required
+def delete_uploaded_csv(request, course_name):
+    """Yüklenen CSV dosyasını sil (notları silmez, sadece dosya bilgisini)"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    instructor_user = request.instructor_user
+    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+    
+    # Sadece dosya bilgisini temizle (notları silme)
+    Grade.objects.filter(course=course).update(
+        uploaded_file_name='',
+        uploaded_at=None
+    )
+    
+    return JsonResponse({'status': 'ok'})
+
+@csrf_exempt
+@instructor_required
+def update_manual_grades(request, course_name):
+    """Manuel not girişi için güncelleme"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    instructor_user = request.instructor_user
+    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+    
+    # Kesinleştirilmiş mi kontrol et
+    existing_grades = Grade.objects.filter(course=course)
+    if any(g.is_finalized for g in existing_grades):
+        return JsonResponse({'error': 'Grades are finalized and cannot be changed'}, status=403)
+    
+    data = json.loads(request.body)
+    students_data = data.get('students', [])
+    
+    for student_data in students_data:
+        student_id = student_data.get('student_id')
+        student = get_object_or_404(Student, id=student_id)
+        
+        grade, created = Grade.objects.get_or_create(
+            student=student,
+            course=course,
+            defaults={}
+        )
+        
+        # Dinamik notları güncelle
+        # Format: [{"name": "1. Vize", "score": 85}, {"name": "Final", "score": 90}]
+        grades_list = student_data.get('grades', [])
+        grades_dict = {}
+        for grade_item in grades_list:
+            name = grade_item.get('name', '').strip()
+            score = grade_item.get('score', '')
+            if name and score:
+                try:
+                    grades_dict[name] = float(score)
+                except (ValueError, TypeError):
+                    pass
+        
+        grade.grades = grades_dict
+        grade.save()
+    
+    return JsonResponse({'status': 'ok'})
+
+@csrf_exempt
+@instructor_required
+def finalize_grades(request, course_name):
+    """Notları kesinleştir"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    instructor_user = request.instructor_user
+    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+    
+    from django.utils import timezone
+    Grade.objects.filter(course=course).update(
+        is_finalized=True,
+        finalized_at=timezone.now()
+    )
+    
+    return JsonResponse({'status': 'ok'})
 
 @instructor_required
 def instructor_announcements(request):
@@ -1950,8 +2131,22 @@ def student_grades(request):
         courses_with_grades = []
         for course in courses:
             grade_obj = grades_qs.filter(course=course).first()
+            # Yeni dinamik notlar sistemini kullan
+            grades_dict = grade_obj.grades if grade_obj and grade_obj.grades else {}
+            
+            # Eski alanları da kontrol et (geriye dönük uyumluluk için)
+            if not grades_dict and grade_obj:
+                if grade_obj.midterm is not None:
+                    grades_dict['Midterm'] = grade_obj.midterm
+                if grade_obj.assignment is not None:
+                    grades_dict['Assignment'] = grade_obj.assignment
+                if grade_obj.final is not None:
+                    grades_dict['Final'] = grade_obj.final
+            
             courses_with_grades.append({
                 'course_name': course.name,
+                'grades': grades_dict,
+                # Eski alanlar (geriye dönük uyumluluk)
                 'midterm': grade_obj.midterm if grade_obj else None,
                 'assignment': grade_obj.assignment if grade_obj else None,
                 'final': grade_obj.final if grade_obj else None,
