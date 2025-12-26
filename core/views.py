@@ -441,10 +441,22 @@ def instructor_course_grades(request, course_name):
     # Kesinleştirme durumu
     is_finalized = any(g.is_finalized for g in grades_dict.values()) if grades_dict else False
     
+    # JavaScript için JSON formatında öğrenci verileri
+    students_with_grades_json = []
+    for item in students_with_grades:
+        student_name = item['student'].first_name + ' ' + item['student'].last_name if (item['student'].first_name or item['student'].last_name) else item['student'].username
+        students_with_grades_json.append({
+            'id': item['student'].id,
+            'name': student_name,
+            'grades': item['grades']
+        })
+    students_with_grades_json_str = json.dumps(students_with_grades_json)
+    
     context = {
         'course': course,
         'students': students,
         'students_with_grades': students_with_grades,
+        'students_with_grades_json': students_with_grades_json_str,
         'grades': grades_dict,
         'uploaded_file': uploaded_file,
         'is_finalized': is_finalized

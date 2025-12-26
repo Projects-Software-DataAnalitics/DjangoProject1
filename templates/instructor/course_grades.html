@@ -2,6 +2,11 @@
 {% load static %}
 
 {% block content %}
+<style>
+.hidden {
+    display: none !important;
+}
+</style>
 <h1>Grades Management - {{ course.name }}</h1>
 
 <div style="margin: 20px 0;">
@@ -100,7 +105,7 @@
                         <!-- Dinamik sütunlar buraya gelecek -->
                     </th>
                     <th style="padding: 12px; border: 1px solid #ddd; width: 50px;">
-                        <button id="add-grade-column-btn" style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; {% if is_finalized %}display: none;{% endif %}" title="Add Grade Column">
+                        <button id="add-grade-column-btn" class="{% if is_finalized %}hidden{% endif %}" style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer;" title="Add Grade Column">
                             +
                         </button>
                     </th>
@@ -127,44 +132,49 @@
     </div>
     
     <div style="margin-top: 20px;">
-        <button id="update-grades-btn" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; {% if is_finalized %}display: none;{% endif %}">
+        <button id="update-grades-btn" class="{% if is_finalized %}hidden{% endif %}" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
             Update
         </button>
-        <span id="finalized-status" style="{% if not is_finalized %}display: none;{% endif %} color: #dc3545; font-weight: bold; margin-left: 10px;">
+        <span id="finalized-status" class="{% if not is_finalized %}hidden{% endif %}" style="color: #dc3545; font-weight: bold; margin-left: 10px;">
             Finalized
         </span>
-        <button id="finalize-btn" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; {% if is_finalized %}display: none;{% endif %} margin-left: 10px;">
+        <button id="finalize-btn" class="{% if is_finalized %}hidden{% endif %}" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
             Finalize
         </button>
     </div>
 </div>
 
+<script id="course-grades-data" type="application/json">
+{% autoescape off %}
+{
+    "courseName": "{{ course.name|escapejs }}",
+    "isFinalized": {{ is_finalized|yesno:"true,false" }},
+    "studentsData": {{ students_with_grades_json|safe }}
+}
+{% endautoescape %}
+</script>
 <script>
 function getCsrfToken() {
     const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
     return cookieMatch ? cookieMatch[1] : null;
 }
 
-const courseName = "{{ course.name }}";
-const isFinalized = {{ is_finalized|yesno:"true,false" }};
-const studentsData = [
-    {% for item in students_with_grades %}
-    {
-        id: {{ item.student.id }},
-        name: "{% if item.student.first_name or item.student.last_name %}{{ item.student.first_name }} {{ item.student.last_name }}{% else %}{{ item.student.username }}{% endif %}",
-        grades: {{ item.grades_json|safe }}
-    }{% if not forloop.last %},{% endif %}
-    {% endfor %}
-];
+(function() {
+    'use strict';
+    const dataScript = document.getElementById('course-grades-data');
+    const data = JSON.parse(dataScript.textContent);
+    const courseName = data.courseName;
+    const isFinalized = data.isFinalized;
+    const studentsData = data.studentsData;
 
-// Varsayılan 2 not sütunu oluştur
-let gradeColumns = [
-    {name: '', score: ''},
-    {name: '', score: ''}
-];
+    // Varsayılan 2 not sütunu oluştur
+    let gradeColumns = [
+        {name: '', score: ''},
+        {name: '', score: ''}
+    ];
 
-// Mevcut notları yükle (eğer varsa ve tüm öğrencilerde aynı sütunlar varsa)
-if (studentsData.length > 0) {
+    // Mevcut notları yükle (eğer varsa ve tüm öğrencilerde aynı sütunlar varsa)
+    if (studentsData.length > 0) {
     // İlk öğrencinin notlarını kontrol et
     const firstStudent = studentsData[0];
     if (firstStudent.grades && Object.keys(firstStudent.grades).length > 0) {
@@ -173,10 +183,10 @@ if (studentsData.length > 0) {
             score: firstStudent.grades[name]
         }));
     }
-}
+    }
 
-// Sütun başlıklarını oluştur
-function renderGradeColumns() {
+    // Sütun başlıklarını oluştur
+    function renderGradeColumns() {
     const headerCell = document.getElementById('grade-columns-header');
     headerCell.innerHTML = '';
     
@@ -193,10 +203,10 @@ function renderGradeColumns() {
         `;
         headerCell.appendChild(th);
     });
-}
+    }
 
-// Öğrenci satırlarını oluştur
-function renderStudentRows() {
+    // Öğrenci satırlarını oluştur
+    function renderStudentRows() {
     studentsData.forEach(student => {
         const row = document.querySelector(`tr[data-student-id="${student.id}"]`);
         if (!row) return;
@@ -223,54 +233,54 @@ function renderStudentRows() {
             gradeCells.appendChild(td);
         });
     });
-}
+    }
 
-// İlk render
-renderGradeColumns();
-renderStudentRows();
-
-// + Butonuna tıklandığında yeni sütun ekle
-document.getElementById('add-grade-column-btn')?.addEventListener('click', function() {
-    if (isFinalized) return;
-    
-    gradeColumns.push({name: '', score: ''});
+    // İlk render
     renderGradeColumns();
     renderStudentRows();
-});
 
-// Sütun başlığındaki not adı değiştiğinde tüm satırlarda güncelle
-document.addEventListener('change', function(e) {
+    // + Butonuna tıklandığında yeni sütun ekle
+    document.getElementById('add-grade-column-btn')?.addEventListener('click', function() {
+    if (isFinalized) return;
+    
+        gradeColumns.push({name: '', score: ''});
+        renderGradeColumns();
+        renderStudentRows();
+    });
+
+    // Sütun başlığındaki not adı değiştiğinde tüm satırlarda güncelle
+    document.addEventListener('change', function(e) {
     if (e.target.classList.contains('grade-name-input')) {
         const index = parseInt(e.target.dataset.index);
         gradeColumns[index].name = e.target.value;
         // Sütun adı değiştiğinde öğrenci satırlarını yeniden render et
         renderStudentRows();
     }
-});
+    });
 
-// Manuel giriş butonu
-document.getElementById('manual-entry-btn')?.addEventListener('click', function() {
+    // Manuel giriş butonu
+    document.getElementById('manual-entry-btn')?.addEventListener('click', function() {
     document.getElementById('manual-entry-section').style.display = 'block';
-    document.getElementById('csv-upload-section').style.display = 'none';
-    document.getElementById('given-scores-section').style.display = 'none';
-});
+        document.getElementById('csv-upload-section').style.display = 'none';
+        document.getElementById('given-scores-section').style.display = 'none';
+    });
 
-// CSV yükleme butonu
-document.getElementById('csv-upload-btn')?.addEventListener('click', function() {
-    document.getElementById('csv-upload-section').style.display = 'block';
-    document.getElementById('manual-entry-section').style.display = 'none';
-    document.getElementById('given-scores-section').style.display = 'none';
-});
+    // CSV yükleme butonu
+    document.getElementById('csv-upload-btn')?.addEventListener('click', function() {
+        document.getElementById('csv-upload-section').style.display = 'block';
+        document.getElementById('manual-entry-section').style.display = 'none';
+        document.getElementById('given-scores-section').style.display = 'none';
+    });
 
-// Given Scores butonu
-document.getElementById('given-scores-btn')?.addEventListener('click', function() {
-    document.getElementById('given-scores-section').style.display = 'block';
-    document.getElementById('csv-upload-section').style.display = 'none';
-    document.getElementById('manual-entry-section').style.display = 'none';
-});
+    // Given Scores butonu
+    document.getElementById('given-scores-btn')?.addEventListener('click', function() {
+        document.getElementById('given-scores-section').style.display = 'block';
+        document.getElementById('csv-upload-section').style.display = 'none';
+        document.getElementById('manual-entry-section').style.display = 'none';
+    });
 
-// CSV yükleme
-document.getElementById('upload-btn')?.addEventListener('click', function() {
+    // CSV yükleme
+    document.getElementById('upload-btn')?.addEventListener('click', function() {
     const fileInput = document.getElementById('csv-file-input');
     const file = fileInput.files[0];
     if (!file) {
@@ -300,10 +310,10 @@ document.getElementById('upload-btn')?.addEventListener('click', function() {
     .catch(error => {
         alert('Upload error: ' + error);
     });
-});
+    });
 
-// CSV dosyasını sil
-document.getElementById('delete-csv-btn')?.addEventListener('click', function() {
+    // CSV dosyasını sil
+    document.getElementById('delete-csv-btn')?.addEventListener('click', function() {
     if (confirm('Are you sure you want to delete the CSV file information? Grades will not be deleted.')) {
         fetch(`/instructor/grades/${courseName}/delete-csv/`, {
             method: 'POST',
@@ -321,10 +331,10 @@ document.getElementById('delete-csv-btn')?.addEventListener('click', function() 
             }
         });
     }
-});
+    });
 
-// Güncelle butonu
-document.getElementById('update-grades-btn')?.addEventListener('click', function() {
+    // Güncelle butonu
+    document.getElementById('update-grades-btn')?.addEventListener('click', function() {
     const studentsDataToSend = [];
     
     studentsData.forEach(student => {
@@ -370,10 +380,10 @@ document.getElementById('update-grades-btn')?.addEventListener('click', function
     .catch(error => {
         alert('Update error: ' + error);
     });
-});
+    });
 
-// Kesinleştir butonu
-document.getElementById('finalize-btn')?.addEventListener('click', function() {
+    // Kesinleştir butonu
+    document.getElementById('finalize-btn')?.addEventListener('click', function() {
     if (confirm('Are you sure you want to finalize grades? This action cannot be undone.')) {
         fetch(`/instructor/grades/${courseName}/finalize/`, {
             method: 'POST',
@@ -394,7 +404,14 @@ document.getElementById('finalize-btn')?.addEventListener('click', function() {
             alert('Finalize error: ' + error);
         });
     }
-});
+    });
+    
+    // Export to global scope for compatibility
+    window.courseName = courseName;
+    window.isFinalized = isFinalized;
+    window.studentsData = studentsData;
+    window.gradeColumns = gradeColumns;
+})();
 </script>
 {% endblock %}
 
