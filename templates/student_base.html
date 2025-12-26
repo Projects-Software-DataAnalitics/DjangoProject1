@@ -5,8 +5,113 @@
     <title>{% block title %}Student Main Page{% endblock %}</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .header-top {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 60px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-icons {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            background-color: #f3f4f6;
+        }
+        .header-icon:hover {
+            background-color: #e5e7eb;
+        }
+        .header-icon svg {
+            width: 20px;
+            height: 20px;
+            color: #374151;
+        }
+        .profile-popup {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+            padding: 20px;
+            min-width: 250px;
+            z-index: 1001;
+            display: none;
+        }
+        .profile-popup.show {
+            display: block;
+        }
+        .profile-popup-item {
+            margin-bottom: 12px;
+        }
+        .profile-popup-label {
+            font-weight: 600;
+            color: #374151;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .profile-popup-value {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .content-wrapper {
+            margin-top: 60px;
+        }
+        body .sidebar {
+            top: 60px;
+            height: calc(100% - 60px);
+        }
+    </style>
 </head>
 <body>
+
+<div class="header-top">
+    <div class="header-icons">
+        <a href="{% url 'student_announcements' %}" class="header-icon" title="Announcements">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+        </a>
+        <div class="header-icon" id="profile-icon" title="Profile" style="position: relative;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <div class="profile-popup" id="profile-popup">
+                <div class="profile-popup-item">
+                    <div class="profile-popup-label">Username</div>
+                    <div class="profile-popup-value">{% if student_info %}{{ student_info.username }}{% else %}{{ request.user.username|default:"-" }}{% endif %}</div>
+                </div>
+                <div class="profile-popup-item">
+                    <div class="profile-popup-label">Name</div>
+                    <div class="profile-popup-value">{% if student_info %}{{ student_info.name }}{% else %}{% if request.user.first_name or request.user.last_name %}{{ request.user.first_name }} {{ request.user.last_name }}{% else %}-{% endif %}{% endif %}</div>
+                </div>
+                <div class="profile-popup-item">
+                    <div class="profile-popup-label">Student ID</div>
+                    <div class="profile-popup-value">{% if student_info %}{{ student_info.student_id }}{% else %}-{% endif %}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="sidebar" id="sidebar">
     <ul>
@@ -31,9 +136,11 @@
     </ul>
 </div>
 
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    {% block content %}{% endblock %}
+<div class="content-wrapper">
+    <div class="content" id="content">
+        <button class="menu-btn" id="menu-btn">☰</button>
+        {% block content %}{% endblock %}
+    </div>
 </div>
 
 <div id="popup" class="popup-overlay" style="display: none;">
@@ -45,6 +152,26 @@
 </div>
 
 <script src="{% static 'js/student.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const profileIcon = document.getElementById('profile-icon');
+        const profilePopup = document.getElementById('profile-popup');
+        
+        if (profileIcon && profilePopup) {
+            profileIcon.addEventListener('click', function(e) {
+                e.stopPropagation();
+                profilePopup.classList.toggle('show');
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (!profileIcon.contains(e.target) && !profilePopup.contains(e.target)) {
+                    profilePopup.classList.remove('show');
+                }
+            });
+        }
+        
+    });
+</script>
 </body>
 </html>
 

@@ -335,36 +335,25 @@ def faculty_head_login(request):
 
 
 def student_dashboard(request):
-    username = request.GET.get('username', '')
+    if not request.user.is_authenticated:
+        return redirect('student-login')
     
-    courses_with_grades = []
-    if username:
-        try:
-            student = Student.objects.get(username=username)
-            grades_qs = Grade.objects.filter(student=student).select_related('course')
-            
-            students_data = get_students_data()
-            
-            user_courses = []
-            for entry in students_data:
-                if entry.get('username') == username:
-                    user_courses = entry.get('courses', []) or []
-                    break
-            
-            for course_name in user_courses:
-                grade_obj = next((g for g in grades_qs if g.course.name == course_name), None)
-                courses_with_grades.append({
-                    'course_name': course_name,
-                    'midterm': grade_obj.midterm if grade_obj else None,
-                    'assignment': grade_obj.assignment if grade_obj else None,
-                    'final': grade_obj.final if grade_obj else None,
-                })
-        except Student.DoesNotExist:
-            pass
+    try:
+        student = Student.objects.get(user=request.user)
+        student_info = {
+            'username': student.username,
+            'name': f"{student.first_name} {student.last_name}".strip() or student.username,
+            'student_id': student.student_id,
+        }
+    except Student.DoesNotExist:
+        student_info = {
+            'username': request.user.username,
+            'name': request.user.get_full_name() or request.user.username,
+            'student_id': '-',
+        }
     
     return render(request, 'student.html', {
-        'grades': None,
-        'courses_with_grades': courses_with_grades
+        'student_info': student_info
     })
 
 
