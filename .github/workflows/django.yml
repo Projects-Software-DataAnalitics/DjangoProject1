@@ -15,7 +15,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_djangoproject2
+          POSTGRES_DB: postgres
           POSTGRES_USER: postgres
         options: >-
           --health-cmd pg_isready
@@ -51,6 +51,13 @@ jobs:
           echo "Waiting for PostgreSQL..."
           sleep 2
         done
+        echo "PostgreSQL is ready!"
+      env:
+        PGPASSWORD: postgres
+    
+    - name: Verify PostgreSQL connection
+      run: |
+        psql -h localhost -U postgres -d postgres -c "SELECT version();"
       env:
         PGPASSWORD: postgres
     
@@ -59,7 +66,8 @@ jobs:
         python manage.py test core.tests --verbosity=2 --noinput
       env:
         DB_HOST: localhost
-        DB_NAME: test_djangoproject2
+        DB_NAME: djangoproject2
         DB_USER: postgres
         DB_PASSWORD: postgres
         DB_PORT: 5432
+        DJANGO_SETTINGS_MODULE: DjangoProject2.settings
