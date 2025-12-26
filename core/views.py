@@ -447,6 +447,7 @@ def instructor_my_courses(request):
                 'code': course.code,
                 'instructor': instructor_name,
                 'department': course.department,
+                'credits': course.credits,
                 'students': students_list,
                 'students_json': json.dumps(students_list),
             })
@@ -913,6 +914,83 @@ def all_courses(request):
     faculty_head_data = get_faculty_head_data(request.user.username)
     faculty_head_department = faculty_head_data.get('department')
     
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'add_course':
+            course_name = request.POST.get('course_name', '').strip()
+            instructor_username = request.POST.get('instructor_username', '').strip()
+            credits_str = request.POST.get('credits', '').strip()
+            
+            if course_name:
+                credits = None
+                if credits_str:
+                    try:
+                        credits = int(credits_str)
+                    except ValueError:
+                        pass
+                
+                instructor_user = None
+                if instructor_username:
+                    try:
+                        instructor_user = User.objects.get(username=instructor_username)
+                    except User.DoesNotExist:
+                        pass
+                
+                if not instructor_user:
+                    default_instructor = UserProfile.objects.filter(role='instructor').first()
+                    instructor_user = default_instructor.user if default_instructor else User.objects.first()
+                
+                course, created = Course.objects.get_or_create(
+                    name=course_name,
+                    defaults={
+                        'code': '',
+                        'department': faculty_head_department or '',
+                        'instructor': instructor_user,
+                        'credits': credits,
+                    }
+                )
+                
+                if not created:
+                    course.instructor = instructor_user
+                    if credits is not None:
+                        course.credits = credits
+                    course.save()
+        
+        elif action == 'update_course':
+            course_id = request.POST.get('course_id')
+            course_name = request.POST.get('course_name', '').strip()
+            instructor_username = request.POST.get('instructor_username', '').strip()
+            credits_str = request.POST.get('credits', '').strip()
+            
+            try:
+                course = Course.objects.get(id=course_id)
+                
+                if course_name:
+                    course.name = course_name
+                
+                if instructor_username:
+                    try:
+                        instructor_user = User.objects.get(username=instructor_username)
+                        course.instructor = instructor_user
+                    except User.DoesNotExist:
+                        pass
+                
+                if credits_str:
+                    try:
+                        credits = int(credits_str)
+                        course.credits = credits
+                    except ValueError:
+                        pass
+                else:
+                    course.credits = None
+                
+                course.save()
+            except Course.DoesNotExist:
+                pass
+        
+        return redirect('all_courses')
+    
     faculty_courses_with_instructors = []
     course_instructor_map = {}
     
@@ -981,6 +1059,7 @@ def all_courses(request):
             'course': course_name,
             'instructor': instructor_display,
             'course_id': course.id if course else None,
+            'credits': course.credits if course else None,
             'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
         })
     
@@ -1030,6 +1109,7 @@ def my_courses(request):
                 'code': course.code,
                 'instructor': instructor_name,
                 'department': course.department,
+                'credits': course.credits,
                 'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
             })
     
@@ -2389,6 +2469,7 @@ def student_courses(request):
                 'code': course.code,
                 'instructor': instructor_name,
                 'department': course.department,
+                'credits': course.credits,
             })
     except Student.DoesNotExist:
         courses_data = []
@@ -2410,8 +2491,20 @@ def student_grades(request):
         courses_with_grades = []
         for course in courses:
             grade_obj = grades_qs.filter(course=course).first()
+            grades_dict = grade_obj.grades if grade_obj and grade_obj.grades else {}
+            
+            if not grades_dict and grade_obj:
+                if grade_obj.midterm is not None:
+                    grades_dict['Midterm'] = grade_obj.midterm
+                if grade_obj.assignment is not None:
+                    grades_dict['Assignment'] = grade_obj.assignment
+                if grade_obj.final is not None:
+                    grades_dict['Final'] = grade_obj.final
+            
             courses_with_grades.append({
                 'course_name': course.name,
+                'grades': grades_dict,
+                'credits': course.credits,
                 'midterm': grade_obj.midterm if grade_obj else None,
                 'assignment': grade_obj.assignment if grade_obj else None,
                 'final': grade_obj.final if grade_obj else None,
