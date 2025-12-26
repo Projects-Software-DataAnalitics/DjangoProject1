@@ -196,8 +196,11 @@
                         <h3 class="section-title po-title">Program Outcomes</h3>
                         <div class="po-cards-wrapper">
                             {% for po in program_outcomes %}
-                            <div class="po-card" data-po-id="{{ po.id }}">
+                            <div class="po-card" data-po-id="{{ po.id }}" data-percentage="{{ po.percentage|default:0 }}">
                                 <p class="card-text">{{ po.text }}</p>
+                                {% if po.percentage %}
+                                <p style="margin: 8px 0 0 0; font-size: 12px; opacity: 0.8;">{{ po.percentage }}%</p>
+                                {% endif %}
                             </div>
                             {% endfor %}
                         </div>
@@ -207,7 +210,7 @@
                     <svg id="arrows-svg">
                         <defs>
                             <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-                                <path d="M 0 0 L 8 4 L 0 8 Z" fill="#374151" stroke="none" />
+                                <path d="M 0 0 L 8 4 L 0 8 Z" fill="#6b7280" stroke="none" />
                             </marker>
                         </defs>
                     </svg>
@@ -266,7 +269,7 @@
                 marker.setAttribute('markerUnits', 'strokeWidth');
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
-                path.setAttribute('fill', '#374151');
+                path.setAttribute('fill', '#6b7280');
                 path.setAttribute('stroke', 'none');
                 marker.appendChild(path);
                 newDefs.appendChild(marker);
@@ -282,6 +285,7 @@
             
             poCards.forEach(function(poCard) {
                 const poRect = poCard.getBoundingClientRect();
+                const percentage = parseInt(poCard.dataset.percentage || '0');
                 
                 // Calculate PO card center point (left edge, vertical center)
                 const poEndX = poRect.left - containerRect.left;
@@ -289,12 +293,54 @@
                 
                 // Calculate Bezier curve control points for smooth S-curve
                 const distance = poEndX - loStartX;
-                const controlPointOffset = Math.max(distance * 0.35, 80); // Adjusted for better curve
+                const controlPointOffset = Math.max(distance * 0.35, 80);
                 
                 const controlPoint1X = loStartX + controlPointOffset;
                 const controlPoint1Y = loStartY;
                 const controlPoint2X = poEndX - controlPointOffset;
                 const controlPoint2Y = poEndY;
+                
+                // Calculate stroke width and opacity based on percentage
+                // %100 = 3px kalın ve koyu, %20 = 1px ince ve silik, linear interpolation
+                const strokeWidth = 1 + (percentage / 100) * 2;
+                const opacity = 0.3 + (percentage / 100) * 0.7;
+                
+                // Calculate stroke color based on percentage
+                // %40'dan düşük: açık gri, %60'dan yüksek: koyu gri, ortada: orta gri
+                let strokeColor;
+                if (percentage < 40) {
+                    strokeColor = '#9ca3af';
+                } else if (percentage > 60) {
+                    strokeColor = '#4b5563';
+                } else {
+                    strokeColor = '#6b7280';
+                }
+                
+                // Create unique marker for this arrow with dynamic color
+                const markerId = `arrowhead-${poCard.dataset.poId}`;
+                let marker = svg.querySelector(`#${markerId}`);
+                if (!marker) {
+                    const defs = svg.querySelector('defs') || svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'defs'));
+                    marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                    marker.setAttribute('id', markerId);
+                    marker.setAttribute('markerWidth', '8');
+                    marker.setAttribute('markerHeight', '8');
+                    marker.setAttribute('refX', '7');
+                    marker.setAttribute('refY', '4');
+                    marker.setAttribute('orient', 'auto');
+                    marker.setAttribute('markerUnits', 'strokeWidth');
+                    const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    markerPath.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
+                    markerPath.setAttribute('fill', strokeColor);
+                    markerPath.setAttribute('stroke', 'none');
+                    marker.appendChild(markerPath);
+                    defs.appendChild(marker);
+                } else {
+                    const markerPath = marker.querySelector('path');
+                    if (markerPath) {
+                        markerPath.setAttribute('fill', strokeColor);
+                    }
+                }
                 
                 // Create Bezier curve path with C (cubic bezier) command
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -302,11 +348,29 @@
                 path.setAttribute('d', d);
                 path.setAttribute('class', 'arrow-path');
                 path.setAttribute('fill', 'none');
-                path.setAttribute('stroke', '#374151');
-                path.setAttribute('stroke-width', '2');
-                path.setAttribute('marker-end', 'url(#arrowhead)');
+                path.setAttribute('stroke', strokeColor);
+                path.setAttribute('stroke-width', strokeWidth.toString());
+                path.setAttribute('opacity', opacity.toString());
+                path.setAttribute('marker-end', `url(#${markerId})`);
                 
                 svg.appendChild(path);
+                
+                // Add percentage text on the arrow (at midpoint)
+                // Text color is always black, only arrow color changes
+                const midX = (loStartX + poEndX) / 2;
+                const midY = (loStartY + poEndY) / 2;
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', midX.toString());
+                text.setAttribute('y', midY.toString());
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('dominant-baseline', 'middle');
+                text.setAttribute('font-size', '14');
+                text.setAttribute('font-weight', '600');
+                text.setAttribute('fill', '#000000');
+                text.setAttribute('class', 'percentage-text');
+                text.style.pointerEvents = 'none';
+                text.textContent = percentage + '%';
+                svg.appendChild(text);
             });
         }
         

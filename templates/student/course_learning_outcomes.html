@@ -22,19 +22,11 @@
                             {{ outcome.text }}
                         </p>
                         {% if outcome.related_program_outcomes %}
-                        <div style="margin: 8px 0;">
-                            <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to Program Outcomes:</span>
-                            <div style="margin-top: 8px; padding-left: 16px;">
-                                {% for po in outcome.related_program_outcomes %}
-                                <div style="margin-bottom: 6px; font-size: 14px; color: #475569; padding: 8px; background: #eff6ff; border-radius: 6px; border-left: 3px solid #3b82f6;">
-                                    {{ po.text }}
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% else %}
-                        <div style="margin: 8px 0; padding: 8px; background: #f1f5f9; border-radius: 6px;">
-                            <span style="font-size: 13px; color: #64748b; font-style: italic;">No program outcomes linked.</span>
+                        <div style="margin: 8px 0; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to:</span>
+                            <a href="{% url 'student_learning_outcome_detail' course_id outcome.id %}" onclick="event.stopPropagation(); return true;" style="font-size: 13px; color: #ffffff; font-weight: 500; text-decoration: none; cursor: pointer; display: inline-block; padding: 8px 16px; background: #2563eb; border-radius: 6px; transition: all 0.2s; border: none;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
+                                {{ outcome.related_program_outcomes|length }} Program Outcome{{ outcome.related_program_outcomes|length|pluralize }}
+                            </a>
                         </div>
                         {% endif %}
                         <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">

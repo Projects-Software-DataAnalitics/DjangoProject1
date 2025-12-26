@@ -1,0 +1,69 @@
+{% extends "student_base.html" %}
+{% load static %}
+
+{% block title %}Learning Outcome Detail{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto; padding: 24px;">
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 24px;">
+        <a href="{% url 'student_course_learning_outcomes' course.id %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+            ← Back to Learning Outcomes
+        </a>
+    </div>
+    
+    <!-- Toggle -->
+    <div style="display: flex; gap: 0; margin-bottom: 32px; background: #e2e8f0; padding: 4px; border-radius: 12px; width: fit-content; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <button id="create-toggle-btn" class="toggle-btn active" style="padding: 12px 32px; border: none; border-radius: 8px; background: #3b82f6; color: white; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(59,130,246,0.3);">
+            Details
+        </button>
+        <button id="graph-toggle-btn" class="toggle-btn" onclick="window.location.href='{% url 'student_learning_outcome_graph' course.id outcome.id %}'" style="padding: 12px 32px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">
+            Graph
+        </button>
+    </div>
+    
+    <!-- Details Mode (default, always visible) -->
+    <div id="create-mode">
+        <!-- Learning Outcome Text (read-only) -->
+        <div style="margin-bottom: 32px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 22px; font-weight: 600; color: #0f172a;">
+                Learning Outcome Text
+            </label>
+            <div style="width: 100%; padding: 16px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 16px; line-height: 1.6; color: #1e293b;">
+                {{ outcome.text }}
+            </div>
+        </div>
+        
+        <!-- Linked Program Outcomes (read-only) -->
+        <div style="margin-top: 40px;">
+            <h2 style="font-size: 22px; color: #0f172a; margin-bottom: 24px;">Linked Program Outcomes</h2>
+            
+            {% if program_outcomes %}
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                {% for po in program_outcomes %}
+                <div style="display: flex; align-items: center; gap: 12px; background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="flex: 1;">
+                        <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.5;">
+                            {{ po.text }}
+                        </p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="background: #f8fafc; padding: 32px; border-radius: 8px; text-align: center; border: 1px dashed #cbd5e1;">
+                <p style="margin: 0; font-size: 16px; color: #6b7280;">
+                    This learning outcome is not linked to any program outcomes.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                Created by <strong>{{ created_by }}</strong> on {{ created_at }}
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

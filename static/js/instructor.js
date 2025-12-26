@@ -17,15 +17,36 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-let instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
+let instructorData = null;
+try {
+    const stored = sessionStorage.getItem('loggedInstructor');
+    if (stored) {
+        instructorData = JSON.parse(stored);
+    }
+} catch (e) {
+    instructorData = null;
+}
+
 if (!instructorData) {
     window.location.href = "/";
 } else {
     const jsonPathElement = document.getElementById('instructor-json-path');
     const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
     
-    fetch(jsonPath + '?t=' + Date.now())
-        .then(response => response.json())
+    const fetchWithTimeout = (url, options, timeout = 5000) => {
+        return Promise.race([
+            fetch(url, options),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout')), timeout)
+            )
+        ]);
+    };
+    
+    fetchWithTimeout(jsonPath + '?t=' + Date.now(), {}, 3000)
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
         .then(data => {
             const currentInstructor = data.find(i => i.username === instructorData.username);
             if (currentInstructor) {
@@ -34,21 +55,21 @@ if (!instructorData) {
                 instructorData = currentInstructor;
             }
         })
-        .catch(() => {
-        });
+        .catch(() => {});
     
     function getCsrfToken() {
         const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
         return cookieMatch ? cookieMatch[1] : null;
     }
-    fetch('/instructor/set-session/', {
+    
+    fetchWithTimeout('/instructor/set-session/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRFToken': getCsrfToken() || ''
         },
         body: `username=${encodeURIComponent(instructorData.username)}`
-    }).catch(() => {});
+    }, 3000).catch(() => {});
 }
 
 

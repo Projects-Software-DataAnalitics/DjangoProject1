@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Faculty(models.Model):
@@ -85,10 +86,18 @@ class ProgramOutcome(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     # ManyToMany field for learning outcomes to link to program outcomes
-    related_program_outcomes = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='learning_outcomes')
+    related_program_outcomes = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='learning_outcomes', through='LearningOutcomeProgramOutcome')
 
     def __str__(self):
         return self.text
+
+class LearningOutcomeProgramOutcome(models.Model):
+    learning_outcome = models.ForeignKey('ProgramOutcome', on_delete=models.CASCADE, related_name='lo_po_relationships')
+    program_outcome = models.ForeignKey('ProgramOutcome', on_delete=models.CASCADE, related_name='po_lo_relationships')
+    percentage = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+
+    class Meta:
+        unique_together = [['learning_outcome', 'program_outcome']]
 
 class Announcement(models.Model):
     ROLE_CHOICES = [

@@ -6,6 +6,14 @@
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        .hide-modal {
+            display: none;
+        }
+        .show-modal {
+            display: flex;
+        }
+    </style>
     <script>
         mermaid.initialize({ startOnLoad: true });
     </script>
@@ -33,7 +41,7 @@
 </div>
 
 <div class="content" id="content">
-    <div style="max-width: 900px; margin: 0 auto; padding: 24px;">
+    <div style="max-width: 900px; margin: 0 auto; padding: 24px;" data-is-faculty-head="{% if is_faculty_head %}true{% else %}false{% endif %}">
         <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 24px;">
             {% if is_faculty_head %}
             <a href="{% url 'faculty_head_course_learning_outcomes' course_name=course_name_slug %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
@@ -51,7 +59,7 @@
             <button id="create-toggle-btn" class="toggle-btn active" style="padding: 12px 32px; border: none; border-radius: 8px; background: #3b82f6; color: white; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(59,130,246,0.3);">
                 Details
             </button>
-            <button id="graph-toggle-btn" class="toggle-btn" onclick="window.location.href='{% url 'learning_outcome_graph' course.id outcome.id %}'" style="padding: 12px 32px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">
+            <button id="graph-toggle-btn" class="toggle-btn" style="padding: 12px 32px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">
                 Graph
             </button>
         </div>
@@ -102,15 +110,24 @@
                 {% if program_outcomes %}
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     {% for po in program_outcomes %}
-                    <div style="display: flex; align-items: center; gap: 12px; background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div class="po-item-container" data-po-id="{{ po.id }}" style="display: flex; align-items: center; gap: 12px; background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                         <div style="flex: 1;">
                             <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.5;">
                                 {{ po.text }}
                             </p>
                         </div>
-                        {% if not is_faculty_head %}
-                        <button class="delete-po-btn" data-po-id="{{ po.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Unlink Program Outcome">🗑️</button>
-                        {% endif %}
+                        <div class="percentage-display" style="display: flex; align-items: center; gap: 8px;">
+                            <span class="percentage-value" style="font-size: 15px; font-weight: 600; color: #3b82f6; min-width: 45px; text-align: right;">{{ po.percentage }}%</span>
+                            {% if not is_faculty_head %}
+                            <button class="edit-percentage-btn" data-po-id="{{ po.id }}" data-percentage="{{ po.percentage }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #3b82f6; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Edit Percentage">✏️</button>
+                            <button class="delete-po-btn" data-po-id="{{ po.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Unlink Program Outcome">🗑️</button>
+                            {% endif %}
+                        </div>
+                        <div class="percentage-edit" style="display: none; align-items: center; gap: 8px;">
+                            <input type="number" class="percentage-input-edit" min="0" max="100" step="1" value="{{ po.percentage }}" style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center;">
+                            <button class="save-percentage-btn" data-po-id="{{ po.id }}" style="background: #3b82f6; color: #ffffff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Save</button>
+                            <button class="cancel-percentage-btn" data-po-id="{{ po.id }}" style="background: #6b7280; color: #ffffff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Cancel</button>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -132,9 +149,14 @@
     </div>
 </div>
 
-<div id="add-po-modal" style="position: fixed; inset: 0; background: rgba(15,23,42,0.45); display: none; align-items: center; justify-content: center; z-index: 1000;">
+<div id="add-po-modal" class="{% if error_message %}show-modal{% else %}hide-modal{% endif %}" style="position: fixed; inset: 0; background: rgba(15,23,42,0.45); align-items: center; justify-content: center; z-index: 1000;">
     <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
         <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Select Program Outcomes to Link</h3>
+        {% if error_message %}
+        <div style="background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+            {{ error_message }}
+        </div>
+        {% endif %}
         {% if available_program_outcomes %}
         <form id="link-po-form" method="POST" action="{% url 'link_program_outcomes' outcome.id %}">
             {% csrf_token %}
@@ -144,9 +166,23 @@
                        onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
                        onmouseout="if(!this.querySelector('input[type=checkbox]').checked) { this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'; }">
                     <input type="checkbox" name="program_outcomes" value="{{ po.id }}" 
+                           class="po-checkbox-modal"
+                           data-po-id="{{ po.id }}"
                            style="margin-right: 12px; margin-top: 2px; width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6;"
-                           onchange="if(this.checked) { this.closest('label').style.borderColor='#3b82f6'; this.closest('label').style.background='#eff6ff'; this.closest('label').style.boxShadow='0 2px 8px rgba(59,130,246,0.2)'; } else { this.closest('label').style.borderColor='#e2e8f0'; this.closest('label').style.background='#ffffff'; this.closest('label').style.boxShadow='none'; }">
+                           onchange="handlePOModalSelection(this);">
                     <span style="flex: 1; font-size: 14px; line-height: 1.5; color: #1e293b;">PO{{ po.id }}: {{ po.text }}</span>
+                    <div class="po-percentage-input-modal" data-po-id="{{ po.id }}" style="display: none; margin-left: 12px;">
+                        <input type="number" 
+                               name="po_percentage_{{ po.id }}" 
+                               class="po-percentage-field-modal"
+                               min="0" 
+                               max="100" 
+                               step="1" 
+                               placeholder="%"
+                               style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center;"
+                               onchange="validatePercentage(this);"
+                               oninput="validatePercentage(this);">
+                    </div>
                 </label>
                 {% endfor %}
             </div>
@@ -179,11 +215,178 @@
 <script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
 <script src="{% static 'js/instructor.js' %}"></script>
 <script>
+    function handlePOModalSelection(checkbox) {
+        const card = checkbox.closest('label');
+        const poId = checkbox.dataset.poId;
+        const percentageInput = card.querySelector('.po-percentage-input-modal');
+        
+        if (checkbox.checked) {
+            card.style.borderColor = '#3b82f6';
+            card.style.background = '#eff6ff';
+            card.style.boxShadow = '0 2px 8px rgba(59,130,246,0.2)';
+            if (percentageInput) {
+                percentageInput.style.display = 'block';
+                const inputField = percentageInput.querySelector('input');
+                if (inputField) {
+                    inputField.value = '';
+                    inputField.focus();
+                }
+            }
+        } else {
+            card.style.borderColor = '#e2e8f0';
+            card.style.background = '#ffffff';
+            card.style.boxShadow = 'none';
+            if (percentageInput) {
+                percentageInput.style.display = 'none';
+                const inputField = percentageInput.querySelector('input');
+                if (inputField) {
+                    inputField.value = '';
+                }
+            }
+        }
+    }
+    
+    let percentageValidationModal = null;
+    
+    function getPercentageValidationModal() {
+        if (!percentageValidationModal) {
+            percentageValidationModal = document.createElement('div');
+            percentageValidationModal.id = 'percentage-validation-modal-detail';
+            percentageValidationModal.style.position = 'fixed';
+            percentageValidationModal.style.inset = '0';
+            percentageValidationModal.style.background = 'rgba(15,23,42,0.45)';
+            percentageValidationModal.style.display = 'none';
+            percentageValidationModal.style.alignItems = 'center';
+            percentageValidationModal.style.justifyContent = 'center';
+            percentageValidationModal.style.zIndex = '2000';
+            percentageValidationModal.innerHTML = `
+                <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
+                    <p id="percentage-validation-message-detail" style="margin: 0 0 20px 0; font-size: 16px; color: #111827;"></p>
+                    <button id="percentage-validation-ok-btn-detail" style="padding: 10px 20px; background: #3b82f6; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        OK
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(percentageValidationModal);
+            const okBtn = percentageValidationModal.querySelector('#percentage-validation-ok-btn-detail');
+            okBtn.addEventListener('click', function() {
+                percentageValidationModal.style.display = 'none';
+            });
+        }
+        return percentageValidationModal;
+    }
+    
+    function showPercentageValidationModal(message) {
+        const modal = getPercentageValidationModal();
+        const messageEl = modal.querySelector('#percentage-validation-message-detail');
+        messageEl.textContent = message;
+        modal.style.display = 'flex';
+    }
+    
+    function validatePercentage(input) {
+        if (!input.value || input.value.trim() === '') {
+            return;
+        }
+        let value = parseInt(input.value);
+        if (isNaN(value) || value < 0) {
+            input.value = '';
+            showPercentageValidationModal('Percentage must be between 0 and 100.');
+            input.focus();
+        } else if (value > 100) {
+            input.value = '';
+            showPercentageValidationModal('Percentage cannot exceed 100. Please enter a value between 0 and 100.');
+            input.focus();
+        }
+    }
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
     (function() {
+        const graphToggleBtn = document.getElementById('graph-toggle-btn');
+        if (graphToggleBtn) {
+            graphToggleBtn.addEventListener('click', function() {
+                window.location.href = '{% url "learning_outcome_graph" course.id outcome.id %}';
+            });
+        }
+        
         document.getElementById("logout-btn").addEventListener("click", function() {
             sessionStorage.clear();
             window.location.href = "/";
         });
+        
+        const linkPoForm = document.getElementById('link-po-form');
+        if (linkPoForm) {
+            const linkValidationModal = document.createElement('div');
+            linkValidationModal.id = 'link-validation-modal';
+            linkValidationModal.style.position = 'fixed';
+            linkValidationModal.style.inset = '0';
+            linkValidationModal.style.background = 'rgba(15,23,42,0.45)';
+            linkValidationModal.style.display = 'none';
+            linkValidationModal.style.alignItems = 'center';
+            linkValidationModal.style.justifyContent = 'center';
+            linkValidationModal.style.zIndex = '2000';
+            linkValidationModal.innerHTML = `
+                <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
+                    <p id="link-validation-message" style="margin: 0 0 20px 0; font-size: 16px; color: #111827;"></p>
+                    <button id="link-validation-ok-btn" style="padding: 10px 20px; background: #3b82f6; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        OK
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(linkValidationModal);
+            const linkOkBtn = linkValidationModal.querySelector('#link-validation-ok-btn');
+            linkOkBtn.addEventListener('click', function() {
+                linkValidationModal.style.display = 'none';
+            });
+            
+            linkPoForm.addEventListener('submit', function(e) {
+                const checkedBoxes = document.querySelectorAll('.po-checkbox-modal:checked');
+                for (let checkbox of checkedBoxes) {
+                    const poId = checkbox.dataset.poId;
+                    const percentageInput = document.querySelector(`input[name="po_percentage_${poId}"]`);
+                    if (!percentageInput || !percentageInput.value || percentageInput.value.trim() === '') {
+                        e.preventDefault();
+                        const messageEl = linkValidationModal.querySelector('#link-validation-message');
+                        messageEl.textContent = 'You have to enter a percentage on how much the learning outcome affects the program outcome(s).';
+                        linkValidationModal.style.display = 'flex';
+                        if (percentageInput) {
+                            percentageInput.focus();
+                        }
+                        return false;
+                    }
+                    const value = parseInt(percentageInput.value);
+                    if (isNaN(value) || value < 0) {
+                        e.preventDefault();
+                        const messageEl = linkValidationModal.querySelector('#link-validation-message');
+                        messageEl.textContent = 'Percentage must be between 0 and 100.';
+                        linkValidationModal.style.display = 'flex';
+                        percentageInput.focus();
+                        return false;
+                    }
+                    if (value > 100) {
+                        e.preventDefault();
+                        const messageEl = linkValidationModal.querySelector('#link-validation-message');
+                        messageEl.textContent = 'Percentage cannot exceed 100. Please enter a value between 0 and 100.';
+                        linkValidationModal.style.display = 'flex';
+                        percentageInput.focus();
+                        return false;
+                    }
+                }
+            });
+        }
 
         const editLoBtn = document.getElementById('edit-lo-btn');
         const loDisplay = document.getElementById('lo-display');
@@ -191,7 +394,8 @@
         const loText = document.getElementById('lo-text');
         const cancelEditLoBtn = document.getElementById('cancel-edit-lo-btn');
         const originalText = '{{ outcome.text|escapejs }}';
-        const isFacultyHead = {{ is_faculty_head|yesno:"true,false" }};
+        const mainContainer = document.querySelector('[data-is-faculty-head]');
+        const isFacultyHead = mainContainer ? mainContainer.getAttribute('data-is-faculty-head') === 'true' : false;
         
         if (editLoBtn && loDisplay && updateLoForm && !isFacultyHead) {
             editLoBtn.addEventListener('click', function() {
@@ -239,8 +443,8 @@
         document.body.appendChild(deleteModal);
 
         let pendingDeletePoId = null;
-        const outcomeId = {{ outcome.id }};
-        const courseId = {{ course.id }};
+        const outcomeId = parseInt('{{ outcome.id }}', 10);
+        const courseId = parseInt('{{ course.id }}', 10);
 
         const confirmDeletePoBtn = deleteModal.querySelector('#confirm-delete-po-btn');
         const cancelDeletePoBtn = deleteModal.querySelector('#cancel-delete-po-btn');
@@ -259,6 +463,102 @@
         });
 
         if (!isFacultyHead) {
+            document.querySelectorAll('.edit-percentage-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const poId = this.dataset.poId;
+                    const container = document.querySelector(`.po-item-container[data-po-id="${poId}"]`);
+                    if (container) {
+                        const displayDiv = container.querySelector('.percentage-display');
+                        const editDiv = container.querySelector('.percentage-edit');
+                        const input = container.querySelector('.percentage-input-edit');
+                        if (displayDiv && editDiv && input) {
+                            displayDiv.style.display = 'none';
+                            editDiv.style.display = 'flex';
+                            input.focus();
+                            input.select();
+                        }
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.cancel-percentage-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const poId = this.dataset.poId;
+                    const container = document.querySelector(`.po-item-container[data-po-id="${poId}"]`);
+                    if (container) {
+                        const displayDiv = container.querySelector('.percentage-display');
+                        const editDiv = container.querySelector('.percentage-edit');
+                        const input = container.querySelector('.percentage-input-edit');
+                        const originalValue = container.querySelector('.edit-percentage-btn').dataset.percentage;
+                        if (displayDiv && editDiv && input) {
+                            input.value = originalValue;
+                            displayDiv.style.display = 'flex';
+                            editDiv.style.display = 'none';
+                        }
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.save-percentage-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const poId = this.dataset.poId;
+                    const container = document.querySelector(`.po-item-container[data-po-id="${poId}"]`);
+                    if (container) {
+                        const input = container.querySelector('.percentage-input-edit');
+                        const percentageValue = input.value.trim();
+                        
+                        if (!percentageValue) {
+                            alert('You have to enter a percentage on how much the learning outcome affects the program outcome(s).');
+                            input.focus();
+                            return;
+                        }
+                        
+                        const value = parseInt(percentageValue);
+                        if (isNaN(value) || value < 0) {
+                            alert('Percentage must be between 0 and 100.');
+                            input.focus();
+                            return;
+                        }
+                        if (value > 100) {
+                            alert('Percentage cannot exceed 100. Please enter a value between 0 and 100.');
+                            input.focus();
+                            return;
+                        }
+                        
+                        const formData = new FormData();
+                        formData.append('percentage', value);
+                        
+                        fetch(`/instructor/learning-outcomes/detail/${outcomeId}/update-percentage/${poId}/`, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-CSRFToken': getCookie('csrftoken')
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                const displayDiv = container.querySelector('.percentage-display');
+                                const editDiv = container.querySelector('.percentage-edit');
+                                const percentageSpan = container.querySelector('.percentage-value');
+                                const editBtn = container.querySelector('.edit-percentage-btn');
+                                if (displayDiv && editDiv && percentageSpan && editBtn) {
+                                    percentageSpan.textContent = value + '%';
+                                    editBtn.dataset.percentage = value;
+                                    displayDiv.style.display = 'flex';
+                                    editDiv.style.display = 'none';
+                                }
+                            } else {
+                                alert(data.message || 'Failed to update percentage.');
+                            }
+                        })
+                        .catch(error => {
+                            alert('Error updating percentage. Please try again.');
+                        });
+                    }
+                });
+            });
+            
             document.querySelectorAll('.delete-po-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
                     pendingDeletePoId = this.dataset.poId;

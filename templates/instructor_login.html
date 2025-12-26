@@ -75,9 +75,21 @@
                     'X-CSRFToken': getCsrfToken()
                 }
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
+            .then(response => {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        return { data: data, ok: response.ok, status: response.status };
+                    });
+                } else {
+                    return response.text().then(text => {
+                        throw new Error('Server returned invalid response format');
+                    });
+                }
+            })
+            .then(result => {
+                const data = result.data;
+                if (result.ok && data.status === 'success') {
                     sessionStorage.setItem('loggedInstructor', JSON.stringify({username: username}));
                     window.location.href = "{% url 'instructor' %}";
                 } else {
@@ -85,8 +97,7 @@
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                errorElement.textContent = "Login failed. Please try again.";
+                errorElement.textContent = error.message || "Login failed. Please try again.";
             });
         });
     </script>

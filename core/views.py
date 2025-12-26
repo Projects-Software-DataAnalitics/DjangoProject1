@@ -266,25 +266,40 @@ def student_login(request):
     return render(request, 'student_login.html')
 
 
+@csrf_exempt
 def instructor_login(request):
     if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
-        password = request.POST.get('password', '').strip()
-        
-        user = authenticate(request, username=username, password=password)
-        if user:
-            try:
-                profile = user.profile
-                if profile.role == 'instructor':
-                    auth_login(request, user)
-                    # Django zaten user'ı session'da tutuyor, ekstra session key'e gerek yok
-                    return JsonResponse({'status': 'success', 'username': username})
-                else:
-                    return JsonResponse({'status': 'error', 'message': 'User is not an instructor'}, status=403)
-            except AttributeError:
-                return JsonResponse({'status': 'error', 'message': 'User profile not found'}, status=403)
-        else:
-            return JsonResponse({'status': 'error', 'message': 'Invalid username or password'}, status=401)
+        try:
+            username = request.POST.get('username', '').strip()
+            password = request.POST.get('password', '').strip()
+            
+            if not username or not password:
+                return JsonResponse({'status': 'error', 'message': 'Username and password are required'}, status=400)
+            
+            user = authenticate(request, username=username, password=password)
+            
+            if user:
+                try:
+                    profile = user.profile
+                    if profile.role == 'instructor':
+                        auth_login(request, user)
+                        return JsonResponse({'status': 'success', 'username': username})
+                    else:
+                        return JsonResponse({'status': 'error', 'message': 'User is not an instructor'}, status=403)
+                except AttributeError:
+                    return JsonResponse({'status': 'error', 'message': 'User profile not found'}, status=403)
+            else:
+                try:
+                    User.objects.get(username=username)
+                    return JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
+                except User.DoesNotExist:
+                    return JsonResponse({'status': 'error', 'message': 'Invalid username or password'}, status=401)
+        except Exception as e:
+            import logging
+            import traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f'Instructor login error: {str(e)}\n{traceback.format_exc()}')
+            return JsonResponse({'status': 'error', 'message': 'An error occurred during login. Please try again.'}, status=500)
     
     return render(request, 'instructor_login.html')
 
@@ -313,46 +328,7 @@ def faculty_head_login(request):
             return render(request, 'faculty_head_login.html', {
                 'error': 'Invalid username or password.'
             })
-        
-        from .models import UserProfile, Faculty
-        
-        with transaction.atomic():
-            first_name = faculty_head.get('firstName') or faculty_head.get('first_name', '')
-            last_name = faculty_head.get('lastName') or faculty_head.get('last_name', '')
-            
-            user, created = User.objects.get_or_create(
-                username=username,
-                defaults={'first_name': first_name, 'last_name': last_name}
-            )
-            
-            if created:
-                user.set_unusable_password()
-                user.save()
-            
-            profile, _ = UserProfile.objects.get_or_create(
-                user=user,
-                defaults={'role': 'faculty_head'}
-            )
-            
-            if profile.role != 'faculty_head':
-                profile.role = 'faculty_head'
-                profile.save()
-            
-            if faculty_head.get('faculty'):
-                faculty_name = faculty_head['faculty']
-                faculty_slug = faculty_name.lower().replace(' ', '-')
-                try:
-                    faculty = Faculty.objects.get(slug=faculty_slug)
-                except Faculty.DoesNotExist:
-                    faculty, _ = Faculty.objects.get_or_create(
-                        slug=faculty_slug,
-                        defaults={'name': faculty_name}
-                    )
-                profile.faculty = faculty
-                profile.save()
-        
-        auth_login(request, user)
-        return redirect('faculty-head')
+    
     
     return render(request, 'faculty_head_login.html')
 
@@ -496,12 +472,9 @@ def instructor_course_grades(request, course_name):
     
     # Course'a kayıtlı öğrencileri al
     students = Student.objects.filter(courses=course).order_by('username')
-    
-    # Her öğrenci için grade bilgilerini al
     students_with_grades = []
     for student in students:
         grade_obj = Grade.objects.filter(student=student, course=course).first()
-        
         grades_dict = {}
         is_finalized = False
         
@@ -536,7 +509,6 @@ def instructor_course_grades(request, course_name):
         }
     
     is_finalized = all(item['is_finalized'] for item in students_with_grades if item['grades'])
-    
     students_with_grades_json = json.dumps([
         {
             'id': item['student'].id,
@@ -572,7 +544,6 @@ def delete_uploaded_csv(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Instructor'ın bu course'a erişimi var mı kontrol et
     if profile and course not in profile.courses.all():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
@@ -892,10 +863,23 @@ def all_courses(request):
                 course_instructor_map[course_name] = []
             course_instructor_map[course_name].append(faculty_head_name)
     
-    for course_name, instructors in sorted(course_instructor_map.items()):
-        instructor_display = ', '.join(instructors) if instructors else 'Unknown'
+    all_course_names = set(course_instructor_map.keys())
+    if faculty_head_department:
+        all_courses_in_dept = Course.objects.filter(department=faculty_head_department).values_list('name', flat=True).distinct()
+        all_course_names.update(all_courses_in_dept)
+    
+    for course_name in sorted(all_course_names):
+        instructors = course_instructor_map.get(course_name, [])
         
         course = Course.objects.filter(name=course_name).first()
+        if course and course.instructor:
+            instructor_full_name = (course.instructor.first_name + ' ' + course.instructor.last_name).strip()
+            instructor_name = instructor_full_name if instructor_full_name else course.instructor.username
+            if instructor_name not in instructors:
+                instructors.append(instructor_name)
+        
+        instructor_display = ', '.join(instructors) if instructors else 'Unknown'
+        
         first_learning_outcome = None
         if course:
             learning_outcomes = ProgramOutcome.objects.filter(course_name=course_name).order_by('-created_at')
@@ -908,11 +892,29 @@ def all_courses(request):
             'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
         })
     
+    available_instructors_list = []
+    available_instructors_qs = User.objects.filter(profile__role='instructor').select_related('profile')
+    for user in available_instructors_qs:
+        profile = user.profile
+        inst_department = profile.department
+        if faculty_head_department:
+            if inst_department != faculty_head_department:
+                continue
+        
+        full_name = (user.first_name + ' ' + user.last_name).strip()
+        instructor_name = full_name if full_name else user.username
+        available_instructors_list.append({
+            'username': user.username,
+            'name': instructor_name,
+        })
+    
     import json as json_module
     context = {
         'faculty_head': faculty_head_data,
         'faculty_courses': faculty_courses_with_instructors,
         'faculty_courses_json': json_module.dumps(faculty_courses_with_instructors),
+        'available_instructors': available_instructors_list,
+        'available_instructors_json': json_module.dumps(available_instructors_list),
     }
     return render(request, 'faculty/all_courses.html', context)
 
@@ -1357,11 +1359,18 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
     
     related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
     
+    from .models import LearningOutcomeProgramOutcome
     program_outcomes_data = []
     for po in related_program_outcomes:
+        try:
+            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
+            percentage = lo_po.percentage
+        except LearningOutcomeProgramOutcome.DoesNotExist:
+            percentage = 0
         program_outcomes_data.append({
             'id': po.id,
             'text': po.text,
+            'percentage': percentage,
         })
     
     available_program_outcomes = []
@@ -1378,6 +1387,9 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
     
     course_name_slug = outcome.course_name.replace(' ', '-')
     
+    referer = request.META.get('HTTP_REFERER', '')
+    from_all_courses = 'all-courses' in referer
+    
     return render(
         request,
         'faculty/learning_outcome_detail.html',
@@ -1387,6 +1399,7 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
             'program_outcomes': program_outcomes_data,
             'available_program_outcomes': available_program_outcomes,
             'course_name_slug': course_name_slug,
+            'from_all_courses': from_all_courses,
         }
     )
 
@@ -1405,11 +1418,18 @@ def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
     
     related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
     
+    from .models import LearningOutcomeProgramOutcome
     program_outcomes_data = []
     for po in related_program_outcomes:
+        try:
+            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
+            percentage = lo_po.percentage
+        except LearningOutcomeProgramOutcome.DoesNotExist:
+            percentage = 0
         program_outcomes_data.append({
             'id': po.id,
             'text': po.text,
+            'percentage': percentage,
         })
     
     course_name_slug = outcome.course_name.replace(' ', '-')
@@ -1456,6 +1476,24 @@ def faculty_head_update_learning_outcome(request, outcome_id):
         return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
     
     return JsonResponse({'text': outcome.text})
+
+@faculty_head_required
+def faculty_head_delete_learning_outcome(request, outcome_id):
+    """Delete a learning outcome (for faculty head)"""
+    profile = getattr(request.user, 'profile', None)
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name__isnull=False)
+    
+    course_name = outcome.course_name
+    course_name_slug = course_name.replace(' ', '-')
+    
+    with transaction.atomic():
+        outcome.delete()
+    
+    referer = request.META.get('HTTP_REFERER', '')
+    if 'all-courses' in referer:
+        return redirect('all_courses')
+    
+    return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
 
 @faculty_head_required
 def faculty_head_unlink_program_outcome(request, outcome_id, program_outcome_id):
@@ -1629,21 +1667,93 @@ def course_learning_outcomes(request, course_name):
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
         if text:
-            learning_outcome = ProgramOutcome.objects.create(
-                text=text, 
-                course_name=course_name, 
-                created_by=instructor_user
-            )
             selected_program_outcome_ids = request.POST.getlist('program_outcomes')
+            error_message = None
+            
             if selected_program_outcome_ids:
+                from .models import LearningOutcomeProgramOutcome
                 program_outcomes_to_link = ProgramOutcome.objects.filter(
                     id__in=selected_program_outcome_ids,
                     faculty=faculty,
                     course_name=''
                 )
-                learning_outcome.related_program_outcomes.set(program_outcomes_to_link)
-        course_name_slug = course_name.replace(' ', '-')
-        return redirect('course_learning_outcomes', course_name=course_name_slug)
+                for po in program_outcomes_to_link:
+                    percentage_key = f'po_percentage_{po.id}'
+                    percentage_value = request.POST.get(percentage_key, '').strip()
+                    if not percentage_value:
+                        error_message = 'You have to enter a percentage on how much the learning outcome affects the program outcome(s).'
+                        break
+                    try:
+                        percentage = int(percentage_value)
+                        if percentage < 0:
+                            error_message = 'Percentage must be between 0 and 100.'
+                            break
+                        if percentage > 100:
+                            error_message = 'Percentage cannot exceed 100. Please enter a value between 0 and 100.'
+                            break
+                    except (ValueError, TypeError):
+                        error_message = 'Invalid percentage value.'
+                        break
+                
+                if not error_message:
+                    learning_outcome = ProgramOutcome.objects.create(
+                        text=text, 
+                        course_name=course_name, 
+                        created_by=instructor_user
+                    )
+                    for po in program_outcomes_to_link:
+                        percentage_key = f'po_percentage_{po.id}'
+                        percentage_value = request.POST.get(percentage_key, '').strip()
+                        percentage = int(percentage_value)
+                        LearningOutcomeProgramOutcome.objects.create(
+                            learning_outcome=learning_outcome,
+                            program_outcome=po,
+                            percentage=percentage
+                        )
+                    course_name_slug = course_name.replace(' ', '-')
+                    return redirect('course_learning_outcomes', course_name=course_name_slug)
+                else:
+                    outcomes_qs = ProgramOutcome.objects.filter(
+                        course_name=course_name
+                    ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
+                    
+                    course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
+                    course_id = course.id if course else None
+                    
+                    outcomes_data = []
+                    for o in outcomes_qs:
+                        creator_name = o.created_by.get_full_name() or o.created_by.username
+                        related_program_outcomes = o.related_program_outcomes.all()
+                        outcomes_data.append(
+                            {
+                                'id': o.id,
+                                'text': o.text,
+                                'course': o.course_name or '',
+                                'created_by': creator_name,
+                                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+                                'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
+                            }
+                        )
+                    
+                    return render(
+                        request,
+                        'instructor/course_learning_outcomes.html',
+                        {
+                            'course_name': course_name,
+                            'course_id': course_id,
+                            'outcomes_data': outcomes_data,
+                            'program_outcomes': program_outcomes,
+                            'error_message': error_message,
+                        }
+                    )
+            else:
+                learning_outcome = ProgramOutcome.objects.create(
+                    text=text, 
+                    course_name=course_name, 
+                    created_by=instructor_user
+                )
+                course_name_slug = course_name.replace(' ', '-')
+                return redirect('course_learning_outcomes', course_name=course_name_slug)
     
     outcomes_qs = ProgramOutcome.objects.filter(
         course_name=course_name
@@ -1752,13 +1862,20 @@ def learning_outcome_detail(request, course_id, outcome_id):
         from django.shortcuts import redirect
         return redirect('faculty-head-login')
     
+    from .models import LearningOutcomeProgramOutcome
     related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
     
     program_outcomes_data = []
     for po in related_program_outcomes:
+        try:
+            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
+            percentage = lo_po.percentage
+        except LearningOutcomeProgramOutcome.DoesNotExist:
+            percentage = 0
         program_outcomes_data.append({
             'id': po.id,
             'text': po.text,
+            'percentage': percentage,
         })
     
     available_program_outcomes = []
@@ -1819,13 +1936,20 @@ def learning_outcome_graph(request, course_id, outcome_id):
         from django.shortcuts import redirect
         return redirect('faculty-head-login')
     
+    from .models import LearningOutcomeProgramOutcome
     related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
     
     program_outcomes_data = []
     for po in related_program_outcomes:
+        try:
+            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
+            percentage = lo_po.percentage
+        except LearningOutcomeProgramOutcome.DoesNotExist:
+            percentage = 0
         program_outcomes_data.append({
             'id': po.id,
             'text': po.text,
+            'percentage': percentage,
         })
     
     course_name_slug = outcome.course_name.replace(' ', '-')
@@ -1842,6 +1966,71 @@ def learning_outcome_graph(request, course_id, outcome_id):
         }
     )
 
+
+@instructor_required
+def update_percentage(request, outcome_id, program_outcome_id):
+    """Update percentage for a linked program outcome"""
+    from django.http import JsonResponse
+    instructor_user = request.instructor_user
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, created_by=instructor_user)
+    
+    if request.method == 'POST':
+        percentage_value = request.POST.get('percentage', '').strip()
+        if not percentage_value:
+            return JsonResponse({'status': 'error', 'message': 'You have to enter a percentage on how much the learning outcome affects the program outcome(s).'}, status=400)
+        
+        try:
+            percentage = int(percentage_value)
+            if percentage < 0 or percentage > 100:
+                return JsonResponse({'status': 'error', 'message': 'Percentage must be between 0 and 100.'}, status=400)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid percentage value.'}, status=400)
+        
+        from .models import LearningOutcomeProgramOutcome
+        program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
+        
+        try:
+            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=program_outcome)
+            lo_po.percentage = percentage
+            lo_po.save()
+        except LearningOutcomeProgramOutcome.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Program outcome is not linked to this learning outcome.'}, status=404)
+        
+        return JsonResponse({'status': 'success', 'percentage': percentage})
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+@faculty_head_required
+def faculty_head_update_percentage(request, outcome_id, program_outcome_id):
+    """Update percentage for a linked program outcome (for faculty head)"""
+    from django.http import JsonResponse
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
+    
+    if request.method == 'POST':
+        percentage_value = request.POST.get('percentage', '').strip()
+        if not percentage_value:
+            return JsonResponse({'status': 'error', 'message': 'You have to enter a percentage on how much the learning outcome affects the program outcome(s).'}, status=400)
+        
+        try:
+            percentage = int(percentage_value)
+            if percentage < 0 or percentage > 100:
+                return JsonResponse({'status': 'error', 'message': 'Percentage must be between 0 and 100.'}, status=400)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid percentage value.'}, status=400)
+        
+        from .models import LearningOutcomeProgramOutcome
+        program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
+        
+        try:
+            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=program_outcome)
+            lo_po.percentage = percentage
+            lo_po.save()
+        except LearningOutcomeProgramOutcome.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Program outcome is not linked to this learning outcome.'}, status=404)
+        
+        return JsonResponse({'status': 'success', 'percentage': percentage})
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
 
 @instructor_required
 def unlink_program_outcome(request, outcome_id, program_outcome_id):
@@ -1888,13 +2077,85 @@ def link_program_outcomes(request, outcome_id):
                         )
             
             if faculty:
-                with transaction.atomic():
-                    program_outcomes_to_link = ProgramOutcome.objects.filter(
-                        id__in=selected_program_outcome_ids,
-                        faculty=faculty,
-                        course_name=''
-                    )
-                    outcome.related_program_outcomes.add(*program_outcomes_to_link)
+                from .models import LearningOutcomeProgramOutcome
+                error_message = None
+                program_outcomes_to_link = ProgramOutcome.objects.filter(
+                    id__in=selected_program_outcome_ids,
+                    faculty=faculty,
+                    course_name=''
+                )
+                for po in program_outcomes_to_link:
+                    percentage_key = f'po_percentage_{po.id}'
+                    percentage_value = request.POST.get(percentage_key, '').strip()
+                    if not percentage_value:
+                        error_message = 'You have to enter a percentage on how much the learning outcome affects the program outcome(s).'
+                        break
+                    try:
+                        percentage = int(percentage_value)
+                        if percentage < 0:
+                            error_message = 'Percentage must be between 0 and 100.'
+                            break
+                        if percentage > 100:
+                            error_message = 'Percentage cannot exceed 100. Please enter a value between 0 and 100.'
+                            break
+                    except (ValueError, TypeError):
+                        error_message = 'Invalid percentage value.'
+                        break
+                
+                if not error_message:
+                    with transaction.atomic():
+                        for po in program_outcomes_to_link:
+                            percentage_key = f'po_percentage_{po.id}'
+                            percentage_value = request.POST.get(percentage_key, '').strip()
+                            percentage = int(percentage_value)
+                            LearningOutcomeProgramOutcome.objects.get_or_create(
+                                learning_outcome=outcome,
+                                program_outcome=po,
+                                defaults={'percentage': percentage}
+                            )
+                else:
+                    course = Course.objects.filter(name=outcome.course_name, instructor=instructor_user).first()
+                    course_id = course.id if course else None
+                    if course_id:
+                        from .models import LearningOutcomeProgramOutcome
+                        related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+                        program_outcomes_data = []
+                        for po in related_program_outcomes:
+                            try:
+                                lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
+                                percentage = lo_po.percentage
+                            except LearningOutcomeProgramOutcome.DoesNotExist:
+                                percentage = 0
+                            program_outcomes_data.append({
+                                'id': po.id,
+                                'text': po.text,
+                                'percentage': percentage,
+                            })
+                        available_program_outcomes = []
+                        if faculty:
+                            available_program_outcomes_qs = ProgramOutcome.objects.filter(
+                                faculty=faculty,
+                                course_name=''
+                            ).exclude(id__in=[po.id for po in related_program_outcomes]).select_related('created_by').order_by('created_at')
+                            for po in available_program_outcomes_qs:
+                                available_program_outcomes.append({
+                                    'id': po.id,
+                                    'text': po.text,
+                                })
+                        course_name_slug = outcome.course_name.replace(' ', '-')
+                        return render(
+                            request,
+                            'instructor/learning_outcome_detail.html',
+                            {
+                                'outcome': outcome,
+                                'course': course,
+                                'program_outcomes': program_outcomes_data,
+                                'available_program_outcomes': available_program_outcomes,
+                                'course_name_slug': course_name_slug,
+                                'is_faculty_head': False,
+                                'error_message': error_message,
+                            }
+                        )
     
     # course_id'yi bul - learning_outcome_detail için gerekli
     course = Course.objects.filter(
@@ -2237,7 +2498,7 @@ def student_course_learning_outcomes(request, course_id):
                 'id': o.id,
                 'text': o.text,
                 'created_by': creator_name,
-                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+                'created_at': o.created_at.strftime('%Y'),
                 'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
             })
         
@@ -2247,7 +2508,105 @@ def student_course_learning_outcomes(request, course_id):
     return render(request, "student/course_learning_outcomes.html", {
         'course_name': course_name,
         'outcomes_data': outcomes_data,
+        'course_id': course_id,
     })
+
+def student_learning_outcome_detail(request, course_id, outcome_id):
+    """Show detail page for a learning outcome (read-only for students)"""
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        course = get_object_or_404(Course, id=course_id)
+        
+        if course not in student.courses.all():
+            return HttpResponseForbidden("You are not enrolled in this course.")
+        
+        outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+        
+        from .models import LearningOutcomeProgramOutcome
+        related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+        
+        program_outcomes_data = []
+        for po in related_program_outcomes:
+            try:
+                lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
+                percentage = lo_po.percentage
+            except LearningOutcomeProgramOutcome.DoesNotExist:
+                percentage = 0
+            program_outcomes_data.append({
+                'id': po.id,
+                'text': po.text,
+                'percentage': percentage,
+            })
+        
+        course_name_slug = outcome.course_name.replace(' ', '-')
+        
+        instructors_map = get_instructors_map()
+        creator_name = instructors_map.get(outcome.created_by.username) or outcome.created_by.get_full_name() or outcome.created_by.username
+        
+    except Student.DoesNotExist:
+        return redirect('student-login')
+    
+    return render(
+        request,
+        'student/learning_outcome_detail.html',
+        {
+            'outcome': outcome,
+            'course': course,
+            'program_outcomes': program_outcomes_data,
+            'course_name_slug': course_name_slug,
+            'created_by': creator_name,
+            'created_at': outcome.created_at.strftime('%Y'),
+        }
+    )
+
+def student_learning_outcome_graph(request, course_id, outcome_id):
+    """Show graph view for learning outcome (read-only for students)"""
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        course = get_object_or_404(Course, id=course_id)
+        
+        if course not in student.courses.all():
+            return HttpResponseForbidden("You are not enrolled in this course.")
+        
+        outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+        
+        from .models import LearningOutcomeProgramOutcome
+        related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+        
+        program_outcomes_data = []
+        for po in related_program_outcomes:
+            try:
+                lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
+                percentage = lo_po.percentage
+            except LearningOutcomeProgramOutcome.DoesNotExist:
+                percentage = 0
+            program_outcomes_data.append({
+                'id': po.id,
+                'text': po.text,
+                'percentage': percentage,
+            })
+        
+        course_name_slug = outcome.course_name.replace(' ', '-')
+        
+    except Student.DoesNotExist:
+        return redirect('student-login')
+    
+    return render(
+        request,
+        'student/learning_outcome_graph.html',
+        {
+            'outcome': outcome,
+            'course': course,
+            'program_outcomes': program_outcomes_data,
+            'course_name_slug': course_name_slug,
+        }
+    )
 
 def logout_view(request):
     logout(request)
