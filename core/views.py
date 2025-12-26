@@ -304,6 +304,7 @@ def instructor_login(request):
     return render(request, 'instructor_login.html')
 
 
+@csrf_exempt
 def faculty_head_login(request):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
@@ -704,13 +705,16 @@ def instructor_announcements(request):
                             if profile and course in profile.courses.all():
                                 # Get all students enrolled in this course
                                 students = Student.objects.filter(courses=course).select_related('user')
+                                # Add course marker to subject for grouping (will be removed when displaying)
+                                course_marker = f"__COURSE:{course_name}__"
+                                marked_subject = course_marker + subject if not subject.startswith(course_marker) else subject
                                 for student in students:
                                     student_user = student.user
                                     if student_user:
                                         Announcement.objects.create(
                                             sender=instructor_user,
                                             receiver=student_user,
-                                            subject=subject,
+                                            subject=marked_subject,
                                             message=message,
                                             sender_role='instructor',
                                             receiver_role='student'
@@ -763,83 +767,211 @@ def instructor_announcements(request):
             'created_at': ann.created_at,
         })
     
+    # Group announcements sent to course students
+    from collections import defaultdict
+    from datetime import timedelta
+    
+    # First, process all announcements and group them
     announcements_data = []
+    processed_ids = set()
+    
     for ann in all_announcements:
+        if ann['id'] in processed_ids:
+            continue
+            
         sender_full_name = f"{ann['sender_first_name']} {ann['sender_last_name']}".strip() if ann['sender_first_name'] or ann['sender_last_name'] else ''
         sender_name = instructors_map.get(ann['sender_username']) or faculty_heads_map.get(ann['sender_username']) or sender_full_name or ann['sender_username']
         
-        receiver_name = "Everyone"
-        receiver_username = None
-        if ann['receiver_id']:
-            receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
-            receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
-            receiver_username = ann['receiver_username']
+        is_sent = ann['sender_id'] == instructor_user.id
         
-        created_at_str = ann['created_at']
-        if isinstance(created_at_str, str):
-            from datetime import datetime
-            try:
-                created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
-            except:
+        # Check if this is part of a course broadcast
+        if is_sent:
+            # Find all announcements with same subject, message, sender, and sent within 10 seconds
+            created_at_str = ann['created_at']
+            if isinstance(created_at_str, str):
+                from datetime import datetime
                 try:
-                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
                 except:
+                    try:
+                        created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                    except:
+                        created_at_dt = datetime.now()
+            else:
+                created_at_dt = created_at_str if hasattr(created_at_str, 'timestamp') else None
+                if not created_at_dt:
+                    from datetime import datetime
                     created_at_dt = datetime.now()
-            created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
-        else:
-            created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
+            
+            course_name_from_marker = None
+            clean_subject = ann['subject']
+            if ann['subject'].startswith('__COURSE:'):
+                marker_end = ann['subject'].find('__', 9)  
+                if marker_end > 0:
+                    course_name_from_marker = ann['subject'][9:marker_end]
+                    clean_subject = ann['subject'][marker_end + 2:]
+            
+            matching_anns = []
+            for other_ann in all_announcements:
+                if (other_ann['id'] in processed_ids or 
+                    other_ann['sender_id'] != ann['sender_id'] or
+                    other_ann['message'] != ann['message']):
+                    continue
+                
+                other_subject = other_ann['subject']
+                other_course_name = None
+                if other_subject.startswith('__COURSE:'):
+                    marker_end = other_subject.find('__', 9)
+                    if marker_end > 0:
+                        other_course_name = other_subject[9:marker_end]
+                        other_subject = other_subject[marker_end + 2:]
+                
+                if other_subject != clean_subject:
+                    continue
+                
+                if course_name_from_marker and other_course_name:
+                    if course_name_from_marker != other_course_name:
+                        continue
+                elif course_name_from_marker or other_course_name:
+                    continue
+                
+                other_created_at_str = other_ann['created_at']
+                if isinstance(other_created_at_str, str):
+                    try:
+                        other_created_at_dt = datetime.strptime(other_created_at_str, '%Y-%m-%d %H:%M:%S.%f')
+                    except:
+                        try:
+                            other_created_at_dt = datetime.strptime(other_created_at_str, '%Y-%m-%d %H:%M:%S')
+                        except:
+                            continue
+                else:
+                    other_created_at_dt = other_created_at_str if hasattr(other_created_at_str, 'timestamp') else None
+                    if not other_created_at_dt:
+                        continue
+                
+                time_diff = abs((created_at_dt - other_created_at_dt).total_seconds())
+                if time_diff <= 10:
+                    matching_anns.append(other_ann)
+            
+            if course_name_from_marker and len(matching_anns) > 1:
+                created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_dt, 'strftime') else str(created_at_dt)
+                announcements_data.append({
+                    'id': ann['id'],
+                    'subject': clean_subject,
+                    'message': ann['message'],
+                    'sender': sender_name,
+                    'sender_username': ann['sender_username'],
+                    'receiver': f'All students in {course_name_from_marker}',
+                    'receiver_username': None,
+                    'is_sent': True,
+                    'created_at': created_at_formatted,
+                })
+                for ma in matching_anns:
+                    processed_ids.add(ma['id'])
+                continue
         
-        announcements_data.append({
-            'id': ann['id'],
-            'subject': ann['subject'],
-            'message': ann['message'],
-            'sender': sender_name,
-            'sender_username': ann['sender_username'],
-            'receiver': receiver_name,
-            'receiver_username': receiver_username,
-            'is_sent': ann['sender_id'] == instructor_user.id,
-            'created_at': created_at_formatted,
-        })
+        if ann['id'] not in processed_ids:
+            receiver_name = "Everyone"
+            receiver_username = None
+            if ann['receiver_id']:
+                receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
+                receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
+                receiver_username = ann['receiver_username']
+            
+            created_at_str = ann['created_at']
+            if isinstance(created_at_str, str):
+                from datetime import datetime
+                try:
+                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
+                except:
+                    try:
+                        created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                    except:
+                        created_at_dt = datetime.now()
+                created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
+            else:
+                created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
+            
+            display_subject = ann['subject']
+            if display_subject.startswith('__COURSE:'):
+                marker_end = display_subject.find('__', 9)
+                if marker_end > 0:
+                    display_subject = display_subject[marker_end + 2:]
+            
+            announcements_data.append({
+                'id': ann['id'],
+                'subject': display_subject,
+                'message': ann['message'],
+                'sender': sender_name,
+                'sender_username': ann['sender_username'],
+                'receiver': receiver_name,
+                'receiver_username': receiver_username,
+                'is_sent': is_sent,
+                'created_at': created_at_formatted,
+            })
+            processed_ids.add(ann['id'])
     
     recipients = []
     
     profile = getattr(instructor_user, 'profile', None)
     instructor_courses = []
+    
     if profile:
         instructor_courses = list(profile.courses.all())
+        courses_list = []
         for course in instructor_courses:
-            recipients.append({
+            courses_list.append({
                 'username': f'course_{course.name}',
                 'name': f'All students in {course.name}',
                 'role': 'course'
             })
+        courses_list.sort(key=lambda x: x['name'])
+        recipients.extend(courses_list)
     
+    professors_list = []
     for inst in instructors:
         if inst.username != instructor_user.username:
             name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
-            recipients.append({'username': inst.username, 'name': name, 'role': 'instructor'})
+            professors_list.append({
+                'username': inst.username, 
+                'name': name, 
+                'role': 'instructor'
+            })
     
     for fh in faculty_heads:
         name = faculty_heads_map.get(fh.username) or fh.get_full_name() or fh.username
-        recipients.append({'username': fh.username, 'name': name, 'role': 'faculty_head'})
+        professors_list.append({
+            'username': fh.username, 
+            'name': name, 
+            'role': 'faculty_head'
+        })
     
-    # Add students enrolled in instructor's courses
+    professors_list.sort(key=lambda x: x['name'])
+    
+    if professors_list:
+        professors_list[0]['show_professors_heading'] = True
+    
+    recipients.extend(professors_list)
+    
     if instructor_courses:
-        # Get all students enrolled in any of the instructor's courses
         students = Student.objects.filter(
             courses__in=instructor_courses
-        ).distinct().select_related('user').order_by('first_name', 'last_name', 'username')
+        ).distinct().select_related('user')
         
+        students_list = []
         for student in students:
             full_name = f"{student.first_name} {student.last_name}".strip() if student.first_name or student.last_name else ''
             if not full_name and student.user:
                 full_name = f"{student.user.first_name} {student.user.last_name}".strip()
             name = full_name if full_name else student.username
-            recipients.append({
+            students_list.append({
                 'username': student.user.username if student.user else student.username,
                 'name': name,
                 'role': 'student'
             })
+        
+        students_list.sort(key=lambda x: x['name'])
+        recipients.extend(students_list)
     
     sent_messages = [ann for ann in announcements_data if ann['is_sent']]
     received_messages = [ann for ann in announcements_data if not ann['is_sent']]
@@ -1093,10 +1225,18 @@ def all_courses(request):
 def my_courses(request):
     profile = getattr(request.user, 'profile', None)
     
+    # Get faculty head's department
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
     courses_data = []
     if profile:
         courses = profile.courses.all().select_related('instructor')
         for course in courses:
+            # Filter by department - only show courses from faculty head's department
+            if faculty_head_department and course.department != faculty_head_department:
+                continue
+            
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
             
             first_learning_outcome = None
@@ -1740,13 +1880,232 @@ def give_grade(request, course_id):
 
 @faculty_head_required
 def faculty_head_grades(request):
+    profile = getattr(request.user, 'profile', None)
+    
+    # Get faculty head's department
     faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    courses = []
+    if profile:
+        # Get courses from profile, filtered by department
+        all_courses = profile.courses.all()
+        for course in all_courses:
+            if faculty_head_department and course.department != faculty_head_department:
+                continue
+            courses.append(course.name)
     
     context = {
+        'faculty_head_courses': courses,
         'faculty_head': json.dumps(faculty_head_data),
         'user': request.user,
     }
     return render(request, 'faculty/faculty_head_grades.html', context)
+
+@faculty_head_required
+def faculty_head_course_grades(request, course_name):
+    from django.utils import timezone
+    from datetime import datetime
+    
+    profile = getattr(request.user, 'profile', None)
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return redirect('faculty-head-grades')
+    
+    # Check if faculty head has access to this course
+    if profile and course not in profile.courses.all():
+        return HttpResponseForbidden("You don't have access to this course")
+    
+    # Check department match
+    if faculty_head_department and course.department != faculty_head_department:
+        return HttpResponseForbidden("You don't have access to this course")
+    
+    # Course'a kayıtlı öğrencileri al
+    students = Student.objects.filter(courses=course).order_by('username')
+    students_with_grades = []
+    for student in students:
+        grade_obj = Grade.objects.filter(student=student, course=course).first()
+        grades_dict = {}
+        is_finalized = False
+        
+        if grade_obj:
+            # Yeni JSONField'dan notları al
+            if grade_obj.grades:
+                grades_dict = grade_obj.grades
+            # Eski alanlardan notları al (geriye dönük uyumluluk)
+            elif grade_obj.midterm is not None or grade_obj.assignment is not None or grade_obj.final is not None:
+                if grade_obj.midterm is not None:
+                    grades_dict['Midterm'] = grade_obj.midterm
+                if grade_obj.assignment is not None:
+                    grades_dict['Assignment'] = grade_obj.assignment
+                if grade_obj.final is not None:
+                    grades_dict['Final'] = grade_obj.final
+            
+            is_finalized = grade_obj.is_finalized
+        
+        students_with_grades.append({
+            'student': student,
+            'grades': grades_dict,
+            'is_finalized': is_finalized
+        })
+    
+    # Uploaded file bilgisini al (course'daki herhangi bir grade'den)
+    uploaded_file = None
+    grade_with_file = Grade.objects.filter(course=course).exclude(uploaded_file_name='').first()
+    if grade_with_file and grade_with_file.uploaded_file_name:
+        uploaded_file = {
+            'name': grade_with_file.uploaded_file_name,
+            'uploaded_at': grade_with_file.uploaded_at
+        }
+    
+    is_finalized = all(item['is_finalized'] for item in students_with_grades if item['grades'])
+    students_with_grades_json = json.dumps([
+        {
+            'id': item['student'].id,
+            'username': item['student'].username,
+            'first_name': item['student'].first_name or '',
+            'last_name': item['student'].last_name or '',
+            'grades': item['grades'],
+            'is_finalized': item['is_finalized']
+        }
+        for item in students_with_grades
+    ])
+    
+    return render(request, 'faculty/faculty_head_course_grades.html', {
+        'course': course,
+        'students': students,
+        'students_with_grades': students_with_grades,
+        'students_with_grades_json': students_with_grades_json,
+        'uploaded_file': uploaded_file,
+        'is_finalized': is_finalized
+    })
+
+@faculty_head_required
+@csrf_exempt
+def faculty_head_delete_uploaded_csv(request, course_name):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    profile = getattr(request.user, 'profile', None)
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    if faculty_head_department and course.department != faculty_head_department:
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    # Course'daki tüm grade'lerden uploaded file bilgisini temizle
+    Grade.objects.filter(course=course).update(
+        uploaded_file_name='',
+        uploaded_at=None
+    )
+    
+    return JsonResponse({'status': 'ok'})
+
+@faculty_head_required
+@csrf_exempt
+def faculty_head_update_manual_grades(request, course_name):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    profile = getattr(request.user, 'profile', None)
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    if faculty_head_department and course.department != faculty_head_department:
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    # Grade'ler finalized mi kontrol et
+    finalized_grades = Grade.objects.filter(course=course, is_finalized=True).exists()
+    if finalized_grades:
+        return JsonResponse({'error': 'Grades are finalized and cannot be updated'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        students_data = data.get('students', [])
+        
+        with transaction.atomic():
+            for student_data in students_data:
+                student_id = student_data.get('student_id')
+                grades_list = student_data.get('grades', [])
+                
+                try:
+                    student = Student.objects.get(id=student_id)
+                except Student.DoesNotExist:
+                    continue
+                
+                # Grades dict'ini oluştur
+                grades_dict = {}
+                for grade_item in grades_list:
+                    grade_name = grade_item.get('name', '').strip()
+                    grade_score = grade_item.get('score')
+                    if grade_name and grade_score is not None:
+                        try:
+                            grades_dict[grade_name] = float(grade_score)
+                        except (ValueError, TypeError):
+                            continue
+                
+                # Grade objesini güncelle veya oluştur
+                Grade.objects.update_or_create(
+                    student=student,
+                    course=course,
+                    defaults={'grades': grades_dict}
+                )
+        
+        return JsonResponse({'status': 'ok'})
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
+
+@faculty_head_required
+@csrf_exempt
+def faculty_head_finalize_grades(request, course_name):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    from django.utils import timezone
+    
+    profile = getattr(request.user, 'profile', None)
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    if faculty_head_department and course.department != faculty_head_department:
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    # Course'daki tüm grade'leri finalized yap
+    with transaction.atomic():
+        Grade.objects.filter(course=course).update(
+            is_finalized=True,
+            finalized_at=timezone.now()
+        )
+    
+    return JsonResponse({'status': 'ok'})
 
 
 @instructor_required
@@ -2801,44 +3160,69 @@ def logout_view(request):
 def faculty_head_announcements(request):
     from .models import Announcement, UserProfile
     faculty_head_user = request.user
-
+    
+    faculty_head_data = get_faculty_head_data(faculty_head_user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
     instructors = User.objects.filter(profile__role='instructor').select_related('profile')
     faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
     
-
-    # Cache'li helper fonksiyonları kullan
     instructors_map = get_instructors_map()
     faculty_heads_map = get_faculty_heads_map()
     
     if request.method == 'POST':
         message = (request.POST.get('message') or '').strip()
         subject = (request.POST.get('subject') or '').strip()
-        receiver_username = (request.POST.get('receiver') or '').strip()
+        receivers_str = (request.POST.get('receivers') or '').strip()
         
         if message:
             if not subject:
                 subject = 'No Topic'
             
-            receiver = None
-            receiver_role = None
-            if receiver_username:
-                try:
-                    receiver = User.objects.get(username=receiver_username)
-                    profile = getattr(receiver, 'profile', None)
-                    if profile:
-                        receiver_role = profile.role
-                except User.DoesNotExist:
-                    pass
+            receivers_list = [r.strip() for r in receivers_str.split(',') if r.strip()]
             
             with transaction.atomic():
-                Announcement.objects.create(
-                    sender=faculty_head_user,
-                    receiver=receiver,
-                    subject=subject,
-                    message=message,
-                    sender_role='faculty_head',
-                    receiver_role=receiver_role
-                )
+                for receiver_username in receivers_list:
+                    if receiver_username.startswith('course_'):
+                        course_name = receiver_username.replace('course_', '', 1)
+                        try:
+                            course = Course.objects.get(name=course_name)
+                            profile = getattr(faculty_head_user, 'profile', None)
+                            if profile and course in profile.courses.all():
+                                students = Student.objects.filter(courses=course).select_related('user')
+                                course_marker = f"__COURSE:{course_name}__"
+                                marked_subject = course_marker + subject if not subject.startswith(course_marker) else subject
+                                for student in students:
+                                    student_user = student.user
+                                    if student_user:
+                                        Announcement.objects.create(
+                                            sender=faculty_head_user,
+                                            receiver=student_user,
+                                            subject=marked_subject,
+                                            message=message,
+                                            sender_role='faculty_head',
+                                            receiver_role='student'
+                                        )
+                        except Course.DoesNotExist:
+                            pass
+                    else:
+                        try:
+                            receiver = User.objects.get(username=receiver_username)
+                            profile = getattr(receiver, 'profile', None)
+                            receiver_role = None
+                            if profile:
+                                receiver_role = profile.role
+                            
+                            Announcement.objects.create(
+                                sender=faculty_head_user,
+                                receiver=receiver,
+                                subject=subject,
+                                message=message,
+                                sender_role='faculty_head',
+                                receiver_role=receiver_role
+                            )
+                        except User.DoesNotExist:
+                            pass
             
             return redirect('faculty-head-announcements')
     
@@ -2866,59 +3250,244 @@ def faculty_head_announcements(request):
             'created_at': ann.created_at,
         })
     
+    # Group announcements sent to course students
+    from collections import defaultdict
+    from datetime import timedelta
+    
+    # First, process all announcements and group them
     announcements_data = []
+    processed_ids = set()
+    
     for ann in all_announcements:
+        if ann['id'] in processed_ids:
+            continue
+            
         sender_full_name = f"{ann['sender_first_name']} {ann['sender_last_name']}".strip() if ann['sender_first_name'] or ann['sender_last_name'] else ''
         sender_name = instructors_map.get(ann['sender_username']) or faculty_heads_map.get(ann['sender_username']) or sender_full_name or ann['sender_username']
         
-        receiver_name = "Everyone"
-        receiver_username = None
-        if ann['receiver_id']:
-            receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
-            receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
-            receiver_username = ann['receiver_username']
+        is_sent = ann['sender_id'] == faculty_head_user.id
         
-        created_at_str = ann['created_at']
-        if isinstance(created_at_str, str):
-            from datetime import datetime
-            try:
-                created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
-            except:
+        # Check if this is part of a course broadcast
+        if is_sent:
+            # Find all announcements with same subject, message, sender, and sent within 10 seconds
+            created_at_str = ann['created_at']
+            if isinstance(created_at_str, str):
+                from datetime import datetime
                 try:
-                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
                 except:
+                    try:
+                        created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                    except:
+                        created_at_dt = datetime.now()
+            else:
+                created_at_dt = created_at_str if hasattr(created_at_str, 'timestamp') else None
+                if not created_at_dt:
+                    from datetime import datetime
                     created_at_dt = datetime.now()
-            created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
-        else:
-            created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
+            
+            course_name_from_marker = None
+            clean_subject = ann['subject']
+            if ann['subject'].startswith('__COURSE:'):
+                marker_end = ann['subject'].find('__', 9)  
+                if marker_end > 0:
+                    course_name_from_marker = ann['subject'][9:marker_end]
+                    clean_subject = ann['subject'][marker_end + 2:]
+            
+            matching_anns = []
+            for other_ann in all_announcements:
+                if (other_ann['id'] in processed_ids or 
+                    other_ann['sender_id'] != ann['sender_id'] or
+                    other_ann['message'] != ann['message']):
+                    continue
+                
+                other_subject = other_ann['subject']
+                other_course_name = None
+                if other_subject.startswith('__COURSE:'):
+                    marker_end = other_subject.find('__', 9)
+                    if marker_end > 0:
+                        other_course_name = other_subject[9:marker_end]
+                        other_subject = other_subject[marker_end + 2:]
+                
+                if other_subject != clean_subject:
+                    continue
+                
+                if course_name_from_marker and other_course_name:
+                    if course_name_from_marker != other_course_name:
+                        continue
+                elif course_name_from_marker or other_course_name:
+                    continue
+                
+                other_created_at_str = other_ann['created_at']
+                if isinstance(other_created_at_str, str):
+                    try:
+                        other_created_at_dt = datetime.strptime(other_created_at_str, '%Y-%m-%d %H:%M:%S.%f')
+                    except:
+                        try:
+                            other_created_at_dt = datetime.strptime(other_created_at_str, '%Y-%m-%d %H:%M:%S')
+                        except:
+                            continue
+                else:
+                    other_created_at_dt = other_created_at_str if hasattr(other_created_at_str, 'timestamp') else None
+                    if not other_created_at_dt:
+                        continue
+                
+                time_diff = abs((created_at_dt - other_created_at_dt).total_seconds())
+                if time_diff <= 10:
+                    matching_anns.append(other_ann)
+            
+            if course_name_from_marker and len(matching_anns) > 1:
+                created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_dt, 'strftime') else str(created_at_dt)
+                announcements_data.append({
+                    'id': ann['id'],
+                    'subject': clean_subject,
+                    'message': ann['message'],
+                    'sender': sender_name,
+                    'sender_username': ann['sender_username'],
+                    'receiver': f'All students in {course_name_from_marker}',
+                    'receiver_username': None,
+                    'is_sent': True,
+                    'created_at': created_at_formatted,
+                })
+                for ma in matching_anns:
+                    processed_ids.add(ma['id'])
+                continue
         
-        announcements_data.append({
-            'id': ann['id'],
-            'subject': ann['subject'],
-            'message': ann['message'],
-            'sender': sender_name,
-            'sender_username': ann['sender_username'],
-            'receiver': receiver_name,
-            'receiver_username': receiver_username,
-            'is_sent': ann['sender_id'] == faculty_head_user.id,
-            'created_at': created_at_formatted,
-        })
+        if ann['id'] not in processed_ids:
+            receiver_name = "Everyone"
+            receiver_username = None
+            if ann['receiver_id']:
+                receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
+                receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
+                receiver_username = ann['receiver_username']
+            
+            created_at_str = ann['created_at']
+            if isinstance(created_at_str, str):
+                from datetime import datetime
+                try:
+                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
+                except:
+                    try:
+                        created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                    except:
+                        created_at_dt = datetime.now()
+                created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
+            else:
+                created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
+            
+            display_subject = ann['subject']
+            if display_subject.startswith('__COURSE:'):
+                marker_end = display_subject.find('__', 9)
+                if marker_end > 0:
+                    display_subject = display_subject[marker_end + 2:]
+            
+            announcements_data.append({
+                'id': ann['id'],
+                'subject': display_subject,
+                'message': ann['message'],
+                'sender': sender_name,
+                'sender_username': ann['sender_username'],
+                'receiver': receiver_name,
+                'receiver_username': receiver_username,
+                'is_sent': is_sent,
+                'created_at': created_at_formatted,
+            })
+            processed_ids.add(ann['id'])
     
     recipients = []
+    
+    profile = getattr(faculty_head_user, 'profile', None)
+    faculty_head_courses = []
+    
+    # Courses group - sorted alphabetically by course name
+    if profile:
+        all_courses = profile.courses.all()
+        courses_list = []
+        for course in all_courses:
+            # Filter by department
+            if faculty_head_department and course.department != faculty_head_department:
+                continue
+            courses_list.append({
+                'username': f'course_{course.name}',
+                'name': f'All students in {course.name}',
+                'role': 'course'
+            })
+        courses_list.sort(key=lambda x: x['name'])
+        recipients.extend(courses_list)
+        faculty_head_courses = [c['name'].replace('All students in ', '') for c in courses_list]
+    
+    # Instructors and Faculty Heads group - sorted alphabetically by name
+    professors_list = []
     for inst in instructors:
-        name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
-        recipients.append({'username': inst.username, 'name': name, 'role': 'instructor'})
+        if inst.username != faculty_head_user.username:
+            inst_profile = getattr(inst, 'profile', None)
+            # Filter by department
+            if faculty_head_department and inst_profile and inst_profile.department != faculty_head_department:
+                continue
+            name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
+            professors_list.append({
+                'username': inst.username, 
+                'name': name, 
+                'role': 'instructor'
+            })
     
     for fh in faculty_heads:
         if fh.username != faculty_head_user.username:
+            fh_profile = getattr(fh, 'profile', None)
+            # Filter by department
+            if faculty_head_department and fh_profile and fh_profile.department != faculty_head_department:
+                continue
             name = faculty_heads_map.get(fh.username) or fh.get_full_name() or fh.username
-            recipients.append({'username': fh.username, 'name': name, 'role': 'faculty_head'})
+            professors_list.append({
+                'username': fh.username, 
+                'name': name, 
+                'role': 'faculty_head'
+            })
+    
+    professors_list.sort(key=lambda x: x['name'])
+    
+    if professors_list:
+        professors_list[0]['show_professors_heading'] = True
+    
+    recipients.extend(professors_list)
+    
+    # Students group - sorted alphabetically by name
+    # Faculty head can see ALL students in their department (not just from their courses)
+    if faculty_head_department:
+        students = Student.objects.filter(
+            user__profile__department=faculty_head_department
+        ).distinct().select_related('user')
+        
+        students_list = []
+        for student in students:
+            full_name = f"{student.first_name} {student.last_name}".strip() if student.first_name or student.last_name else ''
+            if not full_name and student.user:
+                full_name = f"{student.user.first_name} {student.user.last_name}".strip()
+            name = full_name if full_name else student.username
+            students_list.append({
+                'username': student.user.username if student.user else student.username,
+                'name': name,
+                'role': 'student'
+            })
+        
+        students_list.sort(key=lambda x: x['name'])
+        recipients.extend(students_list)
     
     sent_messages = [ann for ann in announcements_data if ann['is_sent']]
     received_messages = [ann for ann in announcements_data if not ann['is_sent']]
     
-    return render(request, "faculty/faculty_announcements.html", {
+    announcements_json = json.dumps({str(ann['id']): {
+        'subject': ann['subject'],
+        'message': ann['message'],
+        'sender': ann['sender'],
+        'receiver': ann['receiver'],
+        'created_at': ann['created_at'],
+        'is_sent': ann['is_sent']
+    } for ann in announcements_data})
+    
+    return render(request, 'faculty/faculty_announcements.html', {
         'all_announcements': announcements_data,
+        'announcements_json': announcements_json,
         'sent_messages': sent_messages,
         'received_messages': received_messages,
         'recipients': recipients,

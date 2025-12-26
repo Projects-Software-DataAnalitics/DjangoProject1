@@ -168,15 +168,12 @@
                                             {% endif %}
                                         {% elif group.grouper == 'instructor' or group.grouper == 'faculty_head' %}
                                             {% comment %}Show Professors heading only once, before the first instructor/faculty_head group{% endcomment %}
-                                            {% for check_group in recipients_by_role %}
-                                                {% if check_group.grouper == 'instructor' or check_group.grouper == 'faculty_head' %}
-                                                    {% if forloop.first and check_group.grouper == group.grouper %}
-                                                    <div style="padding: 8px 12px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; margin-top: 4px; margin-bottom: 4px;">
-                                                        <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Professors</span>
-                                                    </div>
-                                                    {% endif %}
-                                                {% endif %}
-                                            {% endfor %}
+                                            {% comment %}Check if first recipient in this group has show_professors_heading flag{% endcomment %}
+                                            {% if group.list.0.show_professors_heading %}
+                                                <div style="padding: 8px 12px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; margin-top: 4px; margin-bottom: 4px;">
+                                                    <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Professors</span>
+                                                </div>
+                                            {% endif %}
                                             {% for recipient in group.list %}
                                             <label class="dropdown-item">
                                                 <input type="checkbox" class="receiver-checkbox individual-checkbox"
@@ -452,12 +449,15 @@
                         e.stopPropagation();
                         updateDropdownHeader();
                         updateSendButton();
+                        // Close dropdown after selection
+                        if (dropdownList) {
+                            dropdownList.classList.remove('show');
+                        }
                     });
                 });
 
                 function updateDropdownHeader() {
                     const checkedCount = document.querySelectorAll('.individual-checkbox:checked').length;
-                    const totalCount = individualCheckboxes.length;
                     const receiversInput = document.getElementById('receivers-input');
 
                     // Update hidden input
@@ -468,7 +468,22 @@
                     }
 
                     if (checkedCount > 0) {
-                        dropdownHeaderText.textContent = `${checkedCount} recipient${checkedCount > 1 ? 's' : ''} selected`;
+                        // Get selected names from data-name attribute
+                        const selectedNames = Array.from(document.querySelectorAll('.individual-checkbox:checked'))
+                            .map(cb => cb.getAttribute('data-name'))
+                            .filter(name => name); // Filter out null/empty names
+                        
+                        if (selectedNames.length > 0) {
+                            // Show names, limit to first 3 if too many
+                            if (selectedNames.length <= 3) {
+                                dropdownHeaderText.textContent = selectedNames.join(', ');
+                            } else {
+                                dropdownHeaderText.textContent = selectedNames.slice(0, 3).join(', ') + '...';
+                            }
+                        } else {
+                            // Fallback to count if no names available
+                            dropdownHeaderText.textContent = `${checkedCount} recipient${checkedCount > 1 ? 's' : ''} selected`;
+                        }
                         dropdownHeaderText.style.color = "#0f172a";
                     } else {
                         dropdownHeaderText.textContent = "Select Receiver";

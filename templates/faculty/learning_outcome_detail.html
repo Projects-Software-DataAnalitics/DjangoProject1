@@ -151,6 +151,21 @@
 </div>
 
 <script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
     (function() {
         const editLoBtn = document.getElementById('edit-lo-btn');
         const loDisplay = document.getElementById('lo-display');
@@ -221,7 +236,7 @@
                 deleteModal.style.display = 'none';
                 return;
             }
-            window.location.href = `/faculty-head/learning-outcomes/detail/${outcomeId}/unlink/${pendingDeletePoId}/`;
+            window.location.href = `/faculty-head/learning-outcomes/${outcomeId}/unlink-program-outcome/${pendingDeletePoId}/`;
         });
 
         document.querySelectorAll('.edit-percentage-btn').forEach(btn => {
@@ -289,7 +304,7 @@
                     const formData = new FormData();
                     formData.append('percentage', value);
                     
-                    fetch(`/faculty-head/learning-outcomes/detail/${outcomeId}/update-percentage/${poId}/`, {
+                    fetch(`/faculty-head/learning-outcomes/${outcomeId}/update-percentage/${poId}/`, {
                         method: 'POST',
                         body: formData,
                         headers: {
