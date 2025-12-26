@@ -423,21 +423,46 @@ def instructor_my_courses(request):
     
     courses_data = []
     if profile:
-        courses = profile.courses.all().select_related('instructor')
+        courses = profile.courses.all().select_related('instructor').prefetch_related('students')
         for course in courses:
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+            
+            # Get students enrolled in this course
+            students = course.students.all().order_by('first_name', 'last_name', 'username')
+            students_list = []
+            for student in students:
+                full_name = f"{student.first_name} {student.last_name}".strip() if student.first_name or student.last_name else ''
+                if not full_name and student.user:
+                    full_name = f"{student.user.first_name} {student.user.last_name}".strip()
+                name = full_name if full_name else student.username
+                students_list.append({
+                    'name': name,
+                    'student_id': student.student_id or '-',
+                    'year': student.year or '-',
+                })
+            
             courses_data.append({
                 'id': course.id,
                 'name': course.name,
                 'code': course.code,
                 'instructor': instructor_name,
                 'department': course.department,
+                'students': students_list,
+                'students_json': json.dumps(students_list),
             })
+    
+    # Prepare JSON data for template
+    courses_json = json.dumps([{
+        'id': course['id'],
+        'name': course['name'],
+        'students': course['students']
+    } for course in courses_data])
     
     return render(request, 'instructor.html', {
         'show_welcome': False,
         'page': 'my_courses',
-        'courses': courses_data
+        'courses': courses_data,
+        'courses_json': courses_json
     })
 
 @instructor_required
@@ -657,32 +682,59 @@ def instructor_announcements(request):
     if request.method == 'POST':
         message = (request.POST.get('message') or '').strip()
         subject = (request.POST.get('subject') or '').strip()
-        receiver_username = (request.POST.get('receiver') or '').strip()
+        receivers_str = (request.POST.get('receivers') or '').strip()
         
         if message:
             if not subject:
                 subject = 'No Topic'
             
-            receiver = None
-            receiver_role = None
-            if receiver_username:
-                try:
-                    receiver = User.objects.get(username=receiver_username)
-                    profile = getattr(receiver, 'profile', None)
-                    if profile:
-                        receiver_role = profile.role
-                except User.DoesNotExist:
-                    pass
+            # Parse receivers (comma-separated)
+            receivers_list = [r.strip() for r in receivers_str.split(',') if r.strip()]
             
             with transaction.atomic():
-                Announcement.objects.create(
-                    sender=instructor_user,
-                    receiver=receiver,
-                    subject=subject,
-                    message=message,
-                    sender_role='instructor',
-                    receiver_role=receiver_role
-                )
+                for receiver_username in receivers_list:
+                    # Check if it's a course selection (format: course_CourseName)
+                    if receiver_username.startswith('course_'):
+                        course_name = receiver_username.replace('course_', '', 1)
+                        try:
+                            course = Course.objects.get(name=course_name)
+                            # Verify instructor has access to this course
+                            profile = getattr(instructor_user, 'profile', None)
+                            if profile and course in profile.courses.all():
+                                # Get all students enrolled in this course
+                                students = Student.objects.filter(courses=course).select_related('user')
+                                for student in students:
+                                    student_user = student.user
+                                    if student_user:
+                                        Announcement.objects.create(
+                                            sender=instructor_user,
+                                            receiver=student_user,
+                                            subject=subject,
+                                            message=message,
+                                            sender_role='instructor',
+                                            receiver_role='student'
+                                        )
+                        except Course.DoesNotExist:
+                            pass
+                    else:
+                        # Regular user receiver
+                        try:
+                            receiver = User.objects.get(username=receiver_username)
+                            profile = getattr(receiver, 'profile', None)
+                            receiver_role = None
+                            if profile:
+                                receiver_role = profile.role
+                            
+                            Announcement.objects.create(
+                                sender=instructor_user,
+                                receiver=receiver,
+                                subject=subject,
+                                message=message,
+                                sender_role='instructor',
+                                receiver_role=receiver_role
+                            )
+                        except User.DoesNotExist:
+                            pass
             
             return redirect('instructor_announcements')
     
@@ -749,6 +801,18 @@ def instructor_announcements(request):
         })
     
     recipients = []
+    
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_courses = []
+    if profile:
+        instructor_courses = list(profile.courses.all())
+        for course in instructor_courses:
+            recipients.append({
+                'username': f'course_{course.name}',
+                'name': f'All students in {course.name}',
+                'role': 'course'
+            })
+    
     for inst in instructors:
         if inst.username != instructor_user.username:
             name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
@@ -758,11 +822,39 @@ def instructor_announcements(request):
         name = faculty_heads_map.get(fh.username) or fh.get_full_name() or fh.username
         recipients.append({'username': fh.username, 'name': name, 'role': 'faculty_head'})
     
+    # Add students enrolled in instructor's courses
+    if instructor_courses:
+        # Get all students enrolled in any of the instructor's courses
+        students = Student.objects.filter(
+            courses__in=instructor_courses
+        ).distinct().select_related('user').order_by('first_name', 'last_name', 'username')
+        
+        for student in students:
+            full_name = f"{student.first_name} {student.last_name}".strip() if student.first_name or student.last_name else ''
+            if not full_name and student.user:
+                full_name = f"{student.user.first_name} {student.user.last_name}".strip()
+            name = full_name if full_name else student.username
+            recipients.append({
+                'username': student.user.username if student.user else student.username,
+                'name': name,
+                'role': 'student'
+            })
+    
     sent_messages = [ann for ann in announcements_data if ann['is_sent']]
     received_messages = [ann for ann in announcements_data if not ann['is_sent']]
     
+    announcements_json = json.dumps({str(ann['id']): {
+        'subject': ann['subject'],
+        'message': ann['message'],
+        'sender': ann['sender'],
+        'receiver': ann['receiver'],
+        'created_at': ann['created_at'],
+        'is_sent': ann['is_sent']
+    } for ann in announcements_data})
+    
     return render(request, 'instructor/instructor_announcements.html', {
         'all_announcements': announcements_data,
+        'announcements_json': announcements_json,
         'sent_messages': sent_messages,
         'received_messages': received_messages,
         'recipients': recipients,

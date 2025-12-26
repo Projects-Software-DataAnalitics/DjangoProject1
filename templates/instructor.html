@@ -27,12 +27,26 @@
     {% endif %}
     {% if page == 'my_courses' and courses %}
     <h1>My Courses</h1>
+    <script id="course-students-data" type="application/json">{{ courses_json|safe }}</script>
+    <script>
+        // Parse course students data from JSON script tag
+        const courseStudentsDataScript = document.getElementById('course-students-data');
+        const courseStudentsDataArray = courseStudentsDataScript ? JSON.parse(courseStudentsDataScript.textContent) : [];
+        const courseStudentsData = {};
+        courseStudentsDataArray.forEach(function(course) {
+            courseStudentsData[course.id] = {
+                name: course.name,
+                students: course.students
+            };
+        });
+    </script>
     <table class="courses-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
         <thead>
             <tr style="background-color: #0b5fff; color: white;">
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Instructor</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Credit</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Students Taking the Class</th>
             </tr>
         </thead>
         <tbody>
@@ -41,10 +55,119 @@
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.name }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.instructor }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.credits|default:"-" }}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">
+                    <button class="view-students-btn" data-course-id="{{ course.id }}"
+                        style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                        View
+                    </button>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+
+    <!-- Student List Popup Modal -->
+    <div id="student-list-popup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative;">
+            <button class="close-popup-btn" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            <h3 id="popup-course-name" style="font-size: 22px; color: #0f172a; margin-bottom: 20px; text-align: center; margin-top: 0;"></h3>
+            <div id="popup-student-list" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                <!-- Student list will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const viewStudentsButtons = document.querySelectorAll('.view-students-btn');
+            const studentListPopup = document.getElementById('student-list-popup');
+            const closePopupBtn = document.querySelector('.close-popup-btn');
+            const popupCourseName = document.getElementById('popup-course-name');
+            const popupStudentList = document.getElementById('popup-student-list');
+
+            viewStudentsButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const courseId = this.dataset.courseId;
+                    // Try both string and number keys
+                    const courseData = courseStudentsData[courseId] || courseStudentsData[parseInt(courseId)];
+                    
+                    if (!courseData) {
+                        console.error('Course data not found for ID:', courseId);
+                        console.log('Available course IDs:', Object.keys(courseStudentsData));
+                        popupStudentList.innerHTML = '<p style="text-align: center; color: #ef4444; margin: 20px 0;">Error: Course data not found. Check console for details.</p>';
+                        studentListPopup.style.display = 'flex';
+                        return;
+                    }
+                    
+                    const courseName = courseData.name;
+                    const students = courseData.students || [];
+                    
+                    popupCourseName.textContent = `Students Taking ${courseName}`;
+                    popupStudentList.innerHTML = '';
+
+                    if (students && students.length > 0) {
+                            const table = document.createElement('table');
+                            table.style.width = '100%';
+                            table.style.borderCollapse = 'collapse';
+                            
+                            // Header
+                            const thead = document.createElement('thead');
+                            const headerRow = document.createElement('tr');
+                            headerRow.style.backgroundColor = '#0b5fff';
+                            headerRow.style.color = 'white';
+                            
+                            ['Name', 'Student ID', 'Year'].forEach(headerText => {
+                                const th = document.createElement('th');
+                                th.textContent = headerText;
+                                th.style.padding = '10px';
+                                th.style.textAlign = 'left';
+                                th.style.border = '1px solid #ddd';
+                                headerRow.appendChild(th);
+                            });
+                            thead.appendChild(headerRow);
+                            table.appendChild(thead);
+                            
+                            // Body
+                            const tbody = document.createElement('tbody');
+                            students.forEach((student, index) => {
+                                const row = document.createElement('tr');
+                                row.style.borderBottom = '1px solid #ddd';
+                                if (index % 2 === 0) {
+                                    row.style.backgroundColor = '#f8fafc';
+                                }
+                                
+                                [student.name, student.student_id, student.year].forEach(cellText => {
+                                    const td = document.createElement('td');
+                                    td.textContent = cellText;
+                                    td.style.padding = '10px';
+                                    td.style.border = '1px solid #ddd';
+                                    row.appendChild(td);
+                                });
+                                tbody.appendChild(row);
+                            });
+                            table.appendChild(tbody);
+                            popupStudentList.appendChild(table);
+                        } else {
+                            popupStudentList.innerHTML = '<p style="text-align: center; color: #64748b; margin: 20px 0;">No students enrolled in this course.</p>';
+                        }
+
+                        studentListPopup.style.display = 'flex';
+                });
+            });
+
+            if (closePopupBtn) {
+                closePopupBtn.addEventListener('click', function() {
+                    studentListPopup.style.display = 'none';
+                });
+            }
+
+            studentListPopup.addEventListener('click', function(e) {
+                if (e.target === studentListPopup) {
+                    studentListPopup.style.display = 'none';
+                }
+            });
+        });
+    </script>
     {% elif page == 'my_courses' %}
     <h1>My Courses</h1>
     <p style="margin-top: 20px; color: #666;">No courses assigned yet.</p>
@@ -79,26 +202,26 @@
     <p style="margin-top: 20px; color: #666;">No profile information available.</p>
     {% elif page == 'grades' %}
     <div id="personal-info"></div>
+    <script id="instructor-courses-data" type="application/json">{% if instructor_courses %}{{ instructor_courses|safe }}{% else %}[]{% endif %}</script>
     <script>
-        const instructorCourses = {% if instructor_courses %}{{ instructor_courses|safe }}{% else %}[]{% endif %};
+        const instructorCoursesDataScript = document.getElementById('instructor-courses-data');
+        const instructorCourses = instructorCoursesDataScript ? JSON.parse(instructorCoursesDataScript.textContent) : [];
         if (typeof showGrades === 'function') {
             const infoDiv = document.getElementById("personal-info");
-            const coursesOptions = (instructorCourses || []).map(course => 
-                `<option value="${course}">${course}</option>`
-            ).join('');
+            const coursesOptions = (instructorCourses || []).map(function(course) {
+                return '<option value="' + course + '">' + course + '</option>';
+            }).join('');
             
-            infoDiv.innerHTML = `
-                <h2>Grades</h2>
-                <div style="margin-top: 24px;">
-                    <label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
-                    <select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
-                        <option value="">-- Select a course --</option>
-                        ${coursesOptions}
-                    </select>
-                </div>
-                <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
-                <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
-            `;
+            infoDiv.innerHTML = '<h2>Grades</h2>' +
+                '<div style="margin-top: 24px;">' +
+                '<label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>' +
+                '<select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">' +
+                '<option value="">-- Select a course --</option>' +
+                coursesOptions +
+                '</select>' +
+                '</div>' +
+                '<div id="file-upload-section" style="margin-top: 24px; display: none;"></div>' +
+                '<div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>';
             
             const courseSelect = document.getElementById("course-select");
             if (courseSelect) {
@@ -107,7 +230,7 @@
                     
                     if (selectedCourse) {
                         // Yeni not yönetim sayfasına yönlendir
-                        window.location.href = `/instructor/grades/${encodeURIComponent(selectedCourse)}/`;
+                        window.location.href = '/instructor/grades/' + encodeURIComponent(selectedCourse) + '/';
                     }
                 });
             }

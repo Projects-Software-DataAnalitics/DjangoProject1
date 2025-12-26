@@ -123,7 +123,7 @@
                 </button>
                 <button id="tab-sent" class="tab-button"
                     style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
-                    Messages Send
+                    Messages Sent
                 </button>
             </div>
 
@@ -151,41 +151,52 @@
                                     <span id="dropdown-header-text">Select Receiver</span>
                                 </div>
                                 <div class="dropdown-list" id="dropdown-list">
-                                    <!-- Courses Section -->
-                                    {% for recipient in recipients %}
-                                        {% if recipient.role == 'course' %}
-                                        <label class="dropdown-item">
-                                            <input type="checkbox" class="receiver-checkbox individual-checkbox"
-                                                value="{{ recipient.username }}" data-name="{{ recipient.name }}">
-                                            <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
-                                        </label>
-                                        {% endif %}
-                                    {% endfor %}
-                                    
-                                    <!-- Separator if there are both courses and people -->
                                     {% regroup recipients by role as recipients_by_role %}
                                     {% for group in recipients_by_role %}
                                         {% if group.grouper == 'course' %}
-                                            {% for other_group in recipients_by_role %}
-                                                {% if other_group.grouper != 'course' %}
-                                                    {% if forloop.first %}
+                                            {% if group.list %}
+                                            <div style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; margin-bottom: 4px;">
+                                                <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Courses</span>
+                                            </div>
+                                            {% for recipient in group.list %}
+                                            <label class="dropdown-item">
+                                                <input type="checkbox" class="receiver-checkbox individual-checkbox"
+                                                    value="{{ recipient.username }}" data-name="{{ recipient.name }}">
+                                                <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
+                                            </label>
+                                            {% endfor %}
+                                            {% endif %}
+                                        {% elif group.grouper == 'instructor' or group.grouper == 'faculty_head' %}
+                                            {% comment %}Show Professors heading only once, before the first instructor/faculty_head group{% endcomment %}
+                                            {% for check_group in recipients_by_role %}
+                                                {% if check_group.grouper == 'instructor' or check_group.grouper == 'faculty_head' %}
+                                                    {% if forloop.first and check_group.grouper == group.grouper %}
                                                     <div style="padding: 8px 12px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; margin-top: 4px; margin-bottom: 4px;">
-                                                        <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">People</span>
+                                                        <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Professors</span>
                                                     </div>
                                                     {% endif %}
                                                 {% endif %}
                                             {% endfor %}
-                                        {% endif %}
-                                    {% endfor %}
-                                    
-                                    <!-- Instructors and Faculty Heads -->
-                                    {% for recipient in recipients %}
-                                        {% if recipient.role != 'course' %}
-                                        <label class="dropdown-item">
-                                            <input type="checkbox" class="receiver-checkbox individual-checkbox"
-                                                value="{{ recipient.username }}" data-name="{{ recipient.name }}">
-                                            <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
-                                        </label>
+                                            {% for recipient in group.list %}
+                                            <label class="dropdown-item">
+                                                <input type="checkbox" class="receiver-checkbox individual-checkbox"
+                                                    value="{{ recipient.username }}" data-name="{{ recipient.name }}">
+                                                <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
+                                            </label>
+                                            {% endfor %}
+                                        {% elif group.grouper == 'student' %}
+                                            {% if group.list %}
+                                            <div style="padding: 8px 12px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; margin-top: 4px; margin-bottom: 4px;">
+                                                <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Students</span>
+                                            </div>
+                                            {% for recipient in group.list %}
+                                            <label class="dropdown-item">
+                                                <input type="checkbox" class="receiver-checkbox individual-checkbox"
+                                                    value="{{ recipient.username }}" data-name="{{ recipient.name }}">
+                                                <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
+                                            </label>
+                                            {% endfor %}
+                                            {% endif %}
                                         {% endif %}
                                     {% endfor %}
                                 </div>
@@ -260,7 +271,7 @@
             <div id="content-sent" class="tab-content" style="display: none;">
                 <div
                     style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
-                    <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Send</h2>
+                    <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Sent</h2>
                     {% if sent_messages %}
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         {% for ann in sent_messages %}
@@ -314,18 +325,7 @@
 
         <script>
             // Message data
-            const messagesData = {
-                {% for ann in all_announcements %}
-                "{{ ann.id }}": {
-                    subject: "{{ ann.subject|escapejs }}",
-                    message: "{{ ann.message|escapejs }}",
-                    sender: "{{ ann.sender|escapejs }}",
-                    receiver: "{{ ann.receiver|escapejs }}",
-                    created_at: "{{ ann.created_at|escapejs }}",
-                    is_sent: {{ ann.is_sent|yesno:"true,false" }}
-                }{% if not forloop.last %},{% endif %}
-                {% endfor %}
-            };
+            const messagesData = JSON.parse('{{ announcements_json|escapejs }}');
 
             // Tab switching functionality
             document.addEventListener('DOMContentLoaded', function () {
