@@ -1,27 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Instructor Dashboard</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-</head>
-<body data-page="{% if page %}{{ page }}{% endif %}">
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li><a href="{% url 'instructor_profile' %}">Personal Information</a></li>
-        <li><a href="{% url 'instructor_my_courses' %}">My Courses</a></li>
-        <li><a href="{% url 'instructor_grades' %}">Grades</a></li>
-        <li><a href="{% url 'learning_outcomes' %}">Learning Outcomes</a></li>
-        <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
-        <li><a href="{% url 'instructor_announcements' %}">Announcements</a></li>
-        <li id="logout-btn">Logout</li>
-    </ul>
-    </div>
+{% extends "instructor_base.html" %}
+{% load static %}
 
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    {% block content %}
+{% block title %}Instructor Dashboard{% endblock %}
+
+{% block content %}
+<div data-page="{% if page %}{{ page }}{% endif %}">
     {% if show_welcome %}
     <h1>Welcome Instructor</h1>
     {% endif %}
@@ -239,16 +222,13 @@
     {% else %}
     <div id="personal-info"></div>
     {% endif %}
-    {% endblock %}
-    </div>
+</div>
 
 <form id="csrf-form" style="display:none;">
     {% csrf_token %}
 </form>
 
 <script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
-<script src="{% static 'js/instructor.js' %}"></script>
-</body>
-</html>
+{% endblock %}
 
 

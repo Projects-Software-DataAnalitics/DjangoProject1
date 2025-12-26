@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}Faculty Head{% endblock %}</title>
+    <title>{% block title %}Instructor Dashboard{% endblock %}</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <style>
@@ -86,7 +86,7 @@
 
 <div class="header-top">
     <div class="header-icons">
-        <a href="{% url 'faculty-head-announcements' %}" class="header-icon" title="Announcements">
+        <a href="{% url 'instructor_announcements' %}" class="header-icon" title="Announcements">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
@@ -98,19 +98,19 @@
             <div class="profile-popup" id="profile-popup">
                 <div class="profile-popup-item">
                     <div class="profile-popup-label">Username</div>
-                    <div class="profile-popup-value">{% if faculty_head_info %}{{ faculty_head_info.username }}{% else %}{{ request.user.username|default:"-" }}{% endif %}</div>
+                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.username }}{% else %}{{ request.user.username|default:"-" }}{% endif %}</div>
                 </div>
                 <div class="profile-popup-item">
                     <div class="profile-popup-label">Name</div>
-                    <div class="profile-popup-value">{% if faculty_head_info %}{{ faculty_head_info.name }}{% else %}{% if request.user.first_name or request.user.last_name %}{{ request.user.first_name }} {{ request.user.last_name }}{% else %}-{% endif %}{% endif %}</div>
+                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.name }}{% else %}{% if request.user.first_name or request.user.last_name %}{{ request.user.first_name }} {{ request.user.last_name }}{% else %}-{% endif %}{% endif %}</div>
                 </div>
                 <div class="profile-popup-item">
                     <div class="profile-popup-label">Faculty</div>
-                    <div class="profile-popup-value">{% if faculty_head_info %}{{ faculty_head_info.faculty|default:"-" }}{% else %}-{% endif %}</div>
+                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.faculty|default:"-" }}{% else %}-{% endif %}</div>
                 </div>
                 <div class="profile-popup-item">
                     <div class="profile-popup-label">Department</div>
-                    <div class="profile-popup-value">{% if faculty_head_info %}{{ faculty_head_info.department|default:"-" }}{% else %}-{% endif %}</div>
+                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.department|default:"-" }}{% else %}-{% endif %}</div>
                 </div>
             </div>
         </div>
@@ -120,32 +120,27 @@
 <div class="sidebar" id="sidebar">
     <ul>
         <li>
-            <a href="{% url 'faculty-head' %}">Main Page</a>
+            <a href="{% url 'instructor' %}">Main Page</a>
         </li>
         <li>
-            <a href="{% url 'faculty_head_profile' %}">Personal Information</a>
+            <a href="{% url 'instructor_profile' %}">Personal Information</a>
         </li>
         <li>
-            <a href="{% url 'faculty-head-grades' %}">Grades</a>
+            <a href="{% url 'instructor_my_courses' %}">My Courses</a>
         </li>
         <li>
-            <a href="{% url 'all_courses' %}">All Courses</a>
+            <a href="{% url 'instructor_grades' %}">Grades</a>
         </li>
         <li>
-            <a href="{% url 'my_courses' %}">My Courses</a>
+            <a href="{% url 'learning_outcomes' %}">Learning Outcomes</a>
         </li>
         <li>
-            <a href="{% url 'program_outcomes' %}">Program Outcomes</a>
+            <a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a>
         </li>
         <li>
-            <a href="{% url 'faculty_head_learning_outcomes' %}">Learning Outcomes</a>
+            <a href="{% url 'instructor_announcements' %}">Announcements</a>
         </li>
-        <li>
-            <a href="{% url 'faculty-head-announcements' %}">Announcements</a>
-        </li>
-        <li>
-            <a href="{% url 'faculty-head-logout' %}">Logout</a>
-        </li>
+        <li id="logout-btn">Logout</li>
     </ul>
 </div>
 
@@ -156,7 +151,15 @@
     </div>
 </div>
 
-<script src="{% static 'js/faculty_head.js' %}"></script>
+<div id="popup" class="popup-overlay" style="display: none;">
+    <div class="popup-box">
+        <h3 id="popup-title">Course Details</h3>
+        <p id="popup-content"></p>
+        <button onclick="closePopup()">Close</button>
+    </div>
+</div>
+
+<script src="{% static 'js/instructor.js' %}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const profileIcon = document.getElementById('profile-icon');
@@ -174,9 +177,9 @@
                 }
             });
         }
+        
     });
 </script>
 </body>
 </html>
-
 

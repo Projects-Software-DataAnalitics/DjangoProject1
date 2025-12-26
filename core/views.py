@@ -434,7 +434,83 @@ def instructor_required(view_func):
 
 @instructor_required
 def instructor_dashboard(request):
-    return render(request, 'instructor.html', {'show_welcome': True})
+    from datetime import datetime
+    from .models import Announcement
+    from django.db.models import Q
+    
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    instructor_info = {
+        'username': instructor_user.username,
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
+    
+    current_month = datetime.now().month
+    current_year = datetime.now().year
+    
+    if current_month >= 9:
+        academic_term = f"{current_year}-{current_year + 1} Fall"
+    elif current_month >= 2:
+        academic_term = f"{current_year - 1}-{current_year} Spring"
+    else:
+        academic_term = f"{current_year - 1}-{current_year} Fall"
+    
+    courses_list = []
+    total_students_set = set()
+    chart_data = {'labels': [], 'data': []}
+    
+    if profile:
+        courses = profile.courses.all().select_related('instructor').prefetch_related('students')
+        for course in courses:
+            students = course.students.all()
+            student_count = students.count()
+            
+            for student in students:
+                total_students_set.add(student.id)
+            
+            courses_list.append({
+                'id': course.id,
+                'name': course.name,
+                'code': course.code,
+                'credits': course.credits,
+                'student_count': student_count,
+            })
+            
+            chart_data['labels'].append(course.name)
+            chart_data['data'].append(student_count)
+    
+    total_courses = len(courses_list)
+    total_students = len(total_students_set)
+    
+    latest_announcements = Announcement.objects.filter(
+        Q(sender=instructor_user) | Q(receiver=instructor_user) | Q(receiver__isnull=True)
+    ).select_related('sender', 'receiver').order_by('-created_at')[:5]
+    
+    announcements_list = []
+    for ann in latest_announcements:
+        sender_name = ann.sender.get_full_name() or ann.sender.username
+        announcements_list.append({
+            'id': ann.id,
+            'subject': ann.subject,
+            'sender': sender_name,
+            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
+        })
+    
+    chart_data_json = json.dumps(chart_data)
+    
+    return render(request, 'instructor_main.html', {
+        'instructor_info': instructor_info,
+        'academic_term': academic_term,
+        'courses_list': courses_list,
+        'total_courses': total_courses,
+        'total_students': total_students,
+        'chart_data': chart_data,
+        'chart_data_json': chart_data_json,
+        'latest_announcements': announcements_list,
+    })
 
 @instructor_required
 def instructor_profile(request):
@@ -1074,7 +1150,96 @@ def set_instructor_session(request):
 
 @faculty_head_required
 def faculty_head_dashboard(request):
-    return render(request, 'faculty_head.html', {'show_welcome': True})
+    from datetime import datetime
+    from .models import Announcement
+    from django.db.models import Q
+    
+    faculty_head_user = request.user
+    profile = getattr(faculty_head_user, 'profile', None)
+    faculty_head_data = get_faculty_head_data(faculty_head_user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    faculty_head_info = {
+        'username': faculty_head_user.username,
+        'name': f"{faculty_head_user.first_name} {faculty_head_user.last_name}".strip() or faculty_head_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
+    
+    current_month = datetime.now().month
+    current_year = datetime.now().year
+    
+    if current_month >= 9:
+        academic_term = f"{current_year}-{current_year + 1} Fall"
+    elif current_month >= 2:
+        academic_term = f"{current_year - 1}-{current_year} Spring"
+    else:
+        academic_term = f"{current_year - 1}-{current_year} Fall"
+    
+    courses_list = []
+    total_students_set = set()
+    total_instructors_set = set()
+    chart_data = {'labels': [], 'data': []}
+    
+    if faculty_head_department:
+        courses = Course.objects.filter(department=faculty_head_department).select_related('instructor').prefetch_related('students')
+        for course in courses:
+            students = course.students.all()
+            student_count = students.count()
+            
+            for student in students:
+                total_students_set.add(student.id)
+            
+            if course.instructor:
+                total_instructors_set.add(course.instructor.id)
+            
+            instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() if course.instructor else 'Unknown'
+            if not instructor_name or instructor_name == ' ':
+                instructor_name = course.instructor.username if course.instructor else 'Unknown'
+            
+            courses_list.append({
+                'id': course.id,
+                'name': course.name,
+                'code': course.code,
+                'credits': course.credits,
+                'instructor': instructor_name,
+                'student_count': student_count,
+            })
+            
+            chart_data['labels'].append(course.name)
+            chart_data['data'].append(student_count)
+    
+    total_courses = len(courses_list)
+    total_students = len(total_students_set)
+    total_instructors = len(total_instructors_set)
+    
+    latest_announcements = Announcement.objects.filter(
+        Q(sender=faculty_head_user) | Q(receiver=faculty_head_user) | Q(receiver__isnull=True)
+    ).select_related('sender', 'receiver').order_by('-created_at')[:5]
+    
+    announcements_list = []
+    for ann in latest_announcements:
+        sender_name = ann.sender.get_full_name() or ann.sender.username
+        announcements_list.append({
+            'id': ann.id,
+            'subject': ann.subject,
+            'sender': sender_name,
+            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
+        })
+    
+    chart_data_json = json.dumps(chart_data)
+    
+    return render(request, 'faculty_head_main.html', {
+        'faculty_head_info': faculty_head_info,
+        'academic_term': academic_term,
+        'courses_list': courses_list,
+        'total_courses': total_courses,
+        'total_students': total_students,
+        'total_instructors': total_instructors,
+        'chart_data': chart_data,
+        'chart_data_json': chart_data_json,
+        'latest_announcements': announcements_list,
+    })
 
 @faculty_head_required
 def faculty_head_profile(request):
