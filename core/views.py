@@ -9,10 +9,146 @@ from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
-from django.db import connection
-from .models import Grade, Student, Course, ProgramOutcome, UserProfile
+from django.db import transaction
+from django.db.models import Q
+from django.core.cache import cache
+from .models import Grade, Student, Course, ProgramOutcome
 
 User = get_user_model()
+
+
+def get_instructors_map():
+    cache_key = 'instructors_map_db'
+    cached_map = cache.get(cache_key)
+    if cached_map is not None:
+        return cached_map
+    
+    instructors = User.objects.filter(profile__role='instructor').select_related('profile')
+    instructors_map = {}
+    for user in instructors:
+        full_name = (user.first_name + ' ' + user.last_name).strip()
+        if full_name:
+            instructors_map[user.username] = full_name
+        else:
+            instructors_map[user.username] = user.username
+    
+    # Cache'e kaydet (1 saat)
+    cache.set(cache_key, instructors_map, 3600)
+    return instructors_map
+
+
+def get_faculty_heads_map():
+    """Faculty heads veritabanından username -> full_name mapping'i döndür (cache'li)"""
+    cache_key = 'faculty_heads_map_db'
+    cached_map = cache.get(cache_key)
+    if cached_map is not None:
+        return cached_map
+    
+    faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
+    faculty_heads_map = {}
+    for user in faculty_heads:
+        full_name = (user.first_name + ' ' + user.last_name).strip()
+        if full_name:
+            faculty_heads_map[user.username] = full_name
+        else:
+            faculty_heads_map[user.username] = user.username
+    
+    # Cache'e kaydet (1 saat)
+    cache.set(cache_key, faculty_heads_map, 3600)
+    return faculty_heads_map
+
+
+def get_faculty_head_data(username):
+    """Belirli bir faculty head'in veritabanı verisini döndür (cache'li)"""
+    cache_key = f'faculty_head_data_{username}'
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+    
+    try:
+        user = User.objects.select_related('profile', 'profile__faculty').get(
+            username=username, 
+            profile__role='faculty_head'
+        )
+        profile = user.profile
+        
+        # Courses bilgisini al
+        courses = [course.name for course in profile.courses.all()]
+        
+        data = {
+            'username': user.username,
+            'firstName': user.first_name,
+            'lastName': user.last_name,
+            'department': profile.department or '',
+            'faculty': profile.faculty.name if profile.faculty else '',
+            'courses': courses,
+        }
+        
+        # Cache'e kaydet (1 saat)
+        cache.set(cache_key, data, 3600)
+        return data
+    except User.DoesNotExist:
+        return {}
+
+
+def get_students_data():
+    """Students veritabanı verisini döndür (cache'li)"""
+    cache_key = 'students_data_db'
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+    
+    students = Student.objects.select_related('user').prefetch_related('courses')
+    students_list = []
+    for student in students:
+        courses = [course.name for course in student.courses.all()]
+        students_list.append({
+            'username': student.username,
+            'firstName': student.first_name or (student.user.first_name if student.user else ''),
+            'lastName': student.last_name or (student.user.last_name if student.user else ''),
+            'department': student.department or '',
+            'year': student.year,
+            'courses': courses,
+        })
+    
+    # Cache'e kaydet (1 saat)
+    cache.set(cache_key, students_list, 3600)
+    return students_list
+
+
+def get_instructor_data(username):
+    """Belirli bir instructor'ın veritabanı verisini döndür (cache'li)"""
+    cache_key = f'instructor_data_{username}'
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+    
+    try:
+        user = User.objects.select_related('profile', 'profile__faculty').prefetch_related('profile__courses').get(
+            username=username,
+            profile__role='instructor'
+        )
+        profile = user.profile
+        
+        # Courses bilgisini al (hem Course modelinden hem de UserProfile'dan)
+        courses_from_profile = [course.name for course in profile.courses.all()]
+        courses_from_instructor = [course.name for course in user.instructor_courses.all()]
+        all_courses = list(set(courses_from_profile + courses_from_instructor))
+        
+        data = {
+            'username': user.username,
+            'firstName': user.first_name,
+            'lastName': user.last_name,
+            'department': profile.department or '',
+            'faculty': profile.faculty.name if profile.faculty else '',
+            'courses': all_courses,
+        }
+        
+        # Cache'e kaydet (1 saat)
+        cache.set(cache_key, data, 3600)
+        return data
+    except User.DoesNotExist:
+        return {}
 
 
 def faculty_head_required(view_func):
@@ -71,48 +207,36 @@ def upload_grades(request):
     final_source = normalized_fields['final']
 
     try:
-        def parse_score(raw_value, label):
-            value = (raw_value or '').strip()
-            if value == '':
-                raise ValueError(f'{label} must not be empty')
-            return float(value)
+        with transaction.atomic():
+            def parse_score(raw_value, label):
+                value = (raw_value or '').strip()
+                if value == '':
+                    raise ValueError(f'{label} must not be empty')
+                return float(value)
 
-        for row in reader:
-            username = (row[username_source] or '').strip()
-            course_name = (row[course_source] or '').strip()
-            midterm = parse_score(row[midterm_source], 'midterm')
-            assignment = parse_score(row[assignment_source], 'assignment')
-            final = parse_score(row[final_source], 'final')
+            for row in reader:
+                username = (row[username_source] or '').strip()
+                course_name = (row[course_source] or '').strip()
+                midterm = parse_score(row[midterm_source], 'midterm')
+                assignment = parse_score(row[assignment_source], 'assignment')
+                final = parse_score(row[final_source], 'final')
 
-            if not username or not course_name:
-                return JsonResponse({'error': 'Username and course_name are required'}, status=400)
+                if not username or not course_name:
+                    return JsonResponse({'error': 'Username and course_name are required'}, status=400)
 
-            student = Student.objects.filter(username=username).first()
-            if not student:
-                return JsonResponse({'error': f'Student not found: {username}'}, status=400)
+                student = Student.objects.filter(username=username).first()
+                if not student:
+                    return JsonResponse({'error': f'Student not found: {username}'}, status=400)
 
-            course = Course.objects.filter(name=course_name).first()
-            if not course:
-                return JsonResponse({'error': f'Course not found: {course_name}'}, status=400)
+                course = Course.objects.filter(name=course_name).first()
+                if not course:
+                    return JsonResponse({'error': f'Course not found: {course_name}'}, status=400)
 
-            from django.utils import timezone
-            # CSV'den gelen notları hem eski formatta hem de yeni formatta kaydet
-            Grade.objects.update_or_create(
-                student=student,
-                course=course,
-                defaults={
-                    'midterm': midterm, 
-                    'assignment': assignment, 
-                    'final': final,
-                    'grades': {
-                        'Midterm': midterm,
-                        'Assignment': assignment,
-                        'Final': final
-                    },
-                    'uploaded_file_name': csv_file.name,
-                    'uploaded_at': timezone.now()
-                }
-            )
+                Grade.objects.update_or_create(
+                    student=student,
+                    course=course,
+                    defaults={'midterm': midterm, 'assignment': assignment, 'final': final}
+                )
     except (KeyError, ValueError) as exc:
         return JsonResponse({'error': f'CSV hatası: {exc}'}, status=400)
 
@@ -153,7 +277,7 @@ def instructor_login(request):
                 profile = user.profile
                 if profile.role == 'instructor':
                     auth_login(request, user)
-                    request.session['instructor_username'] = username
+                    # Django zaten user'ı session'da tutuyor, ekstra session key'e gerek yok
                     return JsonResponse({'status': 'success', 'username': username})
                 else:
                     return JsonResponse({'status': 'error', 'message': 'User is not an instructor'}, status=403)
@@ -192,39 +316,40 @@ def faculty_head_login(request):
         
         from .models import UserProfile, Faculty
         
-        first_name = faculty_head.get('firstName') or faculty_head.get('first_name', '')
-        last_name = faculty_head.get('lastName') or faculty_head.get('last_name', '')
-        
-        user, created = User.objects.get_or_create(
-            username=username,
-            defaults={'first_name': first_name, 'last_name': last_name}
-        )
-        
-        if created:
-            user.set_unusable_password()
-            user.save()
-        
-        profile, _ = UserProfile.objects.get_or_create(
-            user=user,
-            defaults={'role': 'faculty_head'}
-        )
-        
-        if profile.role != 'faculty_head':
-            profile.role = 'faculty_head'
-            profile.save()
-        
-        if faculty_head.get('faculty'):
-            faculty_name = faculty_head['faculty']
-            faculty_slug = faculty_name.lower().replace(' ', '-')
-            try:
-                faculty = Faculty.objects.get(slug=faculty_slug)
-            except Faculty.DoesNotExist:
-                faculty, _ = Faculty.objects.get_or_create(
-                    slug=faculty_slug,
-                    defaults={'name': faculty_name}
-                )
-            profile.faculty = faculty
-            profile.save()
+        with transaction.atomic():
+            first_name = faculty_head.get('firstName') or faculty_head.get('first_name', '')
+            last_name = faculty_head.get('lastName') or faculty_head.get('last_name', '')
+            
+            user, created = User.objects.get_or_create(
+                username=username,
+                defaults={'first_name': first_name, 'last_name': last_name}
+            )
+            
+            if created:
+                user.set_unusable_password()
+                user.save()
+            
+            profile, _ = UserProfile.objects.get_or_create(
+                user=user,
+                defaults={'role': 'faculty_head'}
+            )
+            
+            if profile.role != 'faculty_head':
+                profile.role = 'faculty_head'
+                profile.save()
+            
+            if faculty_head.get('faculty'):
+                faculty_name = faculty_head['faculty']
+                faculty_slug = faculty_name.lower().replace(' ', '-')
+                try:
+                    faculty = Faculty.objects.get(slug=faculty_slug)
+                except Faculty.DoesNotExist:
+                    faculty, _ = Faculty.objects.get_or_create(
+                        slug=faculty_slug,
+                        defaults={'name': faculty_name}
+                    )
+                profile.faculty = faculty
+                profile.save()
         
         auth_login(request, user)
         return redirect('faculty-head')
@@ -241,12 +366,7 @@ def student_dashboard(request):
             student = Student.objects.get(username=username)
             grades_qs = Grade.objects.filter(student=student).select_related('course')
             
-            students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
-            try:
-                with open(students_json_path, encoding='utf-8') as f:
-                    students_data = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                students_data = []
+            students_data = get_students_data()
             
             user_courses = []
             for entry in students_data:
@@ -272,29 +392,22 @@ def student_dashboard(request):
 
 
 def instructor_required(view_func):
-    """Decorator to check if user is an instructor (based on session)"""
+    """Decorator to check if user is authenticated and is an instructor"""
     def wrapper(request, *args, **kwargs):
-        username = request.session.get('instructor_username')
-        
-        if not username:
+        if not request.user.is_authenticated:
             from django.shortcuts import redirect
             return redirect('instructor-login')
         
-        user, created = User.objects.get_or_create(username=username)
-        if created:
-            user.set_unusable_password()
-            user.save()
+        try:
+            profile = request.user.profile
+            if profile.role != 'instructor':
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You are not allowed here")
+        except AttributeError:
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("User profile not found")
         
-        from .models import UserProfile
-        profile, profile_created = UserProfile.objects.get_or_create(
-            user=user,
-            defaults={'role': 'instructor'}
-        )
-        if not profile_created and profile.role != 'instructor':
-            profile.role = 'instructor'
-            profile.save()
-        
-        request.instructor_user = user
+        request.instructor_user = request.user
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -332,62 +445,10 @@ def instructor_my_courses(request):
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
     
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    instructor_courses_from_json = []
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_list = json.load(f)
-            for inst in instructors_list:
-                if inst.get('username') == instructor_user.username:
-                    instructor_courses_from_json = inst.get('courses', []) or []
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
-    
     courses_data = []
-    course_names_from_db = set()
-    course_names_from_json_set = set(instructor_courses_from_json)
-    
     if profile:
         courses = profile.courses.all().select_related('instructor')
         for course in courses:
-            if course.name in course_names_from_json_set:
-                course_names_from_db.add(course.name)
-                instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
-                courses_data.append({
-                    'id': course.id,
-                    'name': course.name,
-                    'code': course.code,
-                    'instructor': instructor_name,
-                    'department': course.department,
-                    'credits': course.credits,
-                })
-            else:
-                if course.name == 'Software' and instructor_user.username == 'baris.arslan':
-                    profile.courses.remove(course)
-    
-    for course_name in instructor_courses_from_json:
-        if course_name not in course_names_from_db:
-            course = Course.objects.filter(name=course_name).first()
-            if not course:
-                default_instructor = UserProfile.objects.filter(role='instructor').first()
-                default_instructor_user = default_instructor.user if default_instructor else User.objects.first()
-                course, created = Course.objects.get_or_create(
-                    name=course_name,
-                    defaults={
-                        'code': '',
-                        'department': profile.department if profile else '',
-                        'instructor': instructor_user,
-                        'credits': None,
-                    }
-                )
-                if not created and course.instructor != instructor_user:
-                    course.instructor = instructor_user
-                    course.save()
-            
-            if course and profile:
-                profile.courses.add(course)
-            
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
             courses_data.append({
                 'id': course.id,
@@ -395,7 +456,6 @@ def instructor_my_courses(request):
                 'code': course.code,
                 'instructor': instructor_name,
                 'department': course.department,
-                'credits': course.credits,
             })
     
     return render(request, 'instructor.html', {
@@ -409,11 +469,6 @@ def instructor_grades(request):
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
     
-    # Eğer course_name parametresi varsa, o dersin not sayfasına yönlendir
-    course_name = request.GET.get('course')
-    if course_name:
-        return redirect('instructor_course_grades', course_name=course_name)
-    
     courses = []
     if profile:
         courses = [course.name for course in profile.courses.all()]
@@ -426,108 +481,102 @@ def instructor_grades(request):
 
 @instructor_required
 def instructor_course_grades(request, course_name):
-    """Seçilen ders için not yönetim sayfası"""
+    from django.utils import timezone
+    from datetime import datetime
+    
     instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return redirect('instructor_grades')
     
-    # Dersin bu hocaya ait olduğunu kontrol et
-    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+    if profile and course not in profile.courses.all():
+        return HttpResponseForbidden("You don't have access to this course")
     
-    # Bu dersi alan öğrencileri getir
-    students = Student.objects.filter(courses=course).order_by('first_name', 'last_name', 'username')
+    # Course'a kayıtlı öğrencileri al
+    students = Student.objects.filter(courses=course).order_by('username')
     
-    # Debug: Öğrenci sayısını kontrol et
-    if not students.exists():
-        # Eğer hiç öğrenci yoksa, JSON dosyasından kontrol et
-        import os
-        students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
-        try:
-            with open(students_json_path, encoding='utf-8') as f:
-                students_data = json.load(f)
-                # JSON'dan bu dersi alan öğrencileri bul
-                course_students = []
-                for student_data in students_data:
-                    if course_name in student_data.get('courses', []):
-                        student, created = Student.objects.get_or_create(
-                            username=student_data['username'],
-                            defaults={
-                                'student_id': student_data.get('student_id', student_data['username']),
-                                'first_name': student_data.get('firstName', ''),
-                                'last_name': student_data.get('lastName', ''),
-                                'department': student_data.get('department', ''),
-                                'year': student_data.get('year')
-                            }
-                        )
-                        if created or course not in student.courses.all():
-                            student.courses.add(course)
-                        course_students.append(student)
-                students = Student.objects.filter(id__in=[s.id for s in course_students]).order_by('first_name', 'last_name', 'username')
-        except (OSError, json.JSONDecodeError):
-            pass
-    
-    # Mevcut notları getir
-    grades = Grade.objects.filter(course=course).select_related('student')
-    grades_dict = {g.student.id: g for g in grades}
-    
-    # Öğrenciler için not bilgilerini hazırla
+    # Her öğrenci için grade bilgilerini al
     students_with_grades = []
     for student in students:
-        grade = grades_dict.get(student.id)
-        grades_dict_data = grade.grades if grade and grade.grades else {}
-        grades_json = json.dumps(grades_dict_data)
+        grade_obj = Grade.objects.filter(student=student, course=course).first()
+        
+        grades_dict = {}
+        is_finalized = False
+        
+        if grade_obj:
+            # Yeni JSONField'dan notları al
+            if grade_obj.grades:
+                grades_dict = grade_obj.grades
+            # Eski alanlardan notları al (geriye dönük uyumluluk)
+            elif grade_obj.midterm is not None or grade_obj.assignment is not None or grade_obj.final is not None:
+                if grade_obj.midterm is not None:
+                    grades_dict['Midterm'] = grade_obj.midterm
+                if grade_obj.assignment is not None:
+                    grades_dict['Assignment'] = grade_obj.assignment
+                if grade_obj.final is not None:
+                    grades_dict['Final'] = grade_obj.final
+            
+            is_finalized = grade_obj.is_finalized
+        
         students_with_grades.append({
             'student': student,
-            'grades': grades_dict_data,  # Template'de kullanmak için dict olarak
-            'grades_json': grades_json,  # JavaScript'te kullanmak için JSON string
-            'is_finalized': grade.is_finalized if grade else False
+            'grades': grades_dict,
+            'is_finalized': is_finalized
         })
     
-    # CSV dosya bilgisi
+    # Uploaded file bilgisini al (course'daki herhangi bir grade'den)
     uploaded_file = None
-    if grades.exists():
-        first_grade = grades.first()
-        if first_grade.uploaded_file_name:
-            uploaded_file = {
-                'name': first_grade.uploaded_file_name,
-                'uploaded_at': first_grade.uploaded_at
-            }
+    grade_with_file = Grade.objects.filter(course=course).exclude(uploaded_file_name='').first()
+    if grade_with_file and grade_with_file.uploaded_file_name:
+        uploaded_file = {
+            'name': grade_with_file.uploaded_file_name,
+            'uploaded_at': grade_with_file.uploaded_at
+        }
     
-    # Kesinleştirme durumu
-    is_finalized = any(g.is_finalized for g in grades_dict.values()) if grades_dict else False
+    is_finalized = all(item['is_finalized'] for item in students_with_grades if item['grades'])
     
-    # JavaScript için JSON formatında öğrenci verileri
-    students_with_grades_json = []
-    for item in students_with_grades:
-        student_name = item['student'].first_name + ' ' + item['student'].last_name if (item['student'].first_name or item['student'].last_name) else item['student'].username
-        students_with_grades_json.append({
+    students_with_grades_json = json.dumps([
+        {
             'id': item['student'].id,
-            'name': student_name,
-            'grades': item['grades']
-        })
-    students_with_grades_json_str = json.dumps(students_with_grades_json)
+            'username': item['student'].username,
+            'first_name': item['student'].first_name or '',
+            'last_name': item['student'].last_name or '',
+            'grades': item['grades'],
+            'is_finalized': item['is_finalized']
+        }
+        for item in students_with_grades
+    ])
     
-    context = {
+    return render(request, 'instructor/course_grades.html', {
         'course': course,
         'students': students,
         'students_with_grades': students_with_grades,
-        'students_with_grades_json': students_with_grades_json_str,
-        'grades': grades_dict,
+        'students_with_grades_json': students_with_grades_json,
         'uploaded_file': uploaded_file,
         'is_finalized': is_finalized
-    }
-    
-    return render(request, 'instructor/course_grades.html', context)
+    })
 
-@csrf_exempt
 @instructor_required
+@csrf_exempt
 def delete_uploaded_csv(request, course_name):
-    """Yüklenen CSV dosyasını sil (notları silmez, sadece dosya bilgisini)"""
     if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     instructor_user = request.instructor_user
-    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+    profile = getattr(instructor_user, 'profile', None)
     
-    # Sadece dosya bilgisini temizle (notları silme)
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    # Instructor'ın bu course'a erişimi var mı kontrol et
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    # Course'daki tüm grade'lerden uploaded file bilgisini temizle
     Grade.objects.filter(course=course).update(
         uploaded_file_name='',
         uploaded_at=None
@@ -535,67 +584,91 @@ def delete_uploaded_csv(request, course_name):
     
     return JsonResponse({'status': 'ok'})
 
-@csrf_exempt
 @instructor_required
+@csrf_exempt
 def update_manual_grades(request, course_name):
-    """Manuel not girişi için güncelleme"""
     if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     instructor_user = request.instructor_user
-    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+    profile = getattr(instructor_user, 'profile', None)
     
-    # Kesinleştirilmiş mi kontrol et
-    existing_grades = Grade.objects.filter(course=course)
-    if any(g.is_finalized for g in existing_grades):
-        return JsonResponse({'error': 'Grades are finalized and cannot be changed'}, status=403)
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
     
-    data = json.loads(request.body)
-    students_data = data.get('students', [])
+    # Instructor'ın bu course'a erişimi var mı kontrol et
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
     
-    for student_data in students_data:
-        student_id = student_data.get('student_id')
-        student = get_object_or_404(Student, id=student_id)
+    # Grade'ler finalized mi kontrol et
+    finalized_grades = Grade.objects.filter(course=course, is_finalized=True).exists()
+    if finalized_grades:
+        return JsonResponse({'error': 'Grades are finalized and cannot be updated'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        students_data = data.get('students', [])
         
-        grade, created = Grade.objects.get_or_create(
-            student=student,
-            course=course,
-            defaults={}
-        )
-        
-        # Dinamik notları güncelle
-        # Format: [{"name": "1. Vize", "score": 85}, {"name": "Final", "score": 90}]
-        grades_list = student_data.get('grades', [])
-        grades_dict = {}
-        for grade_item in grades_list:
-            name = grade_item.get('name', '').strip()
-            score = grade_item.get('score', '')
-            if name and score:
+        with transaction.atomic():
+            for student_data in students_data:
+                student_id = student_data.get('student_id')
+                grades_list = student_data.get('grades', [])
+                
                 try:
-                    grades_dict[name] = float(score)
-                except (ValueError, TypeError):
-                    pass
+                    student = Student.objects.get(id=student_id)
+                except Student.DoesNotExist:
+                    continue
+                
+                # Grades dict'ini oluştur
+                grades_dict = {}
+                for grade_item in grades_list:
+                    grade_name = grade_item.get('name', '').strip()
+                    grade_score = grade_item.get('score')
+                    if grade_name and grade_score is not None:
+                        try:
+                            grades_dict[grade_name] = float(grade_score)
+                        except (ValueError, TypeError):
+                            continue
+                
+                # Grade objesini güncelle veya oluştur
+                Grade.objects.update_or_create(
+                    student=student,
+                    course=course,
+                    defaults={'grades': grades_dict}
+                )
         
-        grade.grades = grades_dict
-        grade.save()
-    
-    return JsonResponse({'status': 'ok'})
+        return JsonResponse({'status': 'ok'})
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
 
-@csrf_exempt
 @instructor_required
+@csrf_exempt
 def finalize_grades(request, course_name):
-    """Notları kesinleştir"""
     if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    
-    instructor_user = request.instructor_user
-    course = get_object_or_404(Course, name=course_name, instructor=instructor_user)
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     from django.utils import timezone
-    Grade.objects.filter(course=course).update(
-        is_finalized=True,
-        finalized_at=timezone.now()
-    )
+    
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    # Instructor'ın bu course'a erişimi var mı kontrol et
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    # Course'daki tüm grade'leri finalized yap
+    with transaction.atomic():
+        Grade.objects.filter(course=course).update(
+            is_finalized=True,
+            finalized_at=timezone.now()
+        )
     
     return JsonResponse({'status': 'ok'})
 
@@ -607,126 +680,64 @@ def instructor_announcements(request):
     instructors = User.objects.filter(profile__role='instructor').select_related('profile')
     faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
     
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    
-    instructors_map = {}
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                username = inst.get('username')
-                first_name = inst.get('firstName', '')
-                last_name = inst.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    instructors_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    faculty_heads_map = {}
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_data = json.load(f)
-            for fh in faculty_heads_data:
-                username = fh.get('username')
-                first_name = fh.get('firstName', '')
-                last_name = fh.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    faculty_heads_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
+    instructors_map = get_instructors_map()
+    faculty_heads_map = get_faculty_heads_map()
     
     if request.method == 'POST':
         message = (request.POST.get('message') or '').strip()
         subject = (request.POST.get('subject') or '').strip()
-        receivers_str = (request.POST.get('receivers') or '').strip()
+        receiver_username = (request.POST.get('receiver') or '').strip()
         
         if message:
             if not subject:
                 subject = 'No Topic'
             
-            from datetime import datetime
+            receiver = None
+            receiver_role = None
+            if receiver_username:
+                try:
+                    receiver = User.objects.get(username=receiver_username)
+                    profile = getattr(receiver, 'profile', None)
+                    if profile:
+                        receiver_role = profile.role
+                except User.DoesNotExist:
+                    pass
             
-            instructor_courses = Course.objects.filter(instructor=instructor_user)
-            
-            if receivers_str:
-                receiver_list = [r.strip() for r in receivers_str.split(',') if r.strip()]
-                
-                selected_courses = []
-                selected_users = []
-                
-                for receiver in receiver_list:
-                    course = instructor_courses.filter(name=receiver).first()
-                    if course:
-                        selected_courses.append(course)
-                    else:
-                        try:
-                            user = User.objects.get(username=receiver)
-                            profile = getattr(user, 'profile', None)
-                            if profile and profile.role in ['instructor', 'faculty_head']:
-                                selected_users.append(user)
-                        except User.DoesNotExist:
-                            pass
-                
-                for course in selected_courses:
-                    students = course.students.all()
-                    for student in students:
-                        if student.user:
-                            with connection.cursor() as cursor:
-                                cursor.execute("""
-                                    INSERT INTO core_announcement (sender_id, receiver_id, subject, message, sender_role, receiver_role, created_at)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                """, [instructor_user.id, student.user.id, subject, message, 'instructor', None, datetime.now()])
-                
-                for user in selected_users:
-                    profile = getattr(user, 'profile', None)
-                    receiver_role = profile.role if profile else None
-                    with connection.cursor() as cursor:
-                        cursor.execute("""
-                            INSERT INTO core_announcement (sender_id, receiver_id, subject, message, sender_role, receiver_role, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """, [instructor_user.id, user.id, subject, message, 'instructor', receiver_role, datetime.now()])
+            with transaction.atomic():
+                Announcement.objects.create(
+                    sender=instructor_user,
+                    receiver=receiver,
+                    subject=subject,
+                    message=message,
+                    sender_role='instructor',
+                    receiver_role=receiver_role
+                )
             
             return redirect('instructor_announcements')
     
-    instructor_courses = Course.objects.filter(instructor=instructor_user)
+    # ORM ile announcements'ları çek - select_related ile JOIN optimizasyonu
+    announcements = Announcement.objects.filter(
+        Q(sender=instructor_user) | Q(receiver=instructor_user)
+    ).select_related('sender', 'receiver').order_by('-created_at')
     
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT 
-                a.id, a.subject, a.message, a.sender_role, a.receiver_role, a.created_at,
-                a.sender_id, a.receiver_id,
-                sender.username as sender_username, sender.first_name as sender_first_name, sender.last_name as sender_last_name,
-                receiver.username as receiver_username, receiver.first_name as receiver_first_name, receiver.last_name as receiver_last_name
-            FROM core_announcement a
-            INNER JOIN auth_user sender ON a.sender_id = sender.id
-            LEFT JOIN auth_user receiver ON a.receiver_id = receiver.id
-            WHERE a.sender_id = %s OR a.receiver_id = %s
-            ORDER BY a.created_at DESC
-        """, [instructor_user.id, instructor_user.id])
-        
-        rows = cursor.fetchall()
-        all_announcements = []
-        for row in rows:
-            ann_id, subject, message, sender_role, receiver_role, created_at, sender_id, receiver_id, sender_username, sender_first_name, sender_last_name, receiver_username, receiver_first_name, receiver_last_name = row
-            all_announcements.append({
-                'id': ann_id,
-                'subject': subject,
-                'message': message,
-                'sender_id': sender_id,
-                'receiver_id': receiver_id,
-                'sender_username': sender_username,
-                'sender_first_name': sender_first_name,
-                'sender_last_name': sender_last_name,
-                'receiver_username': receiver_username,
-                'receiver_first_name': receiver_first_name,
-                'receiver_last_name': receiver_last_name,
-                'sender_role': sender_role,
-                'receiver_role': receiver_role,
-                'created_at': created_at,
-            })
+    all_announcements = []
+    for ann in announcements:
+        all_announcements.append({
+            'id': ann.id,
+            'subject': ann.subject,
+            'message': ann.message,
+            'sender_id': ann.sender.id,
+            'receiver_id': ann.receiver.id if ann.receiver else None,
+            'sender_username': ann.sender.username,
+            'sender_first_name': ann.sender.first_name,
+            'sender_last_name': ann.sender.last_name,
+            'receiver_username': ann.receiver.username if ann.receiver else None,
+            'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
+            'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
+            'sender_role': ann.sender_role,
+            'receiver_role': ann.receiver_role,
+            'created_at': ann.created_at,
+        })
     
     announcements_data = []
     for ann in all_announcements:
@@ -739,19 +750,6 @@ def instructor_announcements(request):
             receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
             receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
             receiver_username = ann['receiver_username']
-            
-            if ann['sender_id'] == instructor_user.id and ann['receiver_role'] is None:
-                try:
-                    receiver_user = User.objects.get(id=ann['receiver_id'])
-                    student = Student.objects.filter(user=receiver_user).first()
-                    if student:
-                        student_courses = student.courses.all()
-                        for course in student_courses:
-                            if course in instructor_courses:
-                                receiver_name = f"{course.name} class students"
-                                break
-                except:
-                    pass
         
         created_at_str = ann['created_at']
         if isinstance(created_at_str, str):
@@ -780,45 +778,16 @@ def instructor_announcements(request):
         })
     
     recipients = []
-    
-    for course in instructor_courses:
-        recipients.append({
-            'username': course.name,  # Using course name as identifier
-            'name': f"{course.name} class students",
-            'role': 'course'
-        })
-    
     for inst in instructors:
         if inst.username != instructor_user.username:
             name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
-            recipients.append({
-                'username': inst.username,
-                'name': name,
-                'role': 'instructor'
-            })
+            recipients.append({'username': inst.username, 'name': name, 'role': 'instructor'})
     
     for fh in faculty_heads:
         name = faculty_heads_map.get(fh.username) or fh.get_full_name() or fh.username
-        recipients.append({
-            'username': fh.username,
-            'name': name,
-            'role': 'faculty_head'
-        })
+        recipients.append({'username': fh.username, 'name': name, 'role': 'faculty_head'})
     
-    sent_messages_raw = [ann for ann in announcements_data if ann['is_sent']]
-    
-    sent_messages = []
-    seen_groups = {}
-    
-    for ann in sent_messages_raw:
-        if 'class students' in ann['receiver']:
-            key = f"{ann['subject']}|{ann['message']}|{ann['created_at'][:16]}"
-            if key not in seen_groups:
-                seen_groups[key] = ann
-                sent_messages.append(ann)
-        else:
-            sent_messages.append(ann)
-    
+    sent_messages = [ann for ann in announcements_data if ann['is_sent']]
     received_messages = [ann for ann in announcements_data if not ann['is_sent']]
     
     return render(request, 'instructor/instructor_announcements.html', {
@@ -831,12 +800,21 @@ def instructor_announcements(request):
 
 @csrf_exempt
 def set_instructor_session(request):
-    """Set instructor username in session"""
+    """Set instructor username in session (only for authenticated instructors)"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'status': 'error', 'message': 'Not authenticated'}, status=401)
+    
+    # User'ın instructor olduğunu kontrol et
+    try:
+        if request.user.profile.role != 'instructor':
+            return JsonResponse({'status': 'error', 'message': 'Not an instructor'}, status=403)
+    except AttributeError:
+        return JsonResponse({'status': 'error', 'message': 'Profile not found'}, status=403)
+    
     if request.method == 'POST':
-        username = request.POST.get('username')
-        if username:
-            request.session['instructor_username'] = username
-            return JsonResponse({'status': 'ok'})
+        # Sadece authenticated user'ın kendi username'ini set edebilir
+        request.session['instructor_username'] = request.user.username
+        return JsonResponse({'status': 'ok'})
     return JsonResponse({'status': 'error'}, status=400)
 
 
@@ -869,231 +847,56 @@ def faculty_head_profile(request):
 
 @faculty_head_required
 def all_courses(request):
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_head_data = {}
-    faculty_head_department = None
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    faculty_head_data = fh
-                    faculty_head_department = fh.get('department')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    instructors_list = []
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_list = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    if request.method == 'POST':
-        action = request.POST.get('action')
-        
-        if action == 'add_course':
-            course_name = request.POST.get('course_name', '').strip()
-            instructor_username = request.POST.get('instructor_username', '').strip()
-            credits_str = request.POST.get('credits', '').strip()
-            
-            if course_name:
-                credits = None
-                if credits_str:
-                    try:
-                        credits = int(credits_str)
-                    except ValueError:
-                        pass
-                
-                instructor_user = None
-                if instructor_username:
-                    try:
-                        instructor_user = User.objects.get(username=instructor_username)
-                    except User.DoesNotExist:
-                        pass
-                
-                if not instructor_user:
-                    default_instructor = UserProfile.objects.filter(role='instructor').first()
-                    instructor_user = default_instructor.user if default_instructor else User.objects.first()
-                
-                course, created = Course.objects.get_or_create(
-                    name=course_name,
-                    defaults={
-                        'code': '',
-                        'department': faculty_head_department or '',
-                        'instructor': instructor_user,
-                        'credits': credits,
-                    }
-                )
-                
-                if not created:
-                    course.instructor = instructor_user
-                    if credits is not None:
-                        course.credits = credits
-                    course.save()
-                
-                if instructor_username:
-                    for inst in instructors_list:
-                        if inst.get('username') == instructor_username:
-                            if 'courses' not in inst:
-                                inst['courses'] = []
-                            if course_name not in inst['courses']:
-                                inst['courses'].append(course_name)
-                            break
-                    
-                    with open(instructors_json_path, 'w', encoding='utf-8') as f:
-                        json.dump(instructors_list, f, indent=2, ensure_ascii=False)
-        
-        elif action == 'update_course':
-            course_id = request.POST.get('course_id')
-            course_name = request.POST.get('course_name', '').strip()
-            instructor_username = request.POST.get('instructor_username', '').strip()
-            credits_str = request.POST.get('credits', '').strip()
-            
-            try:
-                course = Course.objects.get(id=course_id)
-                
-                if course_name:
-                    course.name = course_name
-                
-                if instructor_username:
-                    try:
-                        instructor_user = User.objects.get(username=instructor_username)
-                        course.instructor = instructor_user
-                    except User.DoesNotExist:
-                        pass
-                
-                if credits_str:
-                    try:
-                        credits = int(credits_str)
-                        course.credits = credits
-                    except ValueError:
-                        pass
-                else:
-                    course.credits = None
-                
-                course.save()
-            except Course.DoesNotExist:
-                pass
-        
-        elif action == 'add_instructor':
-            course_id = request.POST.get('course_id')
-            instructor_username = request.POST.get('instructor_username', '').strip()
-            
-            try:
-                course = Course.objects.get(id=course_id)
-                course_name = course.name
-                
-                if instructor_username:
-                    try:
-                        instructor_user = User.objects.get(username=instructor_username)
-                        course.instructor = instructor_user
-                        course.save()
-                    except User.DoesNotExist:
-                        pass
-                    
-                    for inst in instructors_list:
-                        if inst.get('username') == instructor_username:
-                            if 'courses' not in inst:
-                                inst['courses'] = []
-                            if course_name not in inst['courses']:
-                                inst['courses'].append(course_name)
-                            break
-                    
-                    with open(instructors_json_path, 'w', encoding='utf-8') as f:
-                        json.dump(instructors_list, f, indent=2, ensure_ascii=False)
-            except Course.DoesNotExist:
-                pass
-        
-        return redirect('all_courses')
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
     
     faculty_courses_with_instructors = []
     course_instructor_map = {}
     
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                fh_department = fh.get('department')
-                if faculty_head_department:
-                    if fh_department != faculty_head_department:
-                        continue
-                
-                fh_courses = fh.get('courses', []) or []
-                full_name = (fh.get('firstName', '') + ' ' + fh.get('lastName', '')).strip()
-                faculty_head_name = full_name if full_name else 'Unknown'
-                faculty_head_username = fh.get('username', '')
-                
-                for course_name in fh_courses:
-                    if course_name not in course_instructor_map:
-                        course_instructor_map[course_name] = []
-                    course_instructor_map[course_name].append({
-                        'name': faculty_head_name,
-                        'username': faculty_head_username
-                    })
-    except (OSError, json.JSONDecodeError):
-        pass
+    # Instructors'ları veritabanından çek
+    instructors = User.objects.filter(profile__role='instructor').select_related('profile').prefetch_related('profile__courses', 'instructor_courses')
+    for user in instructors:
+        profile = user.profile
+        inst_department = profile.department
+        if faculty_head_department:
+            if inst_department != faculty_head_department:
+                continue
+        
+        # Courses bilgisini al (hem UserProfile'dan hem de Course modelinden)
+        courses_from_profile = [course.name for course in profile.courses.all()]
+        courses_from_instructor = [course.name for course in user.instructor_courses.all()]
+        inst_courses = list(set(courses_from_profile + courses_from_instructor))
+        
+        full_name = (user.first_name + ' ' + user.last_name).strip()
+        instructor_name = full_name if full_name else user.username
+        
+        for course_name in inst_courses:
+            if course_name not in course_instructor_map:
+                course_instructor_map[course_name] = []
+            course_instructor_map[course_name].append(instructor_name)
     
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_list = json.load(f)
-            
-            for inst in instructors_list:
-                inst_department = inst.get('department')
-                if faculty_head_department:
-                    if inst_department != faculty_head_department:
-                        continue
-                
-                inst_courses = inst.get('courses', []) or []
-                full_name = (inst.get('firstName', '') + ' ' + inst.get('lastName', '')).strip()
-                instructor_name = full_name if full_name else 'Unknown'
-                instructor_username = inst.get('username', '')
-                
-                for course_name in inst_courses:
-                    if course_name not in course_instructor_map:
-                        course_instructor_map[course_name] = []
-                    instructor_exists = any(inst_item['username'] == instructor_username for inst_item in course_instructor_map[course_name])
-                    if not instructor_exists:
-                        course_instructor_map[course_name].append({
-                            'name': instructor_name,
-                            'username': instructor_username
-                        })
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    db_courses = Course.objects.filter(department=faculty_head_department) if faculty_head_department else Course.objects.all()
-    for course in db_courses:
-        if course.name not in course_instructor_map:
-            course_instructor_map[course.name] = []
-        instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
-        instructor_exists = any(inst['username'] == course.instructor.username for inst in course_instructor_map[course.name])
-        if not instructor_exists:
-            course_instructor_map[course.name].append({
-                'name': instructor_name,
-                'username': course.instructor.username
-            })
+    # Faculty heads'leri veritabanından çek
+    faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile').prefetch_related('profile__courses')
+    for user in faculty_heads:
+        profile = user.profile
+        fh_department = profile.department
+        if faculty_head_department and fh_department != faculty_head_department:
+            continue
+        
+        fh_courses = [course.name for course in profile.courses.all()]
+        full_name = (user.first_name + ' ' + user.last_name).strip()
+        faculty_head_name = full_name if full_name else user.username
+        
+        for course_name in fh_courses:
+            if course_name not in course_instructor_map:
+                course_instructor_map[course_name] = []
+            course_instructor_map[course_name].append(faculty_head_name)
     
     for course_name, instructors in sorted(course_instructor_map.items()):
-        instructor_display = ', '.join([inst['name'] for inst in instructors]) if instructors else 'Unknown'
+        instructor_display = ', '.join(instructors) if instructors else 'Unknown'
         
         course = Course.objects.filter(name=course_name).first()
         first_learning_outcome = None
-        instructor_username = ''
-        
-        if instructors and len(instructors) > 0:
-            instructor_username = instructors[0]['username']
-            if course and course.instructor and course.instructor.username != instructor_username:
-                try:
-                    correct_instructor = User.objects.get(username=instructor_username)
-                    course.instructor = correct_instructor
-                    course.save()
-                except User.DoesNotExist:
-                    pass
-        elif course and course.instructor:
-            instructor_username = course.instructor.username
-        
         if course:
             learning_outcomes = ProgramOutcome.objects.filter(course_name=course_name).order_by('-created_at')
             first_learning_outcome = learning_outcomes.first()
@@ -1101,22 +904,8 @@ def all_courses(request):
         faculty_courses_with_instructors.append({
             'course': course_name,
             'instructor': instructor_display,
-            'instructor_username': instructor_username,
             'course_id': course.id if course else None,
-            'credits': course.credits if course else None,
             'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
-        })
-    
-    available_instructors = []
-    for inst in instructors_list:
-        inst_department = inst.get('department')
-        if faculty_head_department:
-            if inst_department != faculty_head_department:
-                continue
-        full_name = (inst.get('firstName', '') + ' ' + inst.get('lastName', '')).strip()
-        available_instructors.append({
-            'username': inst.get('username', ''),
-            'name': full_name if full_name else inst.get('username', '')
         })
     
     import json as json_module
@@ -1124,8 +913,6 @@ def all_courses(request):
         'faculty_head': faculty_head_data,
         'faculty_courses': faculty_courses_with_instructors,
         'faculty_courses_json': json_module.dumps(faculty_courses_with_instructors),
-        'available_instructors': available_instructors,
-        'available_instructors_json': json_module.dumps(available_instructors),
     }
     return render(request, 'faculty/all_courses.html', context)
 
@@ -1164,65 +951,30 @@ def program_outcomes(request):
     profile = getattr(request.user, 'profile', None)
     faculty = profile.faculty if profile else None
     
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_head_department = None
-    faculty_name_from_json = None
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    faculty_head_department = fh.get('department')
-                    faculty_name_from_json = fh.get('faculty')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    faculty_name_from_json = faculty_head_data.get('faculty')
     
     if not faculty and faculty_name_from_json:
-        faculty_slug = faculty_name_from_json.lower().replace(' ', '-')
-        try:
-            faculty = Faculty.objects.get(slug=faculty_slug)
-        except Faculty.DoesNotExist:
-            faculty, _ = Faculty.objects.get_or_create(
-                slug=faculty_slug,
-                defaults={'name': faculty_name_from_json}
-            )
-        if profile:
-            profile.faculty = faculty
-            profile.save()
+        with transaction.atomic():
+            faculty_slug = faculty_name_from_json.lower().replace(' ', '-')
+            try:
+                faculty = Faculty.objects.get(slug=faculty_slug)
+            except Faculty.DoesNotExist:
+                faculty, _ = Faculty.objects.get_or_create(
+                    slug=faculty_slug,
+                    defaults={'name': faculty_name_from_json}
+                )
+            if profile:
+                profile.faculty = faculty
+                profile.save()
     
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
         creator = request.user if request.user.is_authenticated else None
         
-        faculty_heads_map = {}
-        try:
-            with open(faculty_heads_json_path, encoding='utf-8') as f:
-                faculty_heads_list = json.load(f)
-                for fh in faculty_heads_list:
-                    username = fh.get('username')
-                    first_name = fh.get('firstName', '')
-                    last_name = fh.get('lastName', '')
-                    full_name = (first_name + ' ' + last_name).strip()
-                    if full_name:
-                        faculty_heads_map[username] = full_name
-        except (OSError, json.JSONDecodeError):
-            pass
-        
-        instructors_map = {}
-        instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-        try:
-            with open(instructors_json_path, encoding='utf-8') as f:
-                instructors_list = json.load(f)
-                for inst in instructors_list:
-                    username = inst.get('username')
-                    first_name = inst.get('firstName', '')
-                    last_name = inst.get('lastName', '')
-                    full_name = (first_name + ' ' + last_name).strip()
-                    if full_name:
-                        instructors_map[username] = full_name
-        except (OSError, json.JSONDecodeError):
-            pass
+        faculty_heads_map = get_faculty_heads_map()
+        instructors_map = get_instructors_map()
         
         if not creator:
             outcomes_qs = ProgramOutcome.objects.filter(faculty=faculty, course_name='').select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
@@ -1292,37 +1044,12 @@ def program_outcomes(request):
                 'faculty_head_department': faculty_head_department,
             })
         
-        ProgramOutcome.objects.create(text=text, course_name='', faculty=faculty, created_by=creator)
+        with transaction.atomic():
+            ProgramOutcome.objects.create(text=text, course_name='', faculty=faculty, created_by=creator)
         return redirect('program_outcomes')
     
-    faculty_heads_map = {}
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                username = fh.get('username')
-                first_name = fh.get('firstName', '')
-                last_name = fh.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    faculty_heads_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    instructors_map = {}
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_list = json.load(f)
-            for inst in instructors_list:
-                username = inst.get('username')
-                first_name = inst.get('firstName', '')
-                last_name = inst.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    instructors_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
+    faculty_heads_map = get_faculty_heads_map()
+    instructors_map = get_instructors_map()
     
     outcomes_qs = ProgramOutcome.objects.filter(faculty=faculty, course_name='').select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
     outcomes_data = []
@@ -1366,17 +1093,8 @@ def program_outcome_detail(request, outcome_id):
     profile = getattr(request.user, 'profile', None)
     faculty = profile.faculty if profile else None
     
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_name_from_json = None
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    faculty_name_from_json = fh.get('faculty')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_name_from_json = faculty_head_data.get('faculty')
     
     if not faculty and faculty_name_from_json:
         try:
@@ -1391,20 +1109,7 @@ def program_outcome_detail(request, outcome_id):
     
     related_learning_outcomes = outcome.learning_outcomes.all().order_by('-created_at')
     
-    instructors_map = {}
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_list = json.load(f)
-            for inst in instructors_list:
-                username = inst.get('username')
-                first_name = inst.get('firstName', '')
-                last_name = inst.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    instructors_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
+    instructors_map = get_instructors_map()
     
     learning_outcomes_data = []
     for lo in related_learning_outcomes:
@@ -1438,8 +1143,9 @@ def update_program_outcome(request, outcome_id):
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
         if text:
-            outcome.text = text
-            outcome.save()
+            with transaction.atomic():
+                outcome.text = text
+                outcome.save()
         return redirect('program_outcomes')
     
     return JsonResponse({'text': outcome.text})
@@ -1451,7 +1157,8 @@ def delete_program_outcome(request, outcome_id):
     faculty = profile.faculty if profile else None
     
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, faculty=faculty, created_by=request.user)
-    outcome.delete()
+    with transaction.atomic():
+        outcome.delete()
     
     return redirect('program_outcomes')
 
@@ -1465,17 +1172,8 @@ def create_program_outcome(request):
             'error': 'No faculty assigned to your profile.',
         })
     
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_head_department = None
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    faculty_head_department = fh.get('department')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
     
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
@@ -1496,7 +1194,8 @@ def create_program_outcome(request):
                 }
             )
         
-        ProgramOutcome.objects.create(text=text, course_name=course_name, faculty=faculty, created_by=creator)
+        with transaction.atomic():
+            ProgramOutcome.objects.create(text=text, course_name=course_name, faculty=faculty, created_by=creator)
         return redirect('program_outcomes')
     
     return render(request, 'faculty/create_outcome.html', {
@@ -1554,7 +1253,8 @@ def faculty_head_course_learning_outcomes(request, course_name):
         if not course:
             course = Course.objects.filter(name__iexact=course_name).first()
             if course and profile:
-                profile.courses.add(course)
+                with transaction.atomic():
+                    profile.courses.add(course)
         if not course:
             return HttpResponseForbidden("You don't have access to this course.")
         course_id = course.id
@@ -1586,19 +1286,20 @@ def faculty_head_course_learning_outcomes(request, course_name):
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
         if text:
-            learning_outcome = ProgramOutcome.objects.create(
-                text=text,
-                course_name=course_name,
-                created_by=request.user
-            )
-            selected_program_outcome_ids = request.POST.getlist('program_outcomes')
-            if selected_program_outcome_ids:
-                program_outcomes_to_link = ProgramOutcome.objects.filter(
-                    id__in=selected_program_outcome_ids,
-                    faculty=faculty,
-                    course_name=''
+            with transaction.atomic():
+                learning_outcome = ProgramOutcome.objects.create(
+                    text=text,
+                    course_name=course_name,
+                    created_by=request.user
                 )
-                learning_outcome.related_program_outcomes.set(program_outcomes_to_link)
+                selected_program_outcome_ids = request.POST.getlist('program_outcomes')
+                if selected_program_outcome_ids:
+                    program_outcomes_to_link = ProgramOutcome.objects.filter(
+                        id__in=selected_program_outcome_ids,
+                        faculty=faculty,
+                        course_name=''
+                    )
+                    learning_outcome.related_program_outcomes.set(program_outcomes_to_link)
         course_name_slug = course_name.replace(' ', '-')
         return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
     
@@ -1606,35 +1307,9 @@ def faculty_head_course_learning_outcomes(request, course_name):
         course_name=course_name
     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
     
-    instructors_map = {}
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_list = json.load(f)
-            for inst in instructors_list:
-                username = inst.get('username')
-                first_name = inst.get('firstName', '')
-                last_name = inst.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    instructors_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
+    instructors_map = get_instructors_map()
     
-    faculty_heads_map = {}
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                username = fh.get('username')
-                first_name = fh.get('firstName', '')
-                last_name = fh.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    faculty_heads_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
+    faculty_heads_map = get_faculty_heads_map()
     
     outcomes_data = []
     for o in outcomes_qs:
@@ -1759,8 +1434,9 @@ def faculty_head_update_learning_outcome(request, outcome_id):
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
         if text:
-            outcome.text = text
-            outcome.save()
+            with transaction.atomic():
+                outcome.text = text
+                outcome.save()
         profile = getattr(request.user, 'profile', None)
         if profile:
             course = None
@@ -1771,7 +1447,8 @@ def faculty_head_update_learning_outcome(request, outcome_id):
             if not course:
                 course = Course.objects.filter(name__iexact=outcome.course_name).first()
                 if course and profile:
-                    profile.courses.add(course)
+                    with transaction.atomic():
+                        profile.courses.add(course)
             course_id = course.id if course else None
             if course_id:
                 return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
@@ -1786,7 +1463,8 @@ def faculty_head_unlink_program_outcome(request, outcome_id, program_outcome_id)
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
     program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
     
-    outcome.related_program_outcomes.remove(program_outcome)
+    with transaction.atomic():
+        outcome.related_program_outcomes.remove(program_outcome)
     
     profile = getattr(request.user, 'profile', None)
     if profile:
@@ -1798,7 +1476,8 @@ def faculty_head_unlink_program_outcome(request, outcome_id, program_outcome_id)
         if not course:
             course = Course.objects.filter(name__iexact=outcome.course_name).first()
             if course and profile:
-                profile.courses.add(course)
+                with transaction.atomic():
+                    profile.courses.add(course)
         course_id = course.id if course else None
         if course_id:
             return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
@@ -1819,12 +1498,13 @@ def faculty_head_link_program_outcomes(request, outcome_id):
                 faculty = profile.faculty
             
             if faculty:
-                program_outcomes_to_link = ProgramOutcome.objects.filter(
-                    id__in=selected_program_outcome_ids,
-                    faculty=faculty,
-                    course_name=''
-                )
-                outcome.related_program_outcomes.add(*program_outcomes_to_link)
+                with transaction.atomic():
+                    program_outcomes_to_link = ProgramOutcome.objects.filter(
+                        id__in=selected_program_outcome_ids,
+                        faculty=faculty,
+                        course_name=''
+                    )
+                    outcome.related_program_outcomes.add(*program_outcomes_to_link)
     
     profile = getattr(request.user, 'profile', None)
     if profile:
@@ -1850,240 +1530,13 @@ def give_grade(request, course_id):
 
 @faculty_head_required
 def faculty_head_grades(request):
-    course_name = request.GET.get('course')
-    if course_name:
-        return redirect('faculty_head_course_grades', course_name=course_name)
-    
-    profile = getattr(request.user, 'profile', None)
-    courses = []
-    if profile:
-        courses = [course.name for course in profile.courses.all()]
-    
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('username') == request.user.username:
-                    json_courses = fh.get('courses', [])
-                    courses = list(set(courses + json_courses))
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    instructor_courses = Course.objects.filter(instructor=request.user)
-    courses = list(set(courses + [course.name for course in instructor_courses]))
-    
-    return render(request, 'faculty/faculty_head_grades.html', {
-        'faculty_head_courses': courses
-    })
-
-@faculty_head_required
-def faculty_head_course_grades(request, course_name):
-    profile = getattr(request.user, 'profile', None)
-    
-    course = None
-    if profile:
-        course = profile.courses.filter(name=course_name).first()
-    
-    if not course:
-        course = Course.objects.filter(name=course_name, instructor=request.user).first()
-    
-    if not course:
-        faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-        try:
-            with open(faculty_heads_json_path, encoding='utf-8') as f:
-                faculty_heads_list = json.load(f)
-                for fh in faculty_heads_list:
-                    if fh.get('username') == request.user.username:
-                        if course_name in fh.get('courses', []):
-                            course = Course.objects.filter(name=course_name).first()
-                            if not course:
-                                course = Course.objects.create(
-                                    name=course_name,
-                                    instructor=request.user
-                                )
-                            break
-        except (OSError, json.JSONDecodeError):
-            pass
-    
-    if not course:
-        from django.http import Http404
-        raise Http404("Course not found")
-    
-    students = Student.objects.filter(courses=course).order_by('first_name', 'last_name', 'username')
-    
-    if not students.exists():
-        students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
-        try:
-            with open(students_json_path, encoding='utf-8') as f:
-                students_data = json.load(f)
-                course_students = []
-                for student_data in students_data:
-                    if course_name in student_data.get('courses', []):
-                        student, created = Student.objects.get_or_create(
-                            username=student_data['username'],
-                            defaults={
-                                'student_id': student_data.get('student_id', student_data['username']),
-                                'first_name': student_data.get('firstName', ''),
-                                'last_name': student_data.get('lastName', ''),
-                                'department': student_data.get('department', ''),
-                                'year': student_data.get('year')
-                            }
-                        )
-                        if created or course not in student.courses.all():
-                            student.courses.add(course)
-                        course_students.append(student)
-                students = Student.objects.filter(id__in=[s.id for s in course_students]).order_by('first_name', 'last_name', 'username')
-        except (OSError, json.JSONDecodeError):
-            pass
-    
-    grades = Grade.objects.filter(course=course).select_related('student')
-    grades_dict = {g.student.id: g for g in grades}
-    
-    students_with_grades = []
-    for student in students:
-        grade = grades_dict.get(student.id)
-        grades_dict_data = grade.grades if grade and grade.grades else {}
-        grades_json = json.dumps(grades_dict_data)
-        students_with_grades.append({
-            'student': student,
-            'grades': grades_dict_data,
-            'grades_json': grades_json,
-            'is_finalized': grade.is_finalized if grade else False
-        })
-    
-    uploaded_file = None
-    if grades.exists():
-        first_grade = grades.first()
-        if first_grade.uploaded_file_name:
-            uploaded_file = {
-                'name': first_grade.uploaded_file_name,
-                'uploaded_at': first_grade.uploaded_at
-            }
-    
-    is_finalized = any(g.is_finalized for g in grades_dict.values()) if grades_dict else False
-    
-    students_with_grades_json = []
-    for item in students_with_grades:
-        student_name = item['student'].first_name + ' ' + item['student'].last_name if (item['student'].first_name or item['student'].last_name) else item['student'].username
-        students_with_grades_json.append({
-            'id': item['student'].id,
-            'name': student_name,
-            'grades': item['grades']
-        })
-    students_with_grades_json_str = json.dumps(students_with_grades_json)
+    faculty_head_data = get_faculty_head_data(request.user.username)
     
     context = {
-        'course': course,
-        'students': students,
-        'students_with_grades': students_with_grades,
-        'students_with_grades_json': students_with_grades_json_str,
-        'grades': grades_dict,
-        'uploaded_file': uploaded_file,
-        'is_finalized': is_finalized
+        'faculty_head': json.dumps(faculty_head_data),
+        'user': request.user,
     }
-    
-    return render(request, 'faculty/faculty_head_course_grades.html', context)
-
-@csrf_exempt
-@faculty_head_required
-def faculty_head_delete_uploaded_csv(request, course_name):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    
-    profile = getattr(request.user, 'profile', None)
-    course = None
-    if profile:
-        course = profile.courses.filter(name=course_name).first()
-    
-    if not course:
-        course = Course.objects.filter(name=course_name, instructor=request.user).first()
-    
-    if not course:
-        return JsonResponse({'error': 'Course not found'}, status=404)
-    
-    Grade.objects.filter(course=course).update(
-        uploaded_file_name='',
-        uploaded_at=None
-    )
-    
-    return JsonResponse({'status': 'ok'})
-
-@csrf_exempt
-@faculty_head_required
-def faculty_head_update_manual_grades(request, course_name):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    
-    profile = getattr(request.user, 'profile', None)
-    course = None
-    if profile:
-        course = profile.courses.filter(name=course_name).first()
-    
-    if not course:
-        course = Course.objects.filter(name=course_name, instructor=request.user).first()
-    
-    if not course:
-        return JsonResponse({'error': 'Course not found'}, status=404)
-    
-    existing_grades = Grade.objects.filter(course=course)
-    if any(g.is_finalized for g in existing_grades):
-        return JsonResponse({'error': 'Grades are finalized and cannot be changed'}, status=403)
-    
-    data = json.loads(request.body)
-    students_data = data.get('students', [])
-    
-    for student_data in students_data:
-        student_id = student_data.get('student_id')
-        student = get_object_or_404(Student, id=student_id)
-        
-        grade, created = Grade.objects.get_or_create(
-            student=student,
-            course=course,
-            defaults={}
-        )
-        
-        grades_list = student_data.get('grades', [])
-        grades_dict = {}
-        for grade_item in grades_list:
-            name = grade_item.get('name', '').strip()
-            score = grade_item.get('score', '')
-            if name and score:
-                try:
-                    grades_dict[name] = float(score)
-                except (ValueError, TypeError):
-                    pass
-        
-        grade.grades = grades_dict
-        grade.save()
-    
-    return JsonResponse({'status': 'ok'})
-
-@csrf_exempt
-@faculty_head_required
-def faculty_head_finalize_grades(request, course_name):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    
-    profile = getattr(request.user, 'profile', None)
-    course = None
-    if profile:
-        course = profile.courses.filter(name=course_name).first()
-    
-    if not course:
-        course = Course.objects.filter(name=course_name, instructor=request.user).first()
-    
-    if not course:
-        return JsonResponse({'error': 'Course not found'}, status=404)
-    
-    from django.utils import timezone
-    Grade.objects.filter(course=course).update(
-        is_finalized=True,
-        finalized_at=timezone.now()
-    )
-    
-    return JsonResponse({'status': 'ok'})
+    return render(request, 'faculty/faculty_head_grades.html', context)
 
 
 @instructor_required
@@ -2095,17 +1548,8 @@ def learning_outcomes(request):
     instructor_courses = Course.objects.filter(instructor=instructor_user)
     course_names_from_db = [course.name for course in instructor_courses]
     
-    course_names_from_json = []
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                if inst.get('username') == username:
-                    course_names_from_json = inst.get('courses', []) or []
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    instructor_data = get_instructor_data(username)
+    course_names_from_json = instructor_data.get('courses', []) or []
     
     course_names = list(set(course_names_from_db + course_names_from_json))
     
@@ -2142,42 +1586,33 @@ def course_learning_outcomes(request, course_name):
     instructor_user = request.instructor_user
     username = instructor_user.username
     
-    instructor_department = None
-    instructor_faculty = None
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                if inst.get('username') == username:
-                    instructor_department = inst.get('department')
-                    instructor_faculty = inst.get('faculty')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    instructor_data = get_instructor_data(username)
+    instructor_department = instructor_data.get('department')
+    instructor_faculty = instructor_data.get('faculty')
     
+    # Faculty head department'ı bul
     faculty_head_department = None
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                if fh.get('department') == instructor_department:
-                    faculty_head_department = fh.get('department')
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    if instructor_department:
+        try:
+            faculty_head = User.objects.select_related('profile').get(
+                profile__role='faculty_head',
+                profile__department=instructor_department
+            )
+            faculty_head_department = faculty_head.profile.department
+        except User.DoesNotExist:
+            pass
     
     from .models import Faculty
     faculty = None
     if instructor_faculty:
-        try:
-            faculty = Faculty.objects.get(slug=instructor_faculty.lower())
-        except Faculty.DoesNotExist:
-            faculty, _ = Faculty.objects.get_or_create(
-                slug=instructor_faculty.lower(),
-                defaults={'name': instructor_faculty}
-            )
+        with transaction.atomic():
+            try:
+                faculty = Faculty.objects.get(slug=instructor_faculty.lower())
+            except Faculty.DoesNotExist:
+                faculty, _ = Faculty.objects.get_or_create(
+                    slug=instructor_faculty.lower(),
+                    defaults={'name': instructor_faculty}
+                )
     
     program_outcomes = []
     if faculty:
@@ -2255,8 +1690,9 @@ def update_learning_outcome(request, outcome_id):
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
         if text:
-            outcome.text = text
-            outcome.save()
+            with transaction.atomic():
+                outcome.text = text
+                outcome.save()
         course = Course.objects.filter(name=outcome.course_name, instructor=instructor_user).first()
         course_id = course.id if course else None
         if course_id:
@@ -2282,51 +1718,36 @@ def learning_outcome_detail(request, course_id, outcome_id):
             outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
             faculty = profile.faculty if profile else None
         else:
+            # Instructor kontrolü - Django'nun standart authentication kullan
             if not hasattr(request, 'instructor_user'):
-                username = request.session.get('instructor_username')
-                if not username:
-                    from django.shortcuts import redirect
-                    return redirect('instructor-login')
-                user, created = User.objects.get_or_create(username=username)
-                if created:
-                    user.set_unusable_password()
-                    user.save()
-                from .models import UserProfile
-                profile, profile_created = UserProfile.objects.get_or_create(
-                    user=user,
-                    defaults={'role': 'instructor'}
-                )
-                if not profile_created and profile.role != 'instructor':
-                    profile.role = 'instructor'
-                    profile.save()
-                request.instructor_user = user
+                # User'ın gerçekten instructor olduğunu kontrol et
+                try:
+                    user_profile = request.user.profile
+                    if user_profile.role != 'instructor':
+                        from django.http import HttpResponseForbidden
+                        return HttpResponseForbidden("You are not allowed here")
+                except AttributeError:
+                    from django.http import HttpResponseForbidden
+                    return HttpResponseForbidden("User profile not found")
+                request.instructor_user = request.user
             instructor_user = request.instructor_user
             course = get_object_or_404(Course, id=course_id, instructor=instructor_user)
             outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name, created_by=instructor_user)
             
-            instructor_department = None
-            instructor_faculty = None
-            instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-            try:
-                with open(instructors_json_path, encoding='utf-8') as f:
-                    instructors_data = json.load(f)
-                    for inst in instructors_data:
-                        if inst.get('username') == instructor_user.username:
-                            instructor_department = inst.get('department')
-                            instructor_faculty = inst.get('faculty')
-                            break
-            except (OSError, json.JSONDecodeError):
-                pass
+            instructor_data = get_instructor_data(instructor_user.username)
+            instructor_department = instructor_data.get('department')
+            instructor_faculty = instructor_data.get('faculty')
             
             from .models import Faculty
             if instructor_faculty:
-                try:
-                    faculty = Faculty.objects.get(slug=instructor_faculty.lower())
-                except Faculty.DoesNotExist:
-                    faculty, _ = Faculty.objects.get_or_create(
-                        slug=instructor_faculty.lower(),
-                        defaults={'name': instructor_faculty}
-                    )
+                with transaction.atomic():
+                    try:
+                        faculty = Faculty.objects.get(slug=instructor_faculty.lower())
+                    except Faculty.DoesNotExist:
+                        faculty, _ = Faculty.objects.get_or_create(
+                            slug=instructor_faculty.lower(),
+                            defaults={'name': instructor_faculty}
+                        )
     else:
         from django.shortcuts import redirect
         return redirect('faculty-head-login')
@@ -2379,24 +1800,18 @@ def learning_outcome_graph(request, course_id, outcome_id):
             course = get_object_or_404(Course, id=course_id)
             outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
         else:
+            # Instructor kontrolü - Django'nun standart authentication kullan
             if not hasattr(request, 'instructor_user'):
-                username = request.session.get('instructor_username')
-                if not username:
-                    from django.shortcuts import redirect
-                    return redirect('instructor-login')
-                user, created = User.objects.get_or_create(username=username)
-                if created:
-                    user.set_unusable_password()
-                    user.save()
-                from .models import UserProfile
-                profile, profile_created = UserProfile.objects.get_or_create(
-                    user=user,
-                    defaults={'role': 'instructor'}
-                )
-                if not profile_created and profile.role != 'instructor':
-                    profile.role = 'instructor'
-                    profile.save()
-                request.instructor_user = user
+                # User'ın gerçekten instructor olduğunu kontrol et
+                try:
+                    user_profile = request.user.profile
+                    if user_profile.role != 'instructor':
+                        from django.http import HttpResponseForbidden
+                        return HttpResponseForbidden("You are not allowed here")
+                except AttributeError:
+                    from django.http import HttpResponseForbidden
+                    return HttpResponseForbidden("User profile not found")
+                request.instructor_user = request.user
             instructor_user = request.instructor_user
             course = get_object_or_404(Course, id=course_id, instructor=instructor_user)
             outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name, created_by=instructor_user)
@@ -2435,7 +1850,8 @@ def unlink_program_outcome(request, outcome_id, program_outcome_id):
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, created_by=instructor_user)
     program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
     
-    outcome.related_program_outcomes.remove(program_outcome)
+    with transaction.atomic():
+        outcome.related_program_outcomes.remove(program_outcome)
     
     course = Course.objects.filter(name=outcome.course_name, instructor=instructor_user).first()
     course_id = course.id if course else None
@@ -2456,38 +1872,46 @@ def link_program_outcomes(request, outcome_id):
         selected_program_outcome_ids = request.POST.getlist('program_outcomes')
         if selected_program_outcome_ids:
             instructor_department = None
-            instructor_faculty = None
-            instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-            try:
-                with open(instructors_json_path, encoding='utf-8') as f:
-                    instructors_data = json.load(f)
-                    for inst in instructors_data:
-                        if inst.get('username') == instructor_user.username:
-                            instructor_faculty = inst.get('faculty')
-                            break
-            except (OSError, json.JSONDecodeError):
-                pass
+            instructor_data = get_instructor_data(instructor_user.username)
+            instructor_faculty = instructor_data.get('faculty')
             
             from .models import Faculty
             faculty = None
             if instructor_faculty:
-                try:
-                    faculty = Faculty.objects.get(slug=instructor_faculty.lower())
-                except Faculty.DoesNotExist:
-                    faculty, _ = Faculty.objects.get_or_create(
-                        slug=instructor_faculty.lower(),
-                        defaults={'name': instructor_faculty}
-                    )
+                with transaction.atomic():
+                    try:
+                        faculty = Faculty.objects.get(slug=instructor_faculty.lower())
+                    except Faculty.DoesNotExist:
+                        faculty, _ = Faculty.objects.get_or_create(
+                            slug=instructor_faculty.lower(),
+                            defaults={'name': instructor_faculty}
+                        )
             
             if faculty:
-                program_outcomes_to_link = ProgramOutcome.objects.filter(
-                    id__in=selected_program_outcome_ids,
-                    faculty=faculty,
-                    course_name=''
-                )
-                outcome.related_program_outcomes.add(*program_outcomes_to_link)
+                with transaction.atomic():
+                    program_outcomes_to_link = ProgramOutcome.objects.filter(
+                        id__in=selected_program_outcome_ids,
+                        faculty=faculty,
+                        course_name=''
+                    )
+                    outcome.related_program_outcomes.add(*program_outcomes_to_link)
     
-    return redirect('learning_outcome_detail', outcome_id=outcome_id)
+    # course_id'yi bul - learning_outcome_detail için gerekli
+    course = Course.objects.filter(
+        name=outcome.course_name,
+        instructor=instructor_user
+    ).first()
+    
+    if course:
+        return redirect(
+            'learning_outcome_detail',
+            course_id=course.id,
+            outcome_id=outcome_id
+        )
+    else:
+        # Course bulunamazsa course_learning_outcomes'a yönlendir
+        course_name_slug = outcome.course_name.replace(' ', '-')
+        return redirect('course_learning_outcomes', course_name=course_name_slug)
 
 
 @instructor_required
@@ -2498,7 +1922,8 @@ def delete_learning_outcome(request, outcome_id):
     
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, created_by=instructor_user)
     course_name = outcome.course_name
-    outcome.delete()
+    with transaction.atomic():
+        outcome.delete()
     
     course_name_slug = course_name.replace(' ', '-')
     return redirect('course_learning_outcomes', course_name=course_name_slug)
@@ -2510,17 +1935,8 @@ def create_learning_outcome(request):
     instructor_user = request.instructor_user
     username = instructor_user.username
     
-    instructor_courses_from_json = []
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                if inst.get('username') == username:
-                    instructor_courses_from_json = inst.get('courses', []) or []
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    instructor_data = get_instructor_data(username)
+    instructor_courses_from_json = instructor_data.get('courses', []) or []
     
     course_names_from_db = [c.name for c in Course.objects.filter(instructor=instructor_user)]
     all_available_courses = list(set(course_names_from_db + instructor_courses_from_json))
@@ -2532,17 +1948,8 @@ def create_learning_outcome(request):
         if not course_name or not text:
             instructor_courses = Course.objects.filter(instructor=instructor_user)
             course_names_from_db = [course.name for course in instructor_courses]
-            course_names_from_json = []
-            instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-            try:
-                with open(instructors_json_path, encoding='utf-8') as f:
-                    instructors_data = json.load(f)
-                    for inst in instructors_data:
-                        if inst.get('username') == username:
-                            course_names_from_json = inst.get('courses', []) or []
-                            break
-            except (OSError, json.JSONDecodeError):
-                pass
+            instructor_data = get_instructor_data(username)
+            course_names_from_json = instructor_data.get('courses', []) or []
             course_names = list(set(course_names_from_db + course_names_from_json))
             
             return render(
@@ -2555,7 +1962,8 @@ def create_learning_outcome(request):
                 }
             )
         
-        ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=instructor_user)
+        with transaction.atomic():
+            ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=instructor_user)
         from django.urls import reverse
         course_name_slug = course_name.replace(' ', '-')
         redirect_url = reverse('course_learning_outcomes', args=[course_name_slug])
@@ -2565,17 +1973,8 @@ def create_learning_outcome(request):
     instructor_courses = Course.objects.filter(instructor=instructor_user)
     course_names_from_db = [course.name for course in instructor_courses]
     
-    course_names_from_json = []
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                if inst.get('username') == username:
-                    course_names_from_json = inst.get('courses', []) or []
-                    break
-    except (OSError, json.JSONDecodeError):
-        pass
+    instructor_data = get_instructor_data(username)
+    course_names_from_json = instructor_data.get('courses', []) or []
     
     course_names = list(set(course_names_from_db + course_names_from_json))
     
@@ -2624,12 +2023,11 @@ def student_courses(request):
     if not request.user.is_authenticated:
         return redirect('student-login')
     
-    courses_data = []
-    
     try:
         student = Student.objects.get(user=request.user)
         courses = student.courses.all().select_related('instructor')
         
+        courses_data = []
         for course in courses:
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
             courses_data.append({
@@ -2638,48 +2036,9 @@ def student_courses(request):
                 'code': course.code,
                 'instructor': instructor_name,
                 'department': course.department,
-                'credits': course.credits,
             })
     except Student.DoesNotExist:
-        pass
-    
-    # If no courses in database, try to sync from JSON
-    if not courses_data:
-        try:
-            student = Student.objects.get(user=request.user)
-            students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
-            
-            try:
-                with open(students_json_path, encoding='utf-8') as f:
-                    students_data = json.load(f)
-                    student_data = None
-                    for entry in students_data:
-                        if entry.get('username') == student.username:
-                            student_data = entry
-                            break
-                    
-                    if student_data:
-                        course_names = student_data.get('courses', [])
-                        for course_name in course_names:
-                            # Try to find course in database
-                            course = Course.objects.filter(name=course_name).first()
-                            if course:
-                                # Add course to student if not already added
-                                if course not in student.courses.all():
-                                    student.courses.add(course)
-                                
-                                instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
-                                courses_data.append({
-                                    'id': course.id,
-                                    'name': course.name,
-                                    'code': course.code,
-                                    'instructor': instructor_name,
-                                    'department': course.department,
-                                })
-            except (OSError, json.JSONDecodeError):
-                pass
-        except Student.DoesNotExist:
-            pass
+        courses_data = []
     
     return render(request, "student/courses.html", {
         'courses': courses_data
@@ -2698,23 +2057,8 @@ def student_grades(request):
         courses_with_grades = []
         for course in courses:
             grade_obj = grades_qs.filter(course=course).first()
-            # Yeni dinamik notlar sistemini kullan
-            grades_dict = grade_obj.grades if grade_obj and grade_obj.grades else {}
-            
-            # Eski alanları da kontrol et (geriye dönük uyumluluk için)
-            if not grades_dict and grade_obj:
-                if grade_obj.midterm is not None:
-                    grades_dict['Midterm'] = grade_obj.midterm
-                if grade_obj.assignment is not None:
-                    grades_dict['Assignment'] = grade_obj.assignment
-                if grade_obj.final is not None:
-                    grades_dict['Final'] = grade_obj.final
-            
             courses_with_grades.append({
                 'course_name': course.name,
-                'grades': grades_dict,
-                'credits': course.credits,
-                # Eski alanlar (geriye dönük uyumluluk)
                 'midterm': grade_obj.midterm if grade_obj else None,
                 'assignment': grade_obj.assignment if grade_obj else None,
                 'final': grade_obj.final if grade_obj else None,
@@ -2728,88 +2072,7 @@ def student_grades(request):
 
 
 def student_announcements(request):
-    if not request.user.is_authenticated:
-        return redirect('student-login')
-    
-    from .models import Announcement
-    from datetime import datetime
-    
-    student_user = request.user
-    
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT 
-                a.id, a.subject, a.message, a.sender_role, a.receiver_role, a.created_at,
-                a.sender_id, a.receiver_id,
-                sender.username as sender_username, sender.first_name as sender_first_name, sender.last_name as sender_last_name
-            FROM core_announcement a
-            INNER JOIN auth_user sender ON a.sender_id = sender.id
-            WHERE a.receiver_id = %s
-            ORDER BY a.created_at DESC
-        """, [student_user.id])
-        
-        rows = cursor.fetchall()
-        received_announcements = []
-        for row in rows:
-            ann_id, subject, message, sender_role, receiver_role, created_at, sender_id, receiver_id, sender_username, sender_first_name, sender_last_name = row
-            received_announcements.append({
-                'id': ann_id,
-                'subject': subject,
-                'message': message,
-                'sender_id': sender_id,
-                'sender_username': sender_username,
-                'sender_first_name': sender_first_name,
-                'sender_last_name': sender_last_name,
-                'sender_role': sender_role,
-                'created_at': created_at,
-            })
-    
-    announcements_data = []
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    instructors_map = {}
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                username = inst.get('username')
-                first_name = inst.get('firstName', '')
-                last_name = inst.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    instructors_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    for ann in received_announcements:
-        sender_full_name = f"{ann['sender_first_name']} {ann['sender_last_name']}".strip() if ann['sender_first_name'] or ann['sender_last_name'] else ''
-        sender_name = instructors_map.get(ann['sender_username']) or sender_full_name or ann['sender_username']
-        
-        created_at_str = ann['created_at']
-        if isinstance(created_at_str, str):
-            try:
-                created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
-            except:
-                try:
-                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
-                except:
-                    created_at_dt = datetime.now()
-            created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
-        else:
-            created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
-        
-        announcements_data.append({
-            'id': ann['id'],
-            'subject': ann['subject'],
-            'message': ann['message'],
-            'sender': sender_name,
-            'sender_username': ann['sender_username'],
-            'created_at': created_at_formatted,
-        })
-    
-    return render(request, "student/student_announcement.html", {
-        'received_messages': announcements_data,
-        'all_announcements': announcements_data,
-    })
+    return render(request, "student/student_announcement.html")
 
 @instructor_required
 def instructor_program_outcomes(request):
@@ -2849,19 +2112,7 @@ def instructor_program_outcomes(request):
     except (OSError, json.JSONDecodeError):
         pass
     
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_list = json.load(f)
-            for fh in faculty_heads_list:
-                username = fh.get('username')
-                first_name = fh.get('firstName', '')
-                last_name = fh.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    faculty_heads_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
+    faculty_heads_map = get_faculty_heads_map()
     
     outcomes_data = []
     for o in outcomes_qs:
@@ -2920,36 +2171,8 @@ def student_program_outcomes(request):
                 course_name=''
             ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
         
-        faculty_heads_map = {}
-        instructors_map = {}
-        
-        instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-        try:
-            with open(instructors_json_path, encoding='utf-8') as f:
-                instructors_list = json.load(f)
-                for inst in instructors_list:
-                    username = inst.get('username')
-                    first_name = inst.get('firstName', '')
-                    last_name = inst.get('lastName', '')
-                    full_name = (first_name + ' ' + last_name).strip()
-                    if full_name:
-                        instructors_map[username] = full_name
-        except (OSError, json.JSONDecodeError):
-            pass
-        
-        faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-        try:
-            with open(faculty_heads_json_path, encoding='utf-8') as f:
-                faculty_heads_list = json.load(f)
-                for fh in faculty_heads_list:
-                    username = fh.get('username')
-                    first_name = fh.get('firstName', '')
-                    last_name = fh.get('lastName', '')
-                    full_name = (first_name + ' ' + last_name).strip()
-                    if full_name:
-                        faculty_heads_map[username] = full_name
-        except (OSError, json.JSONDecodeError):
-            pass
+        faculty_heads_map = get_faculty_heads_map()
+        instructors_map = get_instructors_map()
         
         outcomes_data = []
         for o in outcomes_qs:
@@ -3004,20 +2227,7 @@ def student_course_learning_outcomes(request, course_id):
             course_name=course_name
         ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
         
-        instructors_map = {}
-        instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-        try:
-            with open(instructors_json_path, encoding='utf-8') as f:
-                instructors_list = json.load(f)
-                for inst in instructors_list:
-                    username = inst.get('username')
-                    first_name = inst.get('firstName', '')
-                    last_name = inst.get('lastName', '')
-                    full_name = (first_name + ' ' + last_name).strip()
-                    if full_name:
-                        instructors_map[username] = full_name
-        except (OSError, json.JSONDecodeError):
-            pass
+        instructors_map = get_instructors_map()
         
         outcomes_data = []
         for o in outcomes_qs:
@@ -3052,132 +2262,65 @@ def faculty_head_announcements(request):
     faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
     
 
-    instructors_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
-    faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    
-    instructors_map = {}
-    try:
-        with open(instructors_json_path, encoding='utf-8') as f:
-            instructors_data = json.load(f)
-            for inst in instructors_data:
-                username = inst.get('username')
-                first_name = inst.get('firstName', '')
-                last_name = inst.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    instructors_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
-    
-    faculty_heads_map = {}
-    try:
-        with open(faculty_heads_json_path, encoding='utf-8') as f:
-            faculty_heads_data = json.load(f)
-            for fh in faculty_heads_data:
-                username = fh.get('username')
-                first_name = fh.get('firstName', '')
-                last_name = fh.get('lastName', '')
-                full_name = (first_name + ' ' + last_name).strip()
-                if full_name:
-                    faculty_heads_map[username] = full_name
-    except (OSError, json.JSONDecodeError):
-        pass
+    # Cache'li helper fonksiyonları kullan
+    instructors_map = get_instructors_map()
+    faculty_heads_map = get_faculty_heads_map()
     
     if request.method == 'POST':
         message = (request.POST.get('message') or '').strip()
         subject = (request.POST.get('subject') or '').strip()
-        receivers_str = (request.POST.get('receivers') or '').strip()
+        receiver_username = (request.POST.get('receiver') or '').strip()
         
         if message:
             if not subject:
                 subject = 'No Topic'
             
-            from datetime import datetime
+            receiver = None
+            receiver_role = None
+            if receiver_username:
+                try:
+                    receiver = User.objects.get(username=receiver_username)
+                    profile = getattr(receiver, 'profile', None)
+                    if profile:
+                        receiver_role = profile.role
+                except User.DoesNotExist:
+                    pass
             
-            profile = getattr(faculty_head_user, 'profile', None)
-            faculty_head_courses = []
-            if profile:
-                faculty_head_courses = profile.courses.all()
-            
-            if receivers_str:
-                receiver_list = [r.strip() for r in receivers_str.split(',') if r.strip()]
-                
-                selected_courses = []
-                selected_users = []
-                
-                for receiver in receiver_list:
-                    course = faculty_head_courses.filter(name=receiver).first()
-                    if course:
-                        selected_courses.append(course)
-                    else:
-                        try:
-                            user = User.objects.get(username=receiver)
-                            user_profile = getattr(user, 'profile', None)
-                            if user_profile and user_profile.role in ['instructor', 'faculty_head']:
-                                selected_users.append(user)
-                        except User.DoesNotExist:
-                            pass
-                
-                for course in selected_courses:
-                    students = course.students.all()
-                    for student in students:
-                        if student.user:
-                            with connection.cursor() as cursor:
-                                cursor.execute("""
-                                    INSERT INTO core_announcement (sender_id, receiver_id, subject, message, sender_role, receiver_role, created_at)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                """, [faculty_head_user.id, student.user.id, subject, message, 'faculty_head', None, datetime.now()])
-                
-                for user in selected_users:
-                    user_profile = getattr(user, 'profile', None)
-                    receiver_role = user_profile.role if user_profile else None
-                    with connection.cursor() as cursor:
-                        cursor.execute("""
-                            INSERT INTO core_announcement (sender_id, receiver_id, subject, message, sender_role, receiver_role, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """, [faculty_head_user.id, user.id, subject, message, 'faculty_head', receiver_role, datetime.now()])
+            with transaction.atomic():
+                Announcement.objects.create(
+                    sender=faculty_head_user,
+                    receiver=receiver,
+                    subject=subject,
+                    message=message,
+                    sender_role='faculty_head',
+                    receiver_role=receiver_role
+                )
             
             return redirect('faculty-head-announcements')
     
-    profile = getattr(faculty_head_user, 'profile', None)
-    faculty_head_courses = []
-    if profile:
-        faculty_head_courses = profile.courses.all()
+    # ORM ile announcements'ları çek - select_related ile JOIN optimizasyonu
+    announcements = Announcement.objects.filter(
+        Q(sender=faculty_head_user) | Q(receiver=faculty_head_user)
+    ).select_related('sender', 'receiver').order_by('-created_at')
     
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT 
-                a.id, a.subject, a.message, a.sender_role, a.receiver_role, a.created_at,
-                a.sender_id, a.receiver_id,
-                sender.username as sender_username, sender.first_name as sender_first_name, sender.last_name as sender_last_name,
-                receiver.username as receiver_username, receiver.first_name as receiver_first_name, receiver.last_name as receiver_last_name
-            FROM core_announcement a
-            INNER JOIN auth_user sender ON a.sender_id = sender.id
-            LEFT JOIN auth_user receiver ON a.receiver_id = receiver.id
-            WHERE a.sender_id = %s OR a.receiver_id = %s
-            ORDER BY a.created_at DESC
-        """, [faculty_head_user.id, faculty_head_user.id])
-        
-        rows = cursor.fetchall()
-        all_announcements = []
-        for row in rows:
-            ann_id, subject, message, sender_role, receiver_role, created_at, sender_id, receiver_id, sender_username, sender_first_name, sender_last_name, receiver_username, receiver_first_name, receiver_last_name = row
-            all_announcements.append({
-                'id': ann_id,
-                'subject': subject,
-                'message': message,
-                'sender_id': sender_id,
-                'receiver_id': receiver_id,
-                'sender_username': sender_username,
-                'sender_first_name': sender_first_name,
-                'sender_last_name': sender_last_name,
-                'receiver_username': receiver_username,
-                'receiver_first_name': receiver_first_name,
-                'receiver_last_name': receiver_last_name,
-                'sender_role': sender_role,
-                'receiver_role': receiver_role,
-                'created_at': created_at,
-            })
+    all_announcements = []
+    for ann in announcements:
+        all_announcements.append({
+            'id': ann.id,
+            'subject': ann.subject,
+            'message': ann.message,
+            'sender_id': ann.sender.id,
+            'receiver_id': ann.receiver.id if ann.receiver else None,
+            'sender_username': ann.sender.username,
+            'sender_first_name': ann.sender.first_name,
+            'sender_last_name': ann.sender.last_name,
+            'receiver_username': ann.receiver.username if ann.receiver else None,
+            'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
+            'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
+            'sender_role': ann.sender_role,
+            'receiver_role': ann.receiver_role,
+            'created_at': ann.created_at,
+        })
     
     announcements_data = []
     for ann in all_announcements:
@@ -3190,19 +2333,6 @@ def faculty_head_announcements(request):
             receiver_full_name = f"{ann['receiver_first_name']} {ann['receiver_last_name']}".strip() if ann['receiver_first_name'] or ann['receiver_last_name'] else ''
             receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
             receiver_username = ann['receiver_username']
-            
-            if ann['sender_id'] == faculty_head_user.id and ann['receiver_role'] is None:
-                try:
-                    receiver_user = User.objects.get(id=ann['receiver_id'])
-                    student = Student.objects.filter(user=receiver_user).first()
-                    if student:
-                        student_courses = student.courses.all()
-                        for course in student_courses:
-                            if course in faculty_head_courses:
-                                receiver_name = f"{course.name} class students"
-                                break
-                except:
-                    pass
         
         created_at_str = ann['created_at']
         if isinstance(created_at_str, str):
@@ -3231,45 +2361,16 @@ def faculty_head_announcements(request):
         })
     
     recipients = []
-    
-    for course in faculty_head_courses:
-        recipients.append({
-            'username': course.name,
-            'name': f"{course.name} class students",
-            'role': 'course'
-        })
-    
     for inst in instructors:
         name = instructors_map.get(inst.username) or inst.get_full_name() or inst.username
-        recipients.append({
-            'username': inst.username,
-            'name': name,
-            'role': 'instructor'
-        })
+        recipients.append({'username': inst.username, 'name': name, 'role': 'instructor'})
     
     for fh in faculty_heads:
         if fh.username != faculty_head_user.username:
             name = faculty_heads_map.get(fh.username) or fh.get_full_name() or fh.username
-            recipients.append({
-                'username': fh.username,
-                'name': name,
-                'role': 'faculty_head'
-            })
+            recipients.append({'username': fh.username, 'name': name, 'role': 'faculty_head'})
     
-    sent_messages_raw = [ann for ann in announcements_data if ann['is_sent']]
-    
-    sent_messages = []
-    seen_groups = {}
-    
-    for ann in sent_messages_raw:
-        if 'class students' in ann['receiver']:
-            key = f"{ann['subject']}|{ann['message']}|{ann['created_at'][:16]}"
-            if key not in seen_groups:
-                seen_groups[key] = ann
-                sent_messages.append(ann)
-        else:
-            sent_messages.append(ann)
-    
+    sent_messages = [ann for ann in announcements_data if ann['is_sent']]
     received_messages = [ann for ann in announcements_data if not ann['is_sent']]
     
     return render(request, "faculty/faculty_announcements.html", {
