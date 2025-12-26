@@ -24,7 +24,7 @@
     "password": "barisarslan",
     "faculty": "Engineering",
     "department": "Computer Engineering",
-    "courses": ["Software"]
+    "courses": ["Software" ]
   },
   {
     "firstName": "Cengiz ",
