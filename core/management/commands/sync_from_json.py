@@ -81,6 +81,8 @@ class Command(BaseCommand):
                 student.user = user
                 student.save()
             
+            # Clear existing courses and add new ones from JSON
+            student.courses.clear()
             for course_name in student_data.get('courses', []):
                 course_obj = Course.objects.filter(name=course_name).first()
                 if course_obj:
@@ -124,6 +126,9 @@ class Command(BaseCommand):
                 profile.department = instructor_data.get('department', '')
                 profile.faculty = faculty
                 profile.save()
+            
+            # Clear existing courses for instructor
+            profile.courses.clear()
             
             for course_name in instructor_data.get('courses', []):
                 if course_name not in all_courses:

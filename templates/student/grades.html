@@ -8,14 +8,11 @@
 <div id="grades-section">
     {% if courses_with_grades %}
     <section class="grades-section">
-        <h2>Your Grades</h2>
         <table class="grades-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
                 <tr style="background-color: #0b5fff; color: white;">
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Midterm</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Assignment</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Final</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Grades</th>
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Details</th>
                 </tr>
             </thead>
@@ -23,9 +20,20 @@
                 {% for item in courses_with_grades %}
                 <tr style="border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px; border: 1px solid #ddd;">{{ item.course_name }}</td>
-                    <td style="padding: 12px; border: 1px solid #ddd;">{% if item.midterm is not None %}{{ item.midterm }}{% else %}-{% endif %}</td>
-                    <td style="padding: 12px; border: 1px solid #ddd;">{% if item.assignment is not None %}{{ item.assignment }}{% else %}-{% endif %}</td>
-                    <td style="padding: 12px; border: 1px solid #ddd;">{% if item.final is not None %}{{ item.final }}{% else %}-{% endif %}</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">
+                        {% if item.grades %}
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                {% for grade_name, grade_value in item.grades.items %}
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px; background-color: #f8f9fa; border-radius: 4px;">
+                                    <span style="font-weight: 600;">{{ grade_name }}:</span>
+                                    <span style="color: #0b5fff; font-weight: bold;">{{ grade_value }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span style="color: #666;">No grades available</span>
+                        {% endif %}
+                    </td>
                     <td style="padding: 12px; border: 1px solid #ddd;">
                         <button onclick="showDetails('{{ item.course_name }}')" style="padding: 6px 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
                             Show Details
@@ -41,9 +49,7 @@
             <thead>
                 <tr style="background-color: #0b5fff; color: white;">
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Midterm</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Assignment</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Final</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Grades</th>
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Details</th>
                 </tr>
             </thead>

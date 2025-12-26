@@ -19,18 +19,18 @@
     "department": "Computer Engineering",
     "faculty": "Engineering",
     "year": 4,
-    "courses": ["Operating Systems", "Software"]
+    "courses": ["Data Systems", "Computer Architecture", "Algorithms","Software"]
   },
   {
-    "firstName": "Pınar",
-    "lastName": "Çetin",
-    "username": "pınar.cetin",
-    "password": "54321",
-    "student_id": "221401018",
+    "firstName": "Pinar",
+    "lastName": "Cetin",
+    "username": "pinar.cetin",
+    "password": "9876",
+    "student_id": "221401039",
     "department": "Electronical Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Data Systems", "Operating Systems"]
+    "courses": ["Embedded Systems", "Electronics","Data Systems","Operating Systems"]
   },
   {
     "firstName": "Perisa",
@@ -42,7 +42,19 @@
     "faculty": "Engineering",
     "year": 3,
     "courses": ["Data Systems", "Operating Systems"]
+  },
+  {
+    "firstName": "Ross",
+    "lastName": "Lynch",
+    "username": "ross.lynch",
+    "password": "rosslynch",
+    "student_id": "220103050",
+    "department": "Electrical Engineering",
+    "faculty": "Engineering",
+    "year": 3,
+    "courses": ["Embedded Systems", "Electronics"]
   }
+ 
 ]
 
 
