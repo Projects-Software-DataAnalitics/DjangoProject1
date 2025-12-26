@@ -338,6 +338,10 @@ def student_dashboard(request):
     if not request.user.is_authenticated:
         return redirect('student-login')
     
+    from datetime import datetime
+    from .models import Announcement
+    from django.db.models import Q
+    
     try:
         student = Student.objects.get(user=request.user)
         student_info = {
@@ -345,15 +349,65 @@ def student_dashboard(request):
             'name': f"{student.first_name} {student.last_name}".strip() or student.username,
             'student_id': student.student_id,
         }
+        
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        
+        if current_month >= 9:
+            academic_term = f"{current_year}-{current_year + 1} Fall"
+        elif current_month >= 2:
+            academic_term = f"{current_year - 1}-{current_year} Spring"
+        else:
+            academic_term = f"{current_year - 1}-{current_year} Fall"
+        
+        year_display = f"{student.year}. Year" if student.year else "-"
+        department_display = student.department or "-"
+        
+        advisor_name = "Prof. Dr. Ahmet Bulut"
+        
+        courses = student.courses.all().select_related('instructor')
+        courses_list = []
+        for course in courses:
+            courses_list.append({
+                'name': course.name,
+                'code': course.code,
+                'credits': course.credits,
+            })
+        
     except Student.DoesNotExist:
         student_info = {
             'username': request.user.username,
             'name': request.user.get_full_name() or request.user.username,
             'student_id': '-',
         }
+        academic_term = "-"
+        year_display = "-"
+        department_display = "-"
+        advisor_name = "-"
+        courses_list = []
+    
+    latest_announcements = Announcement.objects.filter(
+        Q(receiver=request.user) | Q(receiver__isnull=True)
+    ).select_related('sender').order_by('-created_at')[:5]
+    
+    announcements_list = []
+    for ann in latest_announcements:
+        sender_name = ann.sender.get_full_name() or ann.sender.username
+        announcements_list.append({
+            'id': ann.id,
+            'subject': ann.subject,
+            'sender': sender_name,
+            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
+        })
     
     return render(request, 'student.html', {
-        'student_info': student_info
+        'student_info': student_info,
+        'latest_announcements': announcements_list,
+        'academic_term': academic_term,
+        'year_display': year_display,
+        'department_display': department_display,
+        'advisor_name': advisor_name,
+        'courses_list': courses_list,
     })
 
 
