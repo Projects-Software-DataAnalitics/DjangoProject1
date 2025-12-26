@@ -5,7 +5,7 @@
 
 {% block content %}
 <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
-    <h1 style="margin-bottom: 30px; color: #0f172a; font-size: 32px; font-weight: 700;">Welcome {% if student_info %}{{ student_info.name }}{% else %}{{ request.user.get_full_name|default:request.user.username }}{% endif %}</h1>
+    <h1 id="welcome-message" style="margin-bottom: 30px; color: #0f172a; font-size: 32px; font-weight: 700;">Welcome {% if student_info %}{{ student_info.name }}{% else %}{{ request.user.get_full_name|default:request.user.username }}{% endif %}</h1>
     
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px;">
         <div style="background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); border-radius: 16px; padding: 24px; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3); color: white; display: flex; align-items: center; gap: 16px; min-height: 120px;">
@@ -31,12 +31,21 @@
             <div style="flex: 1;">
                 <h3 style="margin: 0 0 8px 0; font-size: 14px; color: rgba(255,255,255,0.9); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Advisor Information</h3>
                 <p style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700;">{{ advisor_name|default:"-" }}</p>
+                {% if advisor_username %}
+                <a href="{% url 'advisor_profile' advisor_username %}" style="color: white; text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; opacity: 0.9; transition: opacity 0.2s;" onmouseover="this.style.opacity='1';" onmouseout="this.style.opacity='0.9';">
+                    Detail
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </a>
+                {% else %}
                 <a href="{% url 'student_profile' %}" style="color: white; text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; opacity: 0.9; transition: opacity 0.2s;" onmouseover="this.style.opacity='1';" onmouseout="this.style.opacity='0.9';">
                     Detail
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </a>
+                {% endif %}
             </div>
         </div>
         
@@ -123,20 +132,38 @@
                 Latest Announcements
             </h2>
             {% if latest_announcements %}
-            <div style="flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 350px;">
+            <div id="latest-announcements-container" style="flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 350px;">
                 {% for ann in latest_announcements %}
-                <a href="{% url 'student_announcements' %}" style="text-decoration: none; color: inherit;">
-                    <div style="padding: 16px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #f59e0b; cursor: pointer; transition: all 0.2s;" 
-                         onmouseover="this.style.background='#f1f5f9'; this.style.transform='translateX(4px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';"
-                         onmouseout="this.style.background='#f8fafc'; this.style.transform='translateX(0)'; this.style.boxShadow='none';">
-                        <div style="font-weight: 600; color: #0f172a; margin-bottom: 6px; font-size: 15px;">{{ ann.subject }}</div>
-                        <div style="font-size: 12px; color: #64748b; display: flex; gap: 12px;">
-                            <span>From: {{ ann.sender }}</span>
-                            <span>•</span>
-                            <span>{{ ann.created_at }}</span>
-                        </div>
+                <div class="announcement-item" data-ann-id="{{ ann.id }}" data-is-pinned="{% if ann.is_pinned %}true{% else %}false{% endif %}" style="padding: 16px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #f59e0b; cursor: pointer; transition: all 0.2s; position: relative;" 
+                     onmouseover="this.style.background='#f1f5f9'; this.style.transform='translateX(4px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';"
+                     onmouseout="this.style.background='#f8fafc'; this.style.transform='translateX(0)'; this.style.boxShadow='none';">
+                    <div style="display: flex; justify-content: space-between; align-items: start; gap: 12px;">
+                        <a href="{% url 'student_announcements' %}" style="text-decoration: none; color: inherit; flex: 1;">
+                            <div style="font-weight: 600; color: #0f172a; margin-bottom: 6px; font-size: 15px;">{{ ann.subject }}</div>
+                            <div style="font-size: 12px; color: #64748b; display: flex; gap: 12px;">
+                                <span>From: {{ ann.sender }}</span>
+                                <span>•</span>
+                                <span>{{ ann.created_at }}</span>
+                            </div>
+                        </a>
+                        <button class="pin-button-main" data-ann-id="{{ ann.id }}" onclick="event.stopPropagation(); togglePinMain({{ ann.id }}, this);" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s; flex-shrink: 0;" 
+                                onmouseover="this.style.background='#f1f5f9';" 
+                                onmouseout="this.style.background='none';"
+                                title="{% if ann.is_pinned %}Unpin{% else %}Pin{% endif %}">
+                            {% if ann.is_pinned %}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#3b82f6" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                                <line x1="4" y1="22" x2="4" y2="15"></line>
+                            </svg>
+                            {% else %}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                                <line x1="4" y1="22" x2="4" y2="15"></line>
+                            </svg>
+                            {% endif %}
+                        </button>
                     </div>
-                </a>
+                </div>
                 {% endfor %}
             </div>
             {% else %}
@@ -183,6 +210,88 @@
         }
     }
 </style>
+
+<script>
+    // Hide welcome message after first visit
+    document.addEventListener('DOMContentLoaded', function() {
+        const welcomeMessage = document.getElementById('welcome-message');
+        if (welcomeMessage) {
+            const welcomeKey = 'student_welcome_shown';
+            const hasSeenWelcome = localStorage.getItem(welcomeKey);
+            
+            if (hasSeenWelcome) {
+                welcomeMessage.style.display = 'none';
+            } else {
+                localStorage.setItem(welcomeKey, 'true');
+            }
+        }
+    });
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function togglePinMain(announcementId, buttonElement) {
+        const csrftoken = getCookie('csrftoken');
+        const announcementItem = buttonElement.closest('.announcement-item');
+        const isPinned = announcementItem.getAttribute('data-is-pinned') === 'true';
+        
+        fetch(`/student/announcements/${announcementId}/toggle-pin/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const newPinnedState = data.is_pinned;
+                announcementItem.setAttribute('data-is-pinned', newPinnedState);
+                
+                // Update icon
+                const svg = buttonElement.querySelector('svg');
+                if (newPinnedState) {
+                    svg.setAttribute('fill', '#3b82f6');
+                    svg.setAttribute('stroke', '#3b82f6');
+                    buttonElement.setAttribute('title', 'Unpin');
+                } else {
+                    svg.setAttribute('fill', 'none');
+                    svg.setAttribute('stroke', '#64748b');
+                    buttonElement.setAttribute('title', 'Pin');
+                }
+                
+                // Reorder announcements - move pinned to top
+                const container = document.getElementById('latest-announcements-container');
+                if (container) {
+                    const allItems = Array.from(container.children);
+                    const pinnedItems = allItems.filter(item => item.getAttribute('data-is-pinned') === 'true');
+                    const unpinnedItems = allItems.filter(item => item.getAttribute('data-is-pinned') === 'false');
+                    
+                    // Clear container
+                    container.innerHTML = '';
+                    
+                    // Add pinned first, then unpinned
+                    pinnedItems.forEach(item => container.appendChild(item));
+                    unpinnedItems.forEach(item => container.appendChild(item));
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling pin:', error);
+        });
+    }
+</script>
 {% endblock %}
-
-

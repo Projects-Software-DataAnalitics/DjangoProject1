@@ -1,10 +1,26 @@
-{% extends "instructor_base.html" %}
-{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Instructor Dashboard</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body data-page="{% if page %}{{ page }}{% endif %}">
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li><a href="{% url 'instructor_profile' %}">Personal Information</a></li>
+        <li><a href="{% url 'instructor_my_courses' %}">My Courses</a></li>
+        <li><a href="{% url 'instructor_grades' %}">Grades</a></li>
+        <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
+        <li><a href="{% url 'instructor_announcements' %}">Announcements</a></li>
+        <li id="logout-btn">Logout</li>
+    </ul>
+    </div>
 
-{% block title %}Instructor Dashboard{% endblock %}
-
-{% block content %}
-<div data-page="{% if page %}{{ page }}{% endif %}">
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
+    {% block content %}
     {% if show_welcome %}
     <h1>Welcome Instructor</h1>
     {% endif %}
@@ -28,6 +44,7 @@
             <tr style="background-color: #0b5fff; color: white;">
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Instructor</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Learning Outcomes</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Credit</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Students Taking the Class</th>
             </tr>
@@ -37,6 +54,11 @@
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.name }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.instructor }}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">
+                    <a href="{% url 'course_learning_outcomes' course.name|slugify %}" style="display: inline-block; padding: 8px 16px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
+                        View
+                    </a>
+                </td>
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.credits|default:"-" }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">
                     <button class="view-students-btn" data-course-id="{{ course.id }}"
@@ -84,8 +106,9 @@
                     
                     const courseName = courseData.name;
                     const students = courseData.students || [];
+                    const totalStudents = students.length;
                     
-                    popupCourseName.textContent = `Students Taking ${courseName}`;
+                    popupCourseName.textContent = `Students Taking ${courseName} (Total: ${totalStudents})`;
                     popupStudentList.innerHTML = '';
 
                     if (students && students.length > 0) {
@@ -222,13 +245,16 @@
     {% else %}
     <div id="personal-info"></div>
     {% endif %}
-</div>
+    {% endblock %}
+    </div>
 
 <form id="csrf-form" style="display:none;">
     {% csrf_token %}
 </form>
 
 <script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
-{% endblock %}
+<script src="{% static 'js/instructor.js' %}"></script>
+</body>
+</html>
 
 
