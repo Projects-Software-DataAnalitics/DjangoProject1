@@ -441,10 +441,22 @@ def instructor_course_grades(request, course_name):
     # Kesinleştirme durumu
     is_finalized = any(g.is_finalized for g in grades_dict.values()) if grades_dict else False
     
+    # JavaScript için JSON formatında öğrenci verileri
+    students_with_grades_json = []
+    for item in students_with_grades:
+        student_name = item['student'].first_name + ' ' + item['student'].last_name if (item['student'].first_name or item['student'].last_name) else item['student'].username
+        students_with_grades_json.append({
+            'id': item['student'].id,
+            'name': student_name,
+            'grades': item['grades']
+        })
+    students_with_grades_json_str = json.dumps(students_with_grades_json)
+    
     context = {
         'course': course,
         'students': students,
         'students_with_grades': students_with_grades,
+        'students_with_grades_json': students_with_grades_json_str,
         'grades': grades_dict,
         'uploaded_file': uploaded_file,
         'is_finalized': is_finalized
@@ -2164,11 +2176,12 @@ def student_courses(request):
     if not request.user.is_authenticated:
         return redirect('student-login')
     
+    courses_data = []
+    
     try:
         student = Student.objects.get(user=request.user)
         courses = student.courses.all().select_related('instructor')
         
-        courses_data = []
         for course in courses:
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
             courses_data.append({
@@ -2179,7 +2192,45 @@ def student_courses(request):
                 'department': course.department,
             })
     except Student.DoesNotExist:
-        courses_data = []
+        pass
+    
+    # If no courses in database, try to sync from JSON
+    if not courses_data:
+        try:
+            student = Student.objects.get(user=request.user)
+            students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+            
+            try:
+                with open(students_json_path, encoding='utf-8') as f:
+                    students_data = json.load(f)
+                    student_data = None
+                    for entry in students_data:
+                        if entry.get('username') == student.username:
+                            student_data = entry
+                            break
+                    
+                    if student_data:
+                        course_names = student_data.get('courses', [])
+                        for course_name in course_names:
+                            # Try to find course in database
+                            course = Course.objects.filter(name=course_name).first()
+                            if course:
+                                # Add course to student if not already added
+                                if course not in student.courses.all():
+                                    student.courses.add(course)
+                                
+                                instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+                                courses_data.append({
+                                    'id': course.id,
+                                    'name': course.name,
+                                    'code': course.code,
+                                    'instructor': instructor_name,
+                                    'department': course.department,
+                                })
+            except (OSError, json.JSONDecodeError):
+                pass
+        except Student.DoesNotExist:
+            pass
     
     return render(request, "student/courses.html", {
         'courses': courses_data
