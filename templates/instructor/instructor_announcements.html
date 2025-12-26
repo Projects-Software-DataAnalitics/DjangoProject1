@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Announcements</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <script>
-        (function() {
+        (function () {
             const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
             if (!instructorData) {
                 window.location.href = "/";
@@ -15,424 +16,538 @@
         })();
     </script>
 </head>
-<body>
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li id="personal-info-btn">Personal Information</li>
-        <li id="my-courses-btn">My Courses</li>
-        <li id="grades-btn">Grades</li>
-        <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
-        <li id="announcements-btn">Announcements</li>
-        <li id="logout-btn">Logout</li>
-    </ul>
-</div>
+<style>
+    .dropdown-container {
+        position: relative;
+        width: 100%;
+    }
 
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    <div style="margin-left: 0; margin-top: 10px;">
-        <h1 style="font-size: 32px; margin: 0;">Announcements</h1>
+    .dropdown-header {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #f8fafc;
+        font-size: 14px;
+        box-sizing: border-box;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 42px;
+    }
+
+    .dropdown-header:after {
+        content: '▼';
+        font-size: 10px;
+        color: #64748b;
+        margin-left: 8px;
+    }
+
+    .dropdown-list {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #ffffff;
+        z-index: 1000;
+        margin-top: 4px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .dropdown-list.show {
+        display: block;
+    }
+
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: background-color 0.1s;
+        border-bottom: 1px solid #f1f5f9;
+        margin-bottom: 0 !important;
+        /* Override inline styles if any */
+    }
+
+    .dropdown-item:last-child {
+        border-bottom: none;
+    }
+
+    .dropdown-item:hover {
+        background-color: #f8fafc;
+    }
+
+    .dropdown-item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin-right: 12px;
+        cursor: pointer;
+        accent-color: #3b82f6;
+    }
+</style>
+
+<body>
+    <div class="sidebar" id="sidebar">
+        <ul>
+            <li id="personal-info-btn">Personal Information</li>
+            <li id="my-courses-btn">My Courses</li>
+            <li id="grades-btn">Grades</li>
+            <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
+            <li id="announcements-btn">Announcements</li>
+            <li id="logout-btn">Logout</li>
+        </ul>
     </div>
 
-    <div id="announcements-content" style="margin-top: 24px; max-width: 800px;">
-        <!-- Tab Headers -->
-        <div style="display: flex; gap: 24px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
-            <button id="tab-send" class="tab-button active" style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">
-                Send Message
-            </button>
-            <button id="tab-received" class="tab-button" style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
-                Messages Received
-            </button>
-            <button id="tab-sent" class="tab-button" style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
-                Messages Send
-            </button>
+    <div class="content" id="content">
+        <button class="menu-btn" id="menu-btn">☰</button>
+        <div style="margin-left: 0; margin-top: 10px;">
+            <h1 style="font-size: 32px; margin: 0;">Announcements</h1>
         </div>
 
-        <!-- Send Message Tab -->
-        <div id="content-send" class="tab-content" style="display: block;">
-            <div style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
-                <form method="post">
-                    {% csrf_token %}
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                            Topic:
-                        </label>
-                        <input
-                            type="text"
-                            name="subject"
-                            placeholder="No Topic"
-                            style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;"
-                        >
-                    </div>
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                            Send To:
-                        </label>
-                        <div id="receiver-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 8px;">
-                            <label style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin-bottom: 4px; transition: background-color 0.2s;" 
-                                   onmouseover="this.style.backgroundColor='#e2e8f0';" 
-                                   onmouseout="this.style.backgroundColor='transparent';">
-                                <input type="checkbox" class="receiver-checkbox" value="" checked style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer; accent-color: #3b82f6;">
-                                <span style="font-size: 14px; color: #0f172a;">No one is selected</span>
-                            </label>
-                            {% for recipient in recipients %}
-                            <label style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin-bottom: 4px; transition: background-color 0.2s;" 
-                                   onmouseover="this.style.backgroundColor='#e2e8f0';" 
-                                   onmouseout="this.style.backgroundColor='transparent';">
-                                <input type="checkbox" class="receiver-checkbox" value="{{ recipient.username }}" data-name="{{ recipient.name }}" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer; accent-color: #3b82f6;">
-                                <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }} ({{ recipient.role }})</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        <div id="selected-receivers" style="margin-top: 8px; font-size: 14px; color: #64748b; min-height: 20px;">
-                            <span style="font-weight: 600; color: #0f172a;">To: </span><span id="selected-names">No one is selected</span>
-                        </div>
-                        <input type="hidden" name="receivers" id="receivers-input" value="">
-                        <div id="receiver-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
-                            You need to choose a reciever.
-                        </div>
-                    </div>
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
-                            Message
-                        </label>
-                        <textarea
-                            name="message"
-                            id="message-textarea"
-                            rows="4"
-                            required
-                            placeholder="Enter your message..."
-                            style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 14px;"
-                        ></textarea>
-                        <div id="message-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
-                            You need to add a text.
-                        </div>
-                    </div>
-                    <button type="submit" id="send-message-btn" class="primary-btn" disabled style="padding: 12px 24px; font-size: 16px; background-color: #94a3b8; color: #ffffff; cursor: not-allowed; opacity: 0.6;">
-                        Send Message
-                    </button>
-                </form>
+        <div id="announcements-content" style="margin-top: 24px; max-width: 800px;">
+            <!-- Tab Headers -->
+            <div style="display: flex; gap: 24px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
+                <button id="tab-send" class="tab-button active"
+                    style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">
+                    Send Message
+                </button>
+                <button id="tab-received" class="tab-button"
+                    style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
+                    Messages Received
+                </button>
+                <button id="tab-sent" class="tab-button"
+                    style="background: none; border: none; padding: 12px 0; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
+                    Messages Send
+                </button>
             </div>
-        </div>
 
-        <!-- Messages Received Tab -->
-        <div id="content-received" class="tab-content" style="display: none;">
-            <div style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
-                <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Received</h2>
-                {% if received_messages %}
+            <!-- Send Message Tab -->
+            <div id="content-send" class="tab-content" style="display: block;">
+                <div
+                    style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div style="margin-bottom: 16px;">
+                            <label
+                                style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                                Topic:
+                            </label>
+                            <input type="text" name="subject" placeholder="No Topic"
+                                style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                        </div>
+                        <div style="margin-bottom: 16px;">
+                            <label
+                                style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                                Send To:
+                            </label>
+                            <div class="dropdown-container">
+                                <div class="dropdown-header" id="dropdown-header">
+                                    <span id="dropdown-header-text">Select Receiver</span>
+                                </div>
+                                <div class="dropdown-list" id="dropdown-list">
+                                    <!-- Courses Section -->
+                                    {% for recipient in recipients %}
+                                        {% if recipient.role == 'course' %}
+                                        <label class="dropdown-item">
+                                            <input type="checkbox" class="receiver-checkbox individual-checkbox"
+                                                value="{{ recipient.username }}" data-name="{{ recipient.name }}">
+                                            <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
+                                        </label>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    <!-- Separator if there are both courses and people -->
+                                    {% regroup recipients by role as recipients_by_role %}
+                                    {% for group in recipients_by_role %}
+                                        {% if group.grouper == 'course' %}
+                                            {% for other_group in recipients_by_role %}
+                                                {% if other_group.grouper != 'course' %}
+                                                    {% if forloop.first %}
+                                                    <div style="padding: 8px 12px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; margin-top: 4px; margin-bottom: 4px;">
+                                                        <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">People</span>
+                                                    </div>
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    <!-- Instructors and Faculty Heads -->
+                                    {% for recipient in recipients %}
+                                        {% if recipient.role != 'course' %}
+                                        <label class="dropdown-item">
+                                            <input type="checkbox" class="receiver-checkbox individual-checkbox"
+                                                value="{{ recipient.username }}" data-name="{{ recipient.name }}">
+                                            <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
+                                        </label>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+
+                                <input type="hidden" name="receivers" id="receivers-input" value="">
+                                <div id="receiver-error"
+                                    style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
+                                    You need to choose a receiver.
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 16px;">
+                            <label
+                                style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
+                                Message
+                            </label>
+                            <textarea name="message" id="message-textarea" rows="4" required
+                                placeholder="Enter your message..."
+                                style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-family: inherit; resize: vertical; box-sizing: border-box; font-size: 14px;"></textarea>
+                            <div id="message-error"
+                                style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
+                                You need to add a text.
+                            </div>
+                        </div>
+                        <button type="submit" id="send-message-btn" class="primary-btn" disabled
+                            style="padding: 12px 24px; font-size: 16px; background-color: #94a3b8; color: #ffffff; cursor: not-allowed; opacity: 0.6;">
+                            Send Message
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Messages Received Tab -->
+            <div id="content-received" class="tab-content" style="display: none;">
+                <div
+                    style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+                    <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Received</h2>
+                    {% if received_messages %}
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         {% for ann in received_messages %}
-                            <div class="message-item" data-ann-id="{{ ann.id }}" style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.2s;" 
-                                 onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
-                                 onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
-                                <div style="display: flex; justify-content: space-between; align-items: start;">
-                                    <div style="flex: 1;">
-                                        <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 16px;">
-                                            {{ ann.subject }}
-                                        </div>
-                                        <div style="font-size: 14px; color: #64748b; margin-bottom: 4px;">
-                                            From: {{ ann.sender }}
-                                        </div>
-                                        <div style="font-size: 12px; color: #94a3b8;">
-                                            {{ ann.created_at }}
-                                        </div>
+                        <div class="message-item" data-ann-id="{{ ann.id }}"
+                            style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.2s;"
+                            onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
+                            onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 16px;">
+                                        {{ ann.subject }}
                                     </div>
-                                    <span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #10b981; color: #ffffff; height: fit-content;">
-                                        Received
-                                    </span>
+                                    <div style="font-size: 14px; color: #64748b; margin-bottom: 4px;">
+                                        From: {{ ann.sender }}
+                                    </div>
+                                    <div style="font-size: 12px; color: #94a3b8;">
+                                        {{ ann.created_at }}
+                                    </div>
                                 </div>
+                                <span
+                                    style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #10b981; color: #ffffff; height: fit-content;">
+                                    Received
+                                </span>
                             </div>
+                        </div>
                         {% endfor %}
                     </div>
-                {% else %}
+                    {% else %}
                     <p style="color: #64748b; text-align: center; padding: 40px;">No received messages yet.</p>
-                {% endif %}
+                    {% endif %}
+                </div>
             </div>
-        </div>
 
-        <!-- Messages Sent Tab -->
-        <div id="content-sent" class="tab-content" style="display: none;">
-            <div style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
-                <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Send</h2>
-                {% if sent_messages %}
+            <!-- Messages Sent Tab -->
+            <div id="content-sent" class="tab-content" style="display: none;">
+                <div
+                    style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+                    <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Send</h2>
+                    {% if sent_messages %}
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         {% for ann in sent_messages %}
-                            <div class="message-item" data-ann-id="{{ ann.id }}" style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #eff6ff; cursor: pointer; transition: all 0.2s;"
-                                 onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
-                                 onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
-                                <div style="display: flex; justify-content: space-between; align-items: start;">
-                                    <div style="flex: 1;">
-                                        <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 16px;">
-                                            {{ ann.subject }}
-                                        </div>
-                                        <div style="font-size: 14px; color: #64748b; margin-bottom: 4px;">
-                                            To: {{ ann.receiver }}
-                                        </div>
-                                        <div style="font-size: 12px; color: #94a3b8;">
-                                            {{ ann.created_at }}
-                                        </div>
+                        <div class="message-item" data-ann-id="{{ ann.id }}"
+                            style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #eff6ff; cursor: pointer; transition: all 0.2s;"
+                            onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
+                            onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 16px;">
+                                        {{ ann.subject }}
                                     </div>
-                                    <span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #3b82f6; color: #ffffff; height: fit-content;">
-                                        Sent
-                                    </span>
+                                    <div style="font-size: 14px; color: #64748b; margin-bottom: 4px;">
+                                        To: {{ ann.receiver }}
+                                    </div>
+                                    <div style="font-size: 12px; color: #94a3b8;">
+                                        {{ ann.created_at }}
+                                    </div>
                                 </div>
+                                <span
+                                    style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #3b82f6; color: #ffffff; height: fit-content;">
+                                    Sent
+                                </span>
                             </div>
+                        </div>
                         {% endfor %}
                     </div>
-                {% else %}
+                    {% else %}
                     <p style="color: #64748b; text-align: center; padding: 40px;">No sent messages yet.</p>
-                {% endif %}
+                    {% endif %}
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Message Popup -->
-    <div id="message-popup" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 1000; align-items: center; justify-content: center;">
-        <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(15,23,42,0.25); position: relative;">
-            <button id="close-popup" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;"
+        <!-- Message Popup -->
+        <div id="message-popup"
+            style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 1000; align-items: center; justify-content: center;">
+            <div
+                style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(15,23,42,0.25); position: relative;">
+                <button id="close-popup"
+                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;"
                     onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a';"
                     onmouseout="this.style.background='none'; this.style.color='#64748b';">
-                ×
-            </button>
-            <div id="popup-content">
-                <!-- Popup content will be inserted here -->
+                    ×
+                </button>
+                <div id="popup-content">
+                    <!-- Popup content will be inserted here -->
+                </div>
             </div>
         </div>
-    </div>
 
-    <script>
-        // Message data
-        const messagesData = {
-            {% for ann in all_announcements %}
-            {{ ann.id }}: {
-                subject: "{{ ann.subject|escapejs }}",
-                message: "{{ ann.message|escapejs }}",
-                sender: "{{ ann.sender|escapejs }}",
-                receiver: "{{ ann.receiver|escapejs }}",
-                created_at: "{{ ann.created_at|escapejs }}",
-                is_sent: {{ ann.is_sent|yesno:"true,false" }}
-            }{% if not forloop.last %},{% endif %}
-            {% endfor %}
-        };
-
-        // Tab switching functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            const tabs = {
-                'tab-send': 'content-send',
-                'tab-received': 'content-received',
-                'tab-sent': 'content-sent'
+        <script>
+            // Message data
+            const messagesData = {
+                {% for ann in all_announcements %}
+                "{{ ann.id }}": {
+                    subject: "{{ ann.subject|escapejs }}",
+                    message: "{{ ann.message|escapejs }}",
+                    sender: "{{ ann.sender|escapejs }}",
+                    receiver: "{{ ann.receiver|escapejs }}",
+                    created_at: "{{ ann.created_at|escapejs }}",
+                    is_sent: {{ ann.is_sent|yesno:"true,false" }}
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
             };
 
-            function switchTab(activeTabId) {
-                // Hide all content
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.style.display = 'none';
-                });
-                
-                // Reset all tab buttons
-                document.querySelectorAll('.tab-button').forEach(btn => {
-                    btn.style.color = '#64748b';
-                    btn.style.borderBottomColor = 'transparent';
-                    btn.classList.remove('active');
-                });
-                
-                // Show active content
-                const activeContentId = tabs[activeTabId];
-                document.getElementById(activeContentId).style.display = 'block';
-                
-                // Update active tab button
-                const activeBtn = document.getElementById(activeTabId);
-                activeBtn.style.color = '#3b82f6';
-                activeBtn.style.borderBottomColor = '#3b82f6';
-                activeBtn.classList.add('active');
-            }
+            // Tab switching functionality
+            document.addEventListener('DOMContentLoaded', function () {
+                const tabs = {
+                    'tab-send': 'content-send',
+                    'tab-received': 'content-received',
+                    'tab-sent': 'content-sent'
+                };
 
-            // Add click handlers for tabs
-            Object.keys(tabs).forEach(tabId => {
-                document.getElementById(tabId).addEventListener('click', function() {
-                    switchTab(tabId);
-                });
-            });
-
-            // Message item click handlers
-            document.querySelectorAll('.message-item').forEach(item => {
-                item.addEventListener('click', function() {
-                    const annId = this.getAttribute('data-ann-id');
-                    const message = messagesData[annId];
-                    if (message) {
-                        showMessagePopup(message);
-                    }
-                });
-            });
-
-            // Close popup
-            document.getElementById('close-popup').addEventListener('click', function() {
-                document.getElementById('message-popup').style.display = 'none';
-            });
-
-            // Close popup when clicking outside
-            document.getElementById('message-popup').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.style.display = 'none';
-                }
-            });
-
-            // Update selected receivers display
-            function updateSelectedReceivers() {
-                const checkboxes = document.querySelectorAll('.receiver-checkbox:checked');
-                const selectedNames = [];
-                const selectedUsernames = [];
-                
-                checkboxes.forEach(checkbox => {
-                    if (checkbox.value === '') {
-                        // "No one is selected" is checked
-                        return;
-                    }
-                    selectedUsernames.push(checkbox.value);
-                    selectedNames.push(checkbox.getAttribute('data-name'));
-                });
-                
-                const selectedNamesSpan = document.getElementById('selected-names');
-                const receiversInput = document.getElementById('receivers-input');
-                
-                if (selectedNames.length > 0) {
-                    selectedNamesSpan.textContent = selectedNames.join(', ');
-                    receiversInput.value = selectedUsernames.join(',');
-                } else {
-                    selectedNamesSpan.textContent = 'No one is selected';
-                    receiversInput.value = '';
-                }
-                
-                updateSendButton();
-            }
-
-            // Button enable/disable functionality
-            function updateSendButton() {
-                const checkboxes = document.querySelectorAll('.receiver-checkbox:checked');
-                const messageTextarea = document.getElementById('message-textarea');
-                const sendButton = document.getElementById('send-message-btn');
-                const receiverError = document.getElementById('receiver-error');
-                const messageError = document.getElementById('message-error');
-                
-                if (!messageTextarea || !sendButton) return;
-                
-                // Check if any receiver (other than "No one is selected") is selected
-                let isReceiverSelected = false;
-                checkboxes.forEach(checkbox => {
-                    if (checkbox.value !== '') {
-                        isReceiverSelected = true;
-                    }
-                });
-                
-                const isMessageFilled = messageTextarea.value && messageTextarea.value.trim() !== '';
-                
-                if (isReceiverSelected && isMessageFilled) {
-                    // Enable button - blue
-                    sendButton.disabled = false;
-                    sendButton.style.backgroundColor = '#3b82f6';
-                    sendButton.style.color = '#ffffff';
-                    sendButton.style.cursor = 'pointer';
-                    sendButton.style.opacity = '1';
-                    
-                    // Hide error messages
-                    if (receiverError) receiverError.style.display = 'none';
-                    if (messageError) messageError.style.display = 'none';
-                } else {
-                    // Disable button - gray
-                    sendButton.disabled = true;
-                    sendButton.style.backgroundColor = '#94a3b8';
-                    sendButton.style.color = '#ffffff';
-                    sendButton.style.cursor = 'not-allowed';
-                    sendButton.style.opacity = '0.6';
-                    
-                    // Show error messages
-                    if (!isReceiverSelected && receiverError) {
-                        receiverError.style.display = 'block';
-                    } else if (receiverError) {
-                        receiverError.style.display = 'none';
-                    }
-                    
-                    if (!isMessageFilled && messageError) {
-                        messageError.style.display = 'block';
-                    } else if (messageError) {
-                        messageError.style.display = 'none';
-                    }
-                }
-            }
-
-            // Form validation for send message
-            const sendMessageForm = document.querySelector('#content-send form');
-            if (sendMessageForm) {
-                const messageTextarea = document.getElementById('message-textarea');
-                const receiverCheckboxes = document.querySelectorAll('.receiver-checkbox');
-                
-                // Handle checkbox changes
-                receiverCheckboxes.forEach(checkbox => {
-                    checkbox.addEventListener('change', function() {
-                        if (this.value === '') {
-                            // "No one is selected" checkbox
-                            if (this.checked) {
-                                // Uncheck all other checkboxes
-                                receiverCheckboxes.forEach(cb => {
-                                    if (cb !== this) {
-                                        cb.checked = false;
-                                    }
-                                });
+                // Message item click handlers - use event delegation for dynamically loaded content
+                function attachMessageItemHandlers() {
+                    document.querySelectorAll('.message-item').forEach(item => {
+                        // Remove existing listeners to avoid duplicates
+                        const newItem = item.cloneNode(true);
+                        item.parentNode.replaceChild(newItem, item);
+                        
+                        newItem.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            const annId = this.getAttribute('data-ann-id');
+                            const message = messagesData[annId];
+                            if (message) {
+                                showMessagePopup(message);
                             }
-                        } else {
-                            // Other checkboxes - uncheck "No one is selected"
-                            const noOneCheckbox = document.querySelector('.receiver-checkbox[value=""]');
-                            if (noOneCheckbox) {
-                                noOneCheckbox.checked = false;
-                            }
-                        }
-                        updateSelectedReceivers();
+                        });
                     });
+                }
+
+                function switchTab(activeTabId) {
+                    // Hide all content
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.style.display = 'none';
+                    });
+
+                    // Reset all tab buttons
+                    document.querySelectorAll('.tab-button').forEach(btn => {
+                        btn.style.color = '#64748b';
+                        btn.style.borderBottomColor = 'transparent';
+                        btn.classList.remove('active');
+                    });
+
+                    // Show active content
+                    const activeContentId = tabs[activeTabId];
+                    document.getElementById(activeContentId).style.display = 'block';
+
+                    // Update active tab button
+                    const activeBtn = document.getElementById(activeTabId);
+                    activeBtn.style.color = '#3b82f6';
+                    activeBtn.style.borderBottomColor = '#3b82f6';
+                    activeBtn.classList.add('active');
+                    
+                    // Re-attach message handlers after tab switch
+                    setTimeout(attachMessageItemHandlers, 50);
+                }
+
+                // Add click handlers for tabs
+                Object.keys(tabs).forEach(tabId => {
+                    const tabElement = document.getElementById(tabId);
+                    if (tabElement) {
+                        tabElement.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            switchTab(tabId);
+                        });
+                    }
                 });
                 
-                // Initialize button state and selected receivers display
-                updateSelectedReceivers();
-                
-                // Update button on message input
-                if (messageTextarea) {
-                    messageTextarea.addEventListener('input', updateSendButton);
-                    messageTextarea.addEventListener('keyup', updateSendButton);
-                }
-                
-                sendMessageForm.addEventListener('submit', function(e) {
-                    // Check if any receiver (other than "No one is selected") is selected
-                    const selectedCheckboxes = document.querySelectorAll('.receiver-checkbox:checked');
-                    let hasReceiver = false;
-                    selectedCheckboxes.forEach(checkbox => {
-                        if (checkbox.value !== '') {
-                            hasReceiver = true;
+                // Attach handlers initially
+                attachMessageItemHandlers();
+
+                // Close popup
+                const closePopupBtn = document.getElementById('close-popup');
+                if (closePopupBtn) {
+                    closePopupBtn.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        const popup = document.getElementById('message-popup');
+                        if (popup) {
+                            popup.style.display = 'none';
                         }
                     });
-                    
-                    if (!hasReceiver) {
-                        e.preventDefault();
-                        alert('Please select a recipient to send the message.');
-                        return false;
-                    }
-                    
-                    // Check if message is not empty
-                    if (!messageTextarea.value || messageTextarea.value.trim() === '') {
-                        e.preventDefault();
-                        alert('Please enter a message.');
-                        messageTextarea.focus();
-                        return false;
-                    }
-                });
-            }
-        });
+                }
 
-        function showMessagePopup(message) {
-            const popupContent = document.getElementById('popup-content');
-            const direction = message.is_sent ? 'To' : 'From';
-            const person = message.is_sent ? message.receiver : message.sender;
-            const badgeColor = message.is_sent ? '#3b82f6' : '#10b981';
-            const badgeText = message.is_sent ? 'Sent' : 'Received';
-            
-            popupContent.innerHTML = `
+                // Close popup when clicking outside
+                const messagePopup = document.getElementById('message-popup');
+                if (messagePopup) {
+                    messagePopup.addEventListener('click', function (e) {
+                        if (e.target === this) {
+                            this.style.display = 'none';
+                        }
+                    });
+                }
+
+                // Dropdown functionality
+                const dropdownHeader = document.getElementById('dropdown-header');
+                const dropdownList = document.getElementById('dropdown-list');
+                const dropdownHeaderText = document.getElementById('dropdown-header-text');
+
+                if (dropdownHeader && dropdownList) {
+                    dropdownHeader.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        dropdownList.classList.toggle('show');
+                    });
+
+                    // Prevent dropdown from closing when clicking on checkboxes
+                    dropdownList.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        // If clicking on a checkbox or label, don't close
+                        if (e.target.type === 'checkbox' || e.target.tagName === 'LABEL' || e.target.closest('label')) {
+                            return;
+                        }
+                    });
+
+                    document.addEventListener('click', function (e) {
+                        if (!dropdownHeader.contains(e.target) && !dropdownList.contains(e.target)) {
+                            dropdownList.classList.remove('show');
+                        }
+                    });
+                }
+
+                const individualCheckboxes = document.querySelectorAll('.individual-checkbox');
+
+                // Handle individual checkboxes (courses)
+                individualCheckboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', function (e) {
+                        e.stopPropagation();
+                        updateDropdownHeader();
+                        updateSendButton();
+                    });
+                });
+
+                function updateDropdownHeader() {
+                    const checkedCount = document.querySelectorAll('.individual-checkbox:checked').length;
+                    const totalCount = individualCheckboxes.length;
+                    const receiversInput = document.getElementById('receivers-input');
+
+                    // Update hidden input
+                    const selectedUsernames = Array.from(document.querySelectorAll('.individual-checkbox:checked'))
+                        .map(cb => cb.value);
+                    if (receiversInput) {
+                        receiversInput.value = selectedUsernames.join(',');
+                    }
+
+                    if (checkedCount > 0) {
+                        dropdownHeaderText.textContent = `${checkedCount} recipient${checkedCount > 1 ? 's' : ''} selected`;
+                        dropdownHeaderText.style.color = "#0f172a";
+                    } else {
+                        dropdownHeaderText.textContent = "Select Receiver";
+                        dropdownHeaderText.style.color = "#64748b";
+                    }
+                }
+
+                // Wrapper for updateSendButton to match new logic
+                function updateSendButton() {
+                    const messageTextarea = document.getElementById('message-textarea');
+                    const sendButton = document.getElementById('send-message-btn');
+                    const receiverError = document.getElementById('receiver-error');
+                    const messageError = document.getElementById('message-error');
+
+                    if (!messageTextarea || !sendButton) return;
+
+                    const isReceiverSelected = document.querySelectorAll('.individual-checkbox:checked').length > 0;
+                    const isMessageFilled = messageTextarea.value && messageTextarea.value.trim() !== '';
+
+                    if (isReceiverSelected && isMessageFilled) {
+                        sendButton.disabled = false;
+                        sendButton.style.backgroundColor = '#3b82f6';
+                        sendButton.style.color = '#ffffff';
+                        sendButton.style.cursor = 'pointer';
+                        sendButton.style.opacity = '1';
+
+                        if (receiverError) receiverError.style.display = 'none';
+                        if (messageError) messageError.style.display = 'none';
+                    } else {
+                        sendButton.disabled = true;
+                        sendButton.style.backgroundColor = '#94a3b8';
+                        sendButton.style.color = '#ffffff';
+                        sendButton.style.cursor = 'not-allowed';
+                        sendButton.style.opacity = '0.6';
+
+                        if (!isReceiverSelected && receiverError && receiverError.style.display !== 'none') {
+                            receiverError.style.display = 'block';
+                        }
+                    }
+                }
+
+                // Form validation for send message
+                const sendMessageForm = document.querySelector('#content-send form');
+                if (sendMessageForm) {
+                    const messageTextarea = document.getElementById('message-textarea');
+
+                    // Update button on message input
+                    if (messageTextarea) {
+                        messageTextarea.addEventListener('input', updateSendButton);
+                        messageTextarea.addEventListener('keyup', updateSendButton);
+                    }
+
+                    sendMessageForm.addEventListener('submit', function (e) {
+                        const selectedCount = document.querySelectorAll('.individual-checkbox:checked').length;
+
+                        if (selectedCount === 0) {
+                            e.preventDefault();
+                            alert('Please select at least one recipient.');
+                            return false;
+                        }
+
+                        if (!messageTextarea.value || messageTextarea.value.trim() === '') {
+                            e.preventDefault();
+                            alert('Please enter a message.');
+                            messageTextarea.focus();
+                            return false;
+                        }
+                    });
+                }
+            });
+
+            function showMessagePopup(message) {
+                const popupContent = document.getElementById('popup-content');
+                const direction = message.is_sent ? 'To' : 'From';
+                const person = message.is_sent ? message.receiver : message.sender;
+                const badgeColor = message.is_sent ? '#3b82f6' : '#10b981';
+                const badgeText = message.is_sent ? 'Sent' : 'Received';
+
+                popupContent.innerHTML = `
                 <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #0f172a; padding-right: 40px;">${message.subject}</h2>
                 <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -449,34 +564,34 @@
                 </div>
                 <div style="color: #1e293b; line-height: 1.6; white-space: pre-wrap; font-size: 15px;">${message.message}</div>
             `;
-            
-            document.getElementById('message-popup').style.display = 'flex';
-        }
+
+                document.getElementById('message-popup').style.display = 'flex';
+            }
+        </script>
+    </div>
+
+    <script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
+    <script src="{% static 'js/instructor.js' %}"></script>
+    <script>
+        (function () {
+            document.getElementById("personal-info-btn").addEventListener("click", function () {
+                window.location.href = "{% url 'instructor_profile' %}";
+            });
+            document.getElementById("my-courses-btn").addEventListener("click", function () {
+                window.location.href = "{% url 'instructor_my_courses' %}";
+            });
+            document.getElementById("grades-btn").addEventListener("click", function () {
+                window.location.href = "{% url 'instructor_grades' %}";
+            });
+            document.getElementById("announcements-btn").addEventListener("click", function () {
+                window.location.href = "{% url 'instructor_announcements' %}";
+            });
+            document.getElementById("logout-btn").addEventListener("click", function () {
+                sessionStorage.clear();
+                window.location.href = "/";
+            });
+        })();
     </script>
-</div>
-
-<script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
-<script src="{% static 'js/instructor.js' %}"></script>
-<script>
-    (function() {
-        document.getElementById("personal-info-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor_profile' %}";
-        });
-        document.getElementById("my-courses-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor_my_courses' %}";
-        });
-        document.getElementById("grades-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor_grades' %}";
-        });
-        document.getElementById("announcements-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor_announcements' %}";
-        });
-        document.getElementById("logout-btn").addEventListener("click", function() {
-            sessionStorage.clear();
-            window.location.href = "/";
-        });
-    })();
-</script>
 </body>
-</html>
 
+</html>

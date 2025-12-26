@@ -4,7 +4,81 @@
 {% block title %}Announcements{% endblock %}
 
 {% block content %}
-<div style="max-width: 800px; margin: 0 auto;">
+<style>
+    .dropdown-container {
+        position: relative;
+        width: 100%;
+    }
+
+    .dropdown-header {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #f8fafc;
+        font-size: 14px;
+        box-sizing: border-box;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 42px;
+    }
+
+    .dropdown-header:after {
+        content: '▼';
+        font-size: 10px;
+        color: #64748b;
+        margin-left: 8px;
+    }
+
+    .dropdown-list {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #ffffff;
+        z-index: 1000;
+        margin-top: 4px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .dropdown-list.show {
+        display: block;
+    }
+
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: background-color 0.1s;
+        border-bottom: 1px solid #f1f5f9;
+        margin-bottom: 0 !important;
+    }
+
+    .dropdown-item:last-child {
+        border-bottom: none;
+    }
+
+    .dropdown-item:hover {
+        background-color: #f8fafc;
+    }
+
+    .dropdown-item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin-right: 12px;
+        cursor: pointer;
+        accent-color: #3b82f6;
+    }
+</style>
+<div style="max-width: 800px;">
     <h1 style="margin-bottom: 24px;">Announcements</h1>
     
     <!-- Tab Headers -->
@@ -40,14 +114,55 @@
                     <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0f172a;">
                         Send To:
                     </label>
-                    <select name="receiver" id="receiver-select" required style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px;">
-                        <option value="" selected>No one is selected</option>
-                        {% for recipient in recipients %}
-                            <option value="{{ recipient.username }}">{{ recipient.name }} ({{ recipient.role }})</option>
-                        {% endfor %}
-                    </select>
-                    <div id="receiver-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
-                        You need to choose a reciever.
+                    <div class="dropdown-container">
+                        <div class="dropdown-header" id="dropdown-header">
+                            <span id="dropdown-header-text">Select Receiver</span>
+                        </div>
+                        <div class="dropdown-list" id="dropdown-list">
+                            <!-- Courses Section -->
+                            {% for recipient in recipients %}
+                                {% if recipient.role == 'course' %}
+                                <label class="dropdown-item">
+                                    <input type="checkbox" class="receiver-checkbox individual-checkbox"
+                                        value="{{ recipient.username }}" data-name="{{ recipient.name }}">
+                                    <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
+                                </label>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            <!-- Separator if there are both courses and people -->
+                            {% regroup recipients by role as recipients_by_role %}
+                            {% for group in recipients_by_role %}
+                                {% if group.grouper == 'course' %}
+                                    {% for other_group in recipients_by_role %}
+                                        {% if other_group.grouper != 'course' %}
+                                            {% if forloop.first %}
+                                            <div style="padding: 8px 12px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; margin-top: 4px; margin-bottom: 4px;">
+                                                <span style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">People</span>
+                                            </div>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            <!-- Instructors and Faculty Heads -->
+                            {% for recipient in recipients %}
+                                {% if recipient.role != 'course' %}
+                                <label class="dropdown-item">
+                                    <input type="checkbox" class="receiver-checkbox individual-checkbox"
+                                        value="{{ recipient.username }}" data-name="{{ recipient.name }}">
+                                    <span style="font-size: 14px; color: #0f172a;">{{ recipient.name }}</span>
+                                </label>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                        <input type="hidden" name="receivers" id="receivers-input" value="">
+                        <div id="receiver-error"
+                            style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;">
+                            You need to choose a receiver.
+                        </div>
                     </div>
                 </div>
                 <div style="margin-bottom: 16px;">
@@ -235,15 +350,75 @@
             }
         });
 
+        // Dropdown functionality
+        const dropdownHeader = document.getElementById('dropdown-header');
+        const dropdownList = document.getElementById('dropdown-list');
+        const dropdownHeaderText = document.getElementById('dropdown-header-text');
+
+        if (dropdownHeader && dropdownList) {
+            dropdownHeader.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dropdownList.classList.toggle('show');
+            });
+
+            // Prevent dropdown from closing when clicking on checkboxes
+            dropdownList.addEventListener('click', function (e) {
+                e.stopPropagation();
+                // If clicking on a checkbox or label, don't close
+                if (e.target.type === 'checkbox' || e.target.tagName === 'LABEL' || e.target.closest('label')) {
+                    return;
+                }
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!dropdownHeader.contains(e.target) && !dropdownList.contains(e.target)) {
+                    dropdownList.classList.remove('show');
+                }
+            });
+        }
+
+        const individualCheckboxes = document.querySelectorAll('.individual-checkbox');
+
+        // Handle individual checkboxes (courses and people)
+        individualCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function (e) {
+                e.stopPropagation();
+                updateDropdownHeader();
+                updateSendButton();
+            });
+        });
+
+        function updateDropdownHeader() {
+            const checkedCount = document.querySelectorAll('.individual-checkbox:checked').length;
+            const totalCount = individualCheckboxes.length;
+            const receiversInput = document.getElementById('receivers-input');
+
+            // Update hidden input
+            const selectedUsernames = Array.from(document.querySelectorAll('.individual-checkbox:checked'))
+                .map(cb => cb.value);
+            if (receiversInput) {
+                receiversInput.value = selectedUsernames.join(',');
+            }
+
+            if (checkedCount > 0) {
+                dropdownHeaderText.textContent = `${checkedCount} recipient${checkedCount > 1 ? 's' : ''} selected`;
+                dropdownHeaderText.style.color = "#0f172a";
+            } else {
+                dropdownHeaderText.textContent = "Select Receiver";
+                dropdownHeaderText.style.color = "#64748b";
+            }
+        }
+
         // Button enable/disable functionality
         function updateSendButton() {
-            const receiverSelect = document.getElementById('receiver-select');
             const messageTextarea = document.getElementById('message-textarea');
             const sendButton = document.getElementById('send-message-btn');
+            const receiverError = document.getElementById('receiver-error');
+            const messageError = document.getElementById('message-error');
             
-            if (!receiverSelect || !messageTextarea || !sendButton) return;
+            if (!messageTextarea || !sendButton) return;
             
-            const isReceiverSelected = receiverSelect.value && receiverSelect.value !== '';
+            const isReceiverSelected = document.querySelectorAll('.individual-checkbox:checked').length > 0;
             const isMessageFilled = messageTextarea.value && messageTextarea.value.trim() !== '';
             
             if (isReceiverSelected && isMessageFilled) {
@@ -253,6 +428,9 @@
                 sendButton.style.color = '#ffffff';
                 sendButton.style.cursor = 'pointer';
                 sendButton.style.opacity = '1';
+
+                if (receiverError) receiverError.style.display = 'none';
+                if (messageError) messageError.style.display = 'none';
             } else {
                 // Disable button - gray
                 sendButton.disabled = true;
@@ -260,22 +438,20 @@
                 sendButton.style.color = '#ffffff';
                 sendButton.style.cursor = 'not-allowed';
                 sendButton.style.opacity = '0.6';
+
+                if (!isReceiverSelected && receiverError && receiverError.style.display !== 'none') {
+                    receiverError.style.display = 'block';
+                }
             }
         }
 
         // Form validation for send message
         const sendMessageForm = document.querySelector('#content-send form');
         if (sendMessageForm) {
-            const receiverSelect = document.getElementById('receiver-select');
             const messageTextarea = document.getElementById('message-textarea');
             
             // Initialize button state
             updateSendButton();
-            
-            // Update button on receiver change
-            if (receiverSelect) {
-                receiverSelect.addEventListener('change', updateSendButton);
-            }
             
             // Update button on message input
             if (messageTextarea) {
@@ -284,15 +460,14 @@
             }
             
             sendMessageForm.addEventListener('submit', function(e) {
-                // Check if receiver is selected (not "No one is selected")
-                if (!receiverSelect.value || receiverSelect.value === '') {
+                const selectedCount = document.querySelectorAll('.individual-checkbox:checked').length;
+
+                if (selectedCount === 0) {
                     e.preventDefault();
-                    alert('Please select a recipient to send the message.');
-                    receiverSelect.focus();
+                    alert('Please select at least one recipient.');
                     return false;
                 }
-                
-                // Check if message is not empty
+
                 if (!messageTextarea.value || messageTextarea.value.trim() === '') {
                     e.preventDefault();
                     alert('Please enter a message.');

@@ -20,6 +20,28 @@
     "faculty": "Engineering",
     "year": 4,
     "courses": ["Operating Systems", "Software"]
+  },
+  {
+    "firstName": "Pınar",
+    "lastName": "Çetin",
+    "username": "pınar.cetin",
+    "password": "54321",
+    "student_id": "221401018",
+    "department": "Electronical Engineering",
+    "faculty": "Engineering",
+    "year": 3,
+    "courses": ["Data Systems", "Operating Systems"]
+  },
+  {
+    "firstName": "Perisa",
+    "lastName": "Çam",
+    "username": "perisa.cam",
+    "password": "cam123",
+    "student_id": "221401042",
+    "department": "Electronical Engineering",
+    "faculty": "Engineering",
+    "year": 3,
+    "courses": ["Data Systems", "Operating Systems"]
   }
 ]
 
