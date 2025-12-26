@@ -1619,23 +1619,240 @@ def give_grade(request, course_id):
 
 @faculty_head_required
 def faculty_head_grades(request):
+    course_name = request.GET.get('course')
+    if course_name:
+        return redirect('faculty_head_course_grades', course_name=course_name)
+    
+    profile = getattr(request.user, 'profile', None)
+    courses = []
+    if profile:
+        courses = [course.name for course in profile.courses.all()]
+    
     faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
-    faculty_head_data = {}
     try:
         with open(faculty_heads_json_path, encoding='utf-8') as f:
             faculty_heads_list = json.load(f)
             for fh in faculty_heads_list:
                 if fh.get('username') == request.user.username:
-                    faculty_head_data = fh
+                    json_courses = fh.get('courses', [])
+                    courses = list(set(courses + json_courses))
                     break
     except (OSError, json.JSONDecodeError):
         pass
     
+    instructor_courses = Course.objects.filter(instructor=request.user)
+    courses = list(set(courses + [course.name for course in instructor_courses]))
+    
+    return render(request, 'faculty/faculty_head_grades.html', {
+        'faculty_head_courses': courses
+    })
+
+@faculty_head_required
+def faculty_head_course_grades(request, course_name):
+    profile = getattr(request.user, 'profile', None)
+    
+    course = None
+    if profile:
+        course = profile.courses.filter(name=course_name).first()
+    
+    if not course:
+        course = Course.objects.filter(name=course_name, instructor=request.user).first()
+    
+    if not course:
+        faculty_heads_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+        try:
+            with open(faculty_heads_json_path, encoding='utf-8') as f:
+                faculty_heads_list = json.load(f)
+                for fh in faculty_heads_list:
+                    if fh.get('username') == request.user.username:
+                        if course_name in fh.get('courses', []):
+                            course = Course.objects.filter(name=course_name).first()
+                            if not course:
+                                course = Course.objects.create(
+                                    name=course_name,
+                                    instructor=request.user
+                                )
+                            break
+        except (OSError, json.JSONDecodeError):
+            pass
+    
+    if not course:
+        from django.http import Http404
+        raise Http404("Course not found")
+    
+    students = Student.objects.filter(courses=course).order_by('first_name', 'last_name', 'username')
+    
+    if not students.exists():
+        students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+        try:
+            with open(students_json_path, encoding='utf-8') as f:
+                students_data = json.load(f)
+                course_students = []
+                for student_data in students_data:
+                    if course_name in student_data.get('courses', []):
+                        student, created = Student.objects.get_or_create(
+                            username=student_data['username'],
+                            defaults={
+                                'student_id': student_data.get('student_id', student_data['username']),
+                                'first_name': student_data.get('firstName', ''),
+                                'last_name': student_data.get('lastName', ''),
+                                'department': student_data.get('department', ''),
+                                'year': student_data.get('year')
+                            }
+                        )
+                        if created or course not in student.courses.all():
+                            student.courses.add(course)
+                        course_students.append(student)
+                students = Student.objects.filter(id__in=[s.id for s in course_students]).order_by('first_name', 'last_name', 'username')
+        except (OSError, json.JSONDecodeError):
+            pass
+    
+    grades = Grade.objects.filter(course=course).select_related('student')
+    grades_dict = {g.student.id: g for g in grades}
+    
+    students_with_grades = []
+    for student in students:
+        grade = grades_dict.get(student.id)
+        grades_dict_data = grade.grades if grade and grade.grades else {}
+        grades_json = json.dumps(grades_dict_data)
+        students_with_grades.append({
+            'student': student,
+            'grades': grades_dict_data,
+            'grades_json': grades_json,
+            'is_finalized': grade.is_finalized if grade else False
+        })
+    
+    uploaded_file = None
+    if grades.exists():
+        first_grade = grades.first()
+        if first_grade.uploaded_file_name:
+            uploaded_file = {
+                'name': first_grade.uploaded_file_name,
+                'uploaded_at': first_grade.uploaded_at
+            }
+    
+    is_finalized = any(g.is_finalized for g in grades_dict.values()) if grades_dict else False
+    
+    students_with_grades_json = []
+    for item in students_with_grades:
+        student_name = item['student'].first_name + ' ' + item['student'].last_name if (item['student'].first_name or item['student'].last_name) else item['student'].username
+        students_with_grades_json.append({
+            'id': item['student'].id,
+            'name': student_name,
+            'grades': item['grades']
+        })
+    students_with_grades_json_str = json.dumps(students_with_grades_json)
+    
     context = {
-        'faculty_head': json.dumps(faculty_head_data),
-        'user': request.user,
+        'course': course,
+        'students': students,
+        'students_with_grades': students_with_grades,
+        'students_with_grades_json': students_with_grades_json_str,
+        'grades': grades_dict,
+        'uploaded_file': uploaded_file,
+        'is_finalized': is_finalized
     }
-    return render(request, 'faculty/faculty_head_grades.html', context)
+    
+    return render(request, 'faculty/faculty_head_course_grades.html', context)
+
+@csrf_exempt
+@faculty_head_required
+def faculty_head_delete_uploaded_csv(request, course_name):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    profile = getattr(request.user, 'profile', None)
+    course = None
+    if profile:
+        course = profile.courses.filter(name=course_name).first()
+    
+    if not course:
+        course = Course.objects.filter(name=course_name, instructor=request.user).first()
+    
+    if not course:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    Grade.objects.filter(course=course).update(
+        uploaded_file_name='',
+        uploaded_at=None
+    )
+    
+    return JsonResponse({'status': 'ok'})
+
+@csrf_exempt
+@faculty_head_required
+def faculty_head_update_manual_grades(request, course_name):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    profile = getattr(request.user, 'profile', None)
+    course = None
+    if profile:
+        course = profile.courses.filter(name=course_name).first()
+    
+    if not course:
+        course = Course.objects.filter(name=course_name, instructor=request.user).first()
+    
+    if not course:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    existing_grades = Grade.objects.filter(course=course)
+    if any(g.is_finalized for g in existing_grades):
+        return JsonResponse({'error': 'Grades are finalized and cannot be changed'}, status=403)
+    
+    data = json.loads(request.body)
+    students_data = data.get('students', [])
+    
+    for student_data in students_data:
+        student_id = student_data.get('student_id')
+        student = get_object_or_404(Student, id=student_id)
+        
+        grade, created = Grade.objects.get_or_create(
+            student=student,
+            course=course,
+            defaults={}
+        )
+        
+        grades_list = student_data.get('grades', [])
+        grades_dict = {}
+        for grade_item in grades_list:
+            name = grade_item.get('name', '').strip()
+            score = grade_item.get('score', '')
+            if name and score:
+                try:
+                    grades_dict[name] = float(score)
+                except (ValueError, TypeError):
+                    pass
+        
+        grade.grades = grades_dict
+        grade.save()
+    
+    return JsonResponse({'status': 'ok'})
+
+@csrf_exempt
+@faculty_head_required
+def faculty_head_finalize_grades(request, course_name):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    profile = getattr(request.user, 'profile', None)
+    course = None
+    if profile:
+        course = profile.courses.filter(name=course_name).first()
+    
+    if not course:
+        course = Course.objects.filter(name=course_name, instructor=request.user).first()
+    
+    if not course:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    from django.utils import timezone
+    Grade.objects.filter(course=course).update(
+        is_finalized=True,
+        finalized_at=timezone.now()
+    )
+    
+    return JsonResponse({'status': 'ok'})
 
 
 @instructor_required

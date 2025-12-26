@@ -43,6 +43,10 @@ urlpatterns = [
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
     path('faculty-head/logout/', core_views.faculty_head_logout, name='faculty-head-logout'),
     path('faculty-head/grades/', core_views.faculty_head_grades, name='faculty-head-grades'),
+    path('faculty-head/grades/<str:course_name>/', core_views.faculty_head_course_grades, name='faculty_head_course_grades'),
+    path('faculty-head/grades/<str:course_name>/delete-csv/', core_views.faculty_head_delete_uploaded_csv, name='faculty_head_delete_uploaded_csv'),
+    path('faculty-head/grades/<str:course_name>/update-manual/', core_views.faculty_head_update_manual_grades, name='faculty_head_update_manual_grades'),
+    path('faculty-head/grades/<str:course_name>/finalize/', core_views.faculty_head_finalize_grades, name='faculty_head_finalize_grades'),
     path('faculty-head/announcements/', core_views.faculty_head_announcements, name='faculty-head-announcements'),
     path('faculty-head/profile/', core_views.faculty_head_profile, name='faculty_head_profile'),
 
