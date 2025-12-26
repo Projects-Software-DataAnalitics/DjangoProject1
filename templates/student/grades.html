@@ -12,6 +12,7 @@
             <thead>
                 <tr style="background-color: #0b5fff; color: white;">
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Credit</th>
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Grades</th>
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Details</th>
                 </tr>
@@ -20,6 +21,7 @@
                 {% for item in courses_with_grades %}
                 <tr style="border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px; border: 1px solid #ddd;">{{ item.course_name }}</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">{{ item.credits|default:"-" }}</td>
                     <td style="padding: 12px; border: 1px solid #ddd;">
                         {% if item.grades %}
                             <div style="display: flex; flex-direction: column; gap: 5px;">
@@ -49,13 +51,14 @@
             <thead>
                 <tr style="background-color: #0b5fff; color: white;">
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Credit</th>
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Grades</th>
                     <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Details</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td colspan="5" style="padding: 12px; text-align: center; border: 1px solid #ddd; color: #666;">No courses available.</td>
+                    <td colspan="4" style="padding: 12px; text-align: center; border: 1px solid #ddd; color: #666;">No courses available.</td>
                 </tr>
             </tbody>
         </table>

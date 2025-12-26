@@ -15,10 +15,10 @@
     "password": "1234",
     "faculty": "Engineering",
     "department": "Computer Engineering",
-    "courses": ["Operating Systems","Data Systems"]
+    "courses": ["Operating Systems"]
   },
   {
-    "firstName": "Barış",
+    "firstName": "Baris",
     "lastName": "Arslan",
     "username": "baris.arslan",
     "password": "barisarslan",

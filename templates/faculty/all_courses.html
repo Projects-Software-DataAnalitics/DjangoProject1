@@ -6,11 +6,45 @@
 {% block content %}
     <h1>All Courses In Your Department</h1>
 
+    <div style="margin-bottom: 20px; padding: 20px; background: #f3f4f6; border-radius: 8px;">
+        <h2 style="margin-top: 0; margin-bottom: 15px;">Add New Course</h2>
+        <form id="add-course-form" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: end;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_course">
+            <div style="flex: 1; min-width: 200px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Course Name:</label>
+                <input type="text" name="course_name" id="course_name_input" required style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Instructor:</label>
+                <select name="instructor_username" id="instructor_select" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    <option value="">Select Instructor</option>
+                    {% for inst in available_instructors %}
+                    <option value="{{ inst.username }}">{{ inst.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex: 0 0 120px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Credits:</label>
+                <input type="number" name="credits" id="credits_input" min="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+            </div>
+            <div>
+                <button type="submit" style="padding: 8px 20px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Add Course</button>
+            </div>
+        </form>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2 style="margin: 0;">Courses</h2>
+        <button id="edit-toggle-btn" style="padding: 8px 20px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Edit</button>
+    </div>
+
     <table class="grades-table">
         <thead>
         <tr>
             <th>Course</th>
             <th>Instructor</th>
+            <th>Credits</th>
             <th>Learning Outcomes</th>
         </tr>
         </thead>
@@ -19,64 +53,312 @@
     </table>
 
     <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+        
+        let isEditMode = false;
         const tbody = document.getElementById("all-courses-body");
         const facultyCoursesJson = '{{ faculty_courses_json|escapejs }}';
+        const availableInstructorsJson = '{{ available_instructors_json|escapejs }}';
         let facultyCourses = [];
+        let availableInstructors = [];
         
         try {
             facultyCourses = JSON.parse(facultyCoursesJson);
+            availableInstructors = JSON.parse(availableInstructorsJson);
         } catch (e) {
-            console.error('Error parsing faculty courses:', e);
+            console.error('Error parsing JSON:', e);
         }
         
-        if (!facultyCourses || facultyCourses.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3">No courses found in your department.</td></tr>';
-        } else {
-            facultyCourses.forEach(item => {
-                const tr = document.createElement("tr");
-                const courseName = (item.course || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const instructorName = (item.instructor || 'Unknown').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const courseId = item.course_id;
-                const firstLoId = item.first_lo_id;
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const editBtn = document.getElementById('edit-toggle-btn');
+            const rows = tbody.querySelectorAll('tr[data-course-id]');
+            
+            if (isEditMode) {
+                editBtn.textContent = 'Save';
+                editBtn.style.background = '#10b981';
+                rows.forEach(row => {
+                    const courseId = row.getAttribute('data-course-id');
+                    if (!courseId) return;
+                    
+                    const courseCell = row.querySelector('.course-cell');
+                    const instructorCell = row.querySelector('.instructor-cell');
+                    const creditsCell = row.querySelector('.credits-cell');
+                    
+                    if (courseCell && !courseCell.querySelector('input')) {
+                        const originalValue = courseCell.textContent.trim();
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = originalValue;
+                        input.className = 'edit-input';
+                        input.style.cssText = 'width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px;';
+                        courseCell.textContent = '';
+                        courseCell.appendChild(input);
+                        courseCell.setAttribute('data-original', originalValue);
+                    }
+                    
+                    if (instructorCell && !instructorCell.querySelector('select')) {
+                        let originalValue = instructorCell.getAttribute('data-instructor-username') || '';
+                        if (!originalValue) {
+                            const instructorText = instructorCell.textContent.trim();
+                            const foundInstructor = availableInstructors.find(inst => inst.name === instructorText);
+                            if (foundInstructor) {
+                                originalValue = foundInstructor.username;
+                                instructorCell.setAttribute('data-instructor-username', originalValue);
+                            }
+                        }
+                        const select = document.createElement('select');
+                        select.className = 'edit-select';
+                        select.style.cssText = 'width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px;';
+                        const option = document.createElement('option');
+                        option.value = '';
+                        option.textContent = 'Select Instructor';
+                        select.appendChild(option);
+                        availableInstructors.forEach(inst => {
+                            const opt = document.createElement('option');
+                            opt.value = inst.username;
+                            opt.textContent = inst.name;
+                            if (inst.username === originalValue) {
+                                opt.selected = true;
+                            }
+                            select.appendChild(opt);
+                        });
+                        instructorCell.textContent = '';
+                        instructorCell.appendChild(select);
+                        instructorCell.setAttribute('data-original', originalValue);
+                    }
+                    
+                    if (creditsCell && !creditsCell.querySelector('input')) {
+                        const originalValue = creditsCell.textContent.trim();
+                        const input = document.createElement('input');
+                        input.type = 'number';
+                        input.min = '0';
+                        input.value = originalValue === '-' ? '' : originalValue;
+                        input.className = 'edit-input';
+                        input.style.cssText = 'width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px;';
+                        creditsCell.textContent = '';
+                        creditsCell.appendChild(input);
+                        creditsCell.setAttribute('data-original', originalValue);
+                    }
+                });
+            } else {
+                editBtn.textContent = 'Edit';
+                editBtn.style.background = '#10b981';
                 
-                const courseTd = document.createElement('td');
-                courseTd.textContent = courseName;
-                
-                const instructorTd = document.createElement('td');
-                instructorTd.textContent = instructorName;
-                
-                const loTd = document.createElement('td');
-                if (courseId && firstLoId) {
-                    const viewLink = document.createElement('a');
-                    viewLink.href = '/faculty-head/courses/' + courseId + '/learning-outcomes/' + firstLoId + '/';
-                    viewLink.textContent = 'View';
-                    viewLink.style.display = 'inline-block';
-                    viewLink.style.padding = '8px 16px';
-                    viewLink.style.background = '#2563eb';
-                    viewLink.style.color = '#ffffff';
-                    viewLink.style.textDecoration = 'none';
-                    viewLink.style.borderRadius = '6px';
-                    viewLink.style.fontSize = '13px';
-                    viewLink.style.fontWeight = '500';
-                    viewLink.style.cursor = 'pointer';
-                    viewLink.style.transition = 'all 0.2s';
-                    viewLink.addEventListener('mouseenter', function() {
-                        this.style.background = '#1d4ed8';
-                    });
-                    viewLink.addEventListener('mouseleave', function() {
-                        this.style.background = '#2563eb';
-                    });
-                    loTd.appendChild(viewLink);
-                } else {
-                    loTd.textContent = '-';
-                    loTd.style.color = '#9ca3af';
+                rows.forEach(row => {
+                    const courseId = row.getAttribute('data-course-id');
+                    if (!courseId) return;
+                    
+                    const courseCell = row.querySelector('.course-cell');
+                    const instructorCell = row.querySelector('.instructor-cell');
+                    const creditsCell = row.querySelector('.credits-cell');
+                    
+                    if (courseCell) {
+                        const input = courseCell.querySelector('input');
+                        if (input) {
+                            const newValue = input.value.trim();
+                            if (newValue && newValue !== courseCell.getAttribute('data-original')) {
+                                courseCell.textContent = newValue;
+                                updateCourseField(courseId, 'course_name', newValue);
+                            } else {
+                                courseCell.textContent = courseCell.getAttribute('data-original') || '';
+                            }
+                        }
+                    }
+                    
+                    if (instructorCell) {
+                        const select = instructorCell.querySelector('select');
+                        if (select) {
+                            const newValue = select.value;
+                            const selectedOption = select.options[select.selectedIndex];
+                            const displayName = selectedOption ? selectedOption.textContent : 'Unknown';
+                            instructorCell.textContent = displayName;
+                            instructorCell.setAttribute('data-instructor-username', newValue);
+                            if (newValue !== instructorCell.getAttribute('data-original')) {
+                                updateCourseField(courseId, 'instructor_username', newValue);
+                            }
+                        }
+                    }
+                    
+                    if (creditsCell) {
+                        const input = creditsCell.querySelector('input');
+                        if (input) {
+                            const newValue = input.value.trim();
+                            creditsCell.textContent = newValue || '-';
+                            if (newValue !== creditsCell.getAttribute('data-original')) {
+                                updateCourseField(courseId, 'credits', newValue);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        function updateCourseField(courseId, field, value) {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', csrftoken);
+            formData.append('action', 'update_course');
+            formData.append('course_id', courseId);
+            
+            if (field === 'course_name') {
+                formData.append('course_name', value);
+            } else if (field === 'instructor_username') {
+                formData.append('instructor_username', value);
+            } else if (field === 'credits') {
+                formData.append('credits', value);
+            }
+            
+            fetch('{% url "all_courses" %}', {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (response.ok) {
+                    console.log('Course updated successfully');
                 }
-                
-                tr.appendChild(courseTd);
-                tr.appendChild(instructorTd);
-                tr.appendChild(loTd);
-                tbody.appendChild(tr);
+            }).catch(error => {
+                console.error('Error updating course:', error);
             });
         }
+        
+        function addRowToTable(courseData) {
+            const tr = document.createElement("tr");
+            tr.setAttribute('data-course-id', courseData.course_id || '');
+            
+            const courseName = (courseData.course || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const instructorName = (courseData.instructor || 'Unknown').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const credits = courseData.credits !== null && courseData.credits !== undefined ? courseData.credits : '-';
+            const firstLoId = courseData.first_lo_id;
+            const courseId = courseData.course_id;
+            
+            const courseTd = document.createElement('td');
+            courseTd.className = 'course-cell';
+            courseTd.textContent = courseName;
+            
+            const instructorTd = document.createElement('td');
+            instructorTd.className = 'instructor-cell';
+            instructorTd.textContent = instructorName;
+            let instructorUsername = courseData.instructor_username;
+            if (!instructorUsername) {
+                const foundInstructor = availableInstructors.find(inst => {
+                    const instName = inst.name.trim();
+                    const courseInstructorName = instructorName.trim();
+                    return instName === courseInstructorName || 
+                           instName.toLowerCase() === courseInstructorName.toLowerCase();
+                });
+                if (foundInstructor) {
+                    instructorUsername = foundInstructor.username;
+                }
+            }
+            if (instructorUsername) {
+                instructorTd.setAttribute('data-instructor-username', instructorUsername);
+            }
+            
+            const creditsTd = document.createElement('td');
+            creditsTd.className = 'credits-cell';
+            creditsTd.textContent = credits;
+            
+            const loTd = document.createElement('td');
+            if (courseId && firstLoId) {
+                const viewLink = document.createElement('a');
+                viewLink.href = '/faculty-head/courses/' + courseId + '/learning-outcomes/' + firstLoId + '/';
+                viewLink.textContent = 'View';
+                viewLink.style.display = 'inline-block';
+                viewLink.style.padding = '8px 16px';
+                viewLink.style.background = '#2563eb';
+                viewLink.style.color = '#ffffff';
+                viewLink.style.textDecoration = 'none';
+                viewLink.style.borderRadius = '6px';
+                viewLink.style.fontSize = '13px';
+                viewLink.style.fontWeight = '500';
+                viewLink.style.cursor = 'pointer';
+                viewLink.style.transition = 'all 0.2s';
+                viewLink.addEventListener('mouseenter', function() {
+                    this.style.background = '#1d4ed8';
+                });
+                viewLink.addEventListener('mouseleave', function() {
+                    this.style.background = '#2563eb';
+                });
+                loTd.appendChild(viewLink);
+            } else {
+                loTd.textContent = '-';
+                loTd.style.color = '#9ca3af';
+            }
+            
+            tr.appendChild(courseTd);
+            tr.appendChild(instructorTd);
+            tr.appendChild(creditsTd);
+            tr.appendChild(loTd);
+            tbody.appendChild(tr);
+        }
+        
+        function renderTable() {
+            tbody.innerHTML = '';
+            if (!facultyCourses || facultyCourses.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No courses found in your department.</td></tr>';
+            } else {
+                facultyCourses.forEach(item => {
+                    addRowToTable(item);
+                });
+            }
+        }
+        
+        document.getElementById('edit-toggle-btn').addEventListener('click', toggleEditMode);
+        
+        document.getElementById('add-course-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const courseName = document.getElementById('course_name_input').value.trim();
+            const instructorSelect = document.getElementById('instructor_select');
+            const selectedInstructor = instructorSelect.options[instructorSelect.selectedIndex];
+            const instructorName = selectedInstructor ? selectedInstructor.textContent : 'Unknown';
+            const instructorUsername = selectedInstructor ? selectedInstructor.value : '';
+            const credits = document.getElementById('credits_input').value.trim();
+            
+            const formData = new FormData(this);
+            
+            fetch('{% url "all_courses" %}', {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (response.ok) {
+                    return response.text();
+                }
+                throw new Error('Network response was not ok');
+            }).then(html => {
+                const newCourseData = {
+                    course: courseName,
+                    instructor: instructorName,
+                    credits: credits ? parseInt(credits) : null,
+                    course_id: null,
+                    first_lo_id: null,
+                    instructor_username: instructorUsername
+                };
+                
+                addRowToTable(newCourseData);
+                
+                document.getElementById('course_name_input').value = '';
+                document.getElementById('instructor_select').selectedIndex = 0;
+                document.getElementById('credits_input').value = '';
+            }).catch(error => {
+                console.error('Error adding course:', error);
+                alert('Error adding course. Please try again.');
+            });
+        });
+        
+        renderTable();
     </script>
 {% endblock %}

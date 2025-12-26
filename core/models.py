@@ -45,6 +45,7 @@ class Course(models.Model):
     code = models.CharField(max_length=20, blank=True)
     instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='instructor_courses')
     department = models.CharField(max_length=200, blank=True)
+    credits = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         if self.code:
