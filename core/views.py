@@ -3083,11 +3083,22 @@ def student_grades(request):
                 if grade_obj.final is not None:
                     grades_dict['Final'] = grade_obj.final
             
-            courses_with_grades.append({
+            course_data = {
                 'course_name': course.name,
                 'grades': grades_dict,
                 'credits': course.credits,
-            })
+            }
+            
+            if grade_obj:
+                course_data['midterm'] = grade_obj.midterm
+                course_data['assignment'] = grade_obj.assignment
+                course_data['final'] = grade_obj.final
+            else:
+                course_data['midterm'] = None
+                course_data['assignment'] = None
+                course_data['final'] = None
+            
+            courses_with_grades.append(course_data)
     except Student.DoesNotExist:
         courses_with_grades = []
     
