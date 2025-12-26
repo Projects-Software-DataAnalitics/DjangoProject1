@@ -1916,11 +1916,12 @@ def student_courses(request):
     if not request.user.is_authenticated:
         return redirect('student-login')
     
+    courses_data = []
+    
     try:
         student = Student.objects.get(user=request.user)
         courses = student.courses.all().select_related('instructor')
         
-        courses_data = []
         for course in courses:
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
             courses_data.append({
@@ -1931,7 +1932,45 @@ def student_courses(request):
                 'department': course.department,
             })
     except Student.DoesNotExist:
-        courses_data = []
+        pass
+    
+    # If no courses in database, try to sync from JSON
+    if not courses_data:
+        try:
+            student = Student.objects.get(user=request.user)
+            students_json_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+            
+            try:
+                with open(students_json_path, encoding='utf-8') as f:
+                    students_data = json.load(f)
+                    student_data = None
+                    for entry in students_data:
+                        if entry.get('username') == student.username:
+                            student_data = entry
+                            break
+                    
+                    if student_data:
+                        course_names = student_data.get('courses', [])
+                        for course_name in course_names:
+                            # Try to find course in database
+                            course = Course.objects.filter(name=course_name).first()
+                            if course:
+                                # Add course to student if not already added
+                                if course not in student.courses.all():
+                                    student.courses.add(course)
+                                
+                                instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+                                courses_data.append({
+                                    'id': course.id,
+                                    'name': course.name,
+                                    'code': course.code,
+                                    'instructor': instructor_name,
+                                    'department': course.department,
+                                })
+            except (OSError, json.JSONDecodeError):
+                pass
+        except Student.DoesNotExist:
+            pass
     
     return render(request, "student/courses.html", {
         'courses': courses_data
