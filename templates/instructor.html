@@ -782,32 +782,56 @@
         const instructorCourses = instructorCoursesDataScript ? JSON.parse(instructorCoursesDataScript.textContent) : [];
         if (typeof showGrades === 'function') {
             const infoDiv = document.getElementById("personal-info");
-            const coursesOptions = (instructorCourses || []).map(function(course) {
-                return '<option value="' + course + '">' + course + '</option>';
-            }).join('');
+            const courses = instructorCourses || [];
+            
+            let coursesTableRows = '';
+            if (courses.length > 0) {
+                coursesTableRows = courses.map(function(course, index) {
+                    let rowStyle = 'cursor: pointer; border-bottom: 1px solid #ddd;';
+                    if (index % 2 === 0) {
+                        rowStyle += ' background-color: #f8fafc;';
+                    }
+                    return '<tr class="course-row" data-course="' + course + '" style="' + rowStyle + '">' +
+                           '<td style="padding: 12px; border: 1px solid #ddd;">' + course + '</td>' +
+                           '</tr>';
+                }).join('');
+            } else {
+                coursesTableRows = '<tr><td style="padding: 12px; text-align: center; color: #666; border: 1px solid #ddd;">No courses available</td></tr>';
+            }
             
             infoDiv.innerHTML = '<h2>Grades</h2>' +
-                '<div style="margin-top: 24px;">' +
-                '<label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>' +
-                '<select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">' +
-                '<option value="">-- Select a course --</option>' +
-                coursesOptions +
-                '</select>' +
+                '<div style="margin-top: 24px; display: flex; justify-content: center;">' +
+                '<table id="courses-table" style="width: 100%; max-width: 500px; border-collapse: collapse; margin-top: 20px;">' +
+                '<thead>' +
+                '<tr style="background-color: #0b5fff; color: white;">' +
+                '<th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                coursesTableRows +
+                '</tbody>' +
+                '</table>' +
                 '</div>' +
                 '<div id="file-upload-section" style="margin-top: 24px; display: none;"></div>' +
                 '<div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>';
             
-            const courseSelect = document.getElementById("course-select");
-            if (courseSelect) {
-                courseSelect.addEventListener("change", function() {
-                    const selectedCourse = this.value;
-                    
-                    if (selectedCourse) {
-                        // Yeni not yönetim sayfasına yönlendir
-                        window.location.href = '/instructor/grades/' + encodeURIComponent(selectedCourse) + '/';
+            // Add click event listeners to course rows
+            const courseRows = document.querySelectorAll('.course-row');
+            courseRows.forEach(function(row, index) {
+                const originalBg = index % 2 === 0 ? '#f8fafc' : 'white';
+                row.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#e0f2fe';
+                });
+                row.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = originalBg;
+                });
+                row.addEventListener('click', function() {
+                    const courseName = this.dataset.course;
+                    if (courseName) {
+                        window.location.href = '/instructor/grades/' + encodeURIComponent(courseName) + '/';
                     }
                 });
-            }
+            });
         }
     </script>
     {% else %}

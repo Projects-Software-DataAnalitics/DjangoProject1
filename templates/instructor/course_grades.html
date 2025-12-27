@@ -2,18 +2,24 @@
 {% load static %}
 
 {% block content %}
-<h1>Grades Management - {{ course.name }}</h1>
+<div style="margin-left: 50px; margin-bottom: 20px;">
+    <a href="{% url 'instructor_grades' %}" style="display: inline-flex; align-items: center; gap: 6px; color: #0b5fff; text-decoration: none; font-size: 14px; font-weight: 600; margin-bottom: 10px;">
+        <span style="font-size: 16px; color: #0b5fff;">←</span>
+        <span style="color: #0b5fff;">Go Back</span>
+    </a>
+    <h1 style="margin: 0;">Grades Management - {{ course.name }}</h1>
+</div>
 
 <!-- Assessment Management Section -->
-<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 8px; border: 1px solid #dee2e6;">
+<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2 style="margin: 0; color: #0f172a;">Assessment Management</h2>
         <button type="button" id="toggle-assessment-btn" 
-                style="padding: 8px 16px; background: #0b5fff; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                style="padding: 8px 16px; background: #0b5fff; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
             <span id="toggle-assessment-text">Show</span>
-        </button>
-    </div>
-    
+    </button>
+</div>
+
     <div id="assessment-content" style="display: none;">
     <!-- Assessment Counts Section -->
     <div style="margin-bottom: 30px;">
@@ -23,47 +29,47 @@
                 <label for="midterm" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Midterm</label>
                 <input type="number" id="midterm" name="midterm" value="{{ assessment.midterm }}" 
                        min="0" max="9" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
-            </div>
-            
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+</div>
+
             <div style="flex: 0 0 auto;">
                 <label for="final" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Final</label>
                 <input type="number" id="final" name="final" value="{{ assessment.final }}" 
                        min="0" max="9" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
-            </div>
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+                                </div>
             
             <div style="flex: 0 0 auto;">
-                <label for="proje" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Proje</label>
-                <input type="number" id="proje" name="proje" value="{{ assessment.proje }}" 
+                <label for="project" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Project</label>
+                <input type="number" id="project" name="project" value="{{ assessment.project }}" 
                        min="0" max="9" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
-            </div>
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+                            </div>
             
             <div style="flex: 0 0 auto;">
-                <label for="homework" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Homework</label>
-                <input type="number" id="homework" name="homework" value="{{ assessment.homework }}" 
+                <label for="assignment" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Assignment</label>
+                <input type="number" id="assignment" name="assignment" value="{{ assessment.assignment }}" 
                        min="0" max="9" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
-            </div>
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+    </div>
             
             <div style="flex: 0 0 auto;">
                 <label for="absence" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Absence</label>
                 <input type="number" id="absence" name="absence" value="{{ assessment.absence }}" 
                        min="0" max="9" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
-            </div>
-            
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+</div>
+
             <div style="flex: 0 0 auto;">
                 <label for="quiz" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Quiz</label>
                 <input type="number" id="quiz" name="quiz" value="{{ assessment.quiz }}" 
                        min="0" max="9" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
             </div>
             
             <div style="flex: 0 0 auto; margin-left: 20px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Total Count</label>
-                <div id="assessment-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center;">
+                <div id="assessment-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
                     {{ assessment.assessment_count }}
                 </div>
             </div>
@@ -78,47 +84,47 @@
                 <label for="midterm_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Midterm %</label>
                 <input type="number" id="midterm_percentage" name="midterm_percentage" value="{{ assessment.midterm_percentage }}" 
                        min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
             </div>
             
             <div style="flex: 0 0 auto;">
                 <label for="final_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Final %</label>
                 <input type="number" id="final_percentage" name="final_percentage" value="{{ assessment.final_percentage }}" 
                        min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
             </div>
             
             <div style="flex: 0 0 auto;">
-                <label for="proje_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Proje %</label>
-                <input type="number" id="proje_percentage" name="proje_percentage" value="{{ assessment.proje_percentage }}" 
+                <label for="project_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Project %</label>
+                <input type="number" id="project_percentage" name="project_percentage" value="{{ assessment.project_percentage }}" 
                        min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
             </div>
             
             <div style="flex: 0 0 auto;">
-                <label for="homework_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Homework %</label>
-                <input type="number" id="homework_percentage" name="homework_percentage" value="{{ assessment.homework_percentage }}" 
+                <label for="assignment_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Assignment %</label>
+                <input type="number" id="assignment_percentage" name="assignment_percentage" value="{{ assessment.assignment_percentage }}" 
                        min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
             </div>
             
             <div style="flex: 0 0 auto;">
                 <label for="absence_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Absence %</label>
                 <input type="number" id="absence_percentage" name="absence_percentage" value="{{ assessment.absence_percentage }}" 
                        min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
             </div>
             
             <div style="flex: 0 0 auto;">
                 <label for="quiz_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Quiz %</label>
                 <input type="number" id="quiz_percentage" name="quiz_percentage" value="{{ assessment.quiz_percentage }}" 
                        min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
             </div>
             
             <div style="flex: 0 0 auto; margin-left: 20px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Total %</label>
-                <div id="percentage-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center;">
+                <div id="percentage-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
                     {{ assessment.percentage_count }}
                 </div>
             </div>
@@ -127,27 +133,26 @@
     
     <!-- Combined Save Button -->
     <button type="button" id="save-all-btn" 
-            style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer;">
+            style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
         Save
-    </button>
+                        </button>
     
     <!-- Combined Message Display -->
-    <div id="combined-message" style="margin-top: 15px; padding: 12px; border-radius: 6px; display: none;"></div>
+    <div id="combined-message" style="margin-top: 15px; padding: 12px; border-radius: 12px; display: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"></div>
     </div>
-</div>
-
+    </div>
+    
 <!-- Grade Upload Section - Separate Box -->
-<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 8px; border: 1px solid #dee2e6;">
+<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2 style="margin: 0; color: #0f172a;">Upload Grades - With CSV</h2>
         <button type="button" id="download-template-btn" 
-                style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
             Download Student List CSV
         </button>
-    </div>
+                                </div>
     <p style="margin-bottom: 20px; color: #475569; font-size: 14px;">
-        Upload separate CSV files for each assessment. CSV format: <code>student_id, score</code><br>
-        <small style="color: #64748b;">Note: All files for an assessment type must be uploaded before the average is calculated and saved.</small>
+        Upload separate CSV files for each assessment. CSV format: <code>student_id, score</code>
     </p>
     
     <div id="grade-upload-boxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
@@ -159,26 +164,26 @@
 </div>
 
 <!-- Grades List Section -->
-<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 8px; border: 1px solid #dee2e6;">
+<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
     <h2 style="margin: 0 0 20px 0; color: #0f172a;">Grades List</h2>
     
     <!-- Last Changes Info -->
-    <div id="last-changes-info" style="margin-bottom: 15px; padding: 8px 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #64748b; display: none;">
+    <div id="last-changes-info" style="margin-bottom: 15px; padding: 8px 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 12px; color: #64748b; display: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
         <strong>Last Changed:</strong> <span id="last-changes-time"></span>
     </div>
     
     <!-- Save Button and Error Message -->
     <div id="grades-list-controls" style="margin-bottom: 15px;">
         <button type="button" id="save-grade-changes-btn" 
-                style="padding: 8px 16px; background: #94a3b8; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: not-allowed; opacity: 0.6;"
+                style="padding: 8px 16px; background: #94a3b8; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: not-allowed; opacity: 0.6; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"
                 disabled>
             Save Changes
         </button>
-        <div id="grade-edit-error" style="margin-top: 10px; padding: 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; display: none; font-size: 13px;"></div>
+        <div id="grade-edit-error" style="margin-top: 10px; padding: 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 10px; display: none; font-size: 13px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"></div>
     </div>
     
     <div id="grades-list-table-container" style="overflow-x: auto;">
-        <table id="grades-list-table" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden;">
+        <table id="grades-list-table" style="width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
             <thead id="grades-table-head">
                 <!-- Table headers will be dynamically generated -->
             </thead>
@@ -237,8 +242,8 @@ function getCsrfToken() {
         const countData = {
             midterm: parseInt(document.getElementById('midterm').value),
             final: parseInt(document.getElementById('final').value),
-            proje: parseInt(document.getElementById('proje').value),
-            homework: parseInt(document.getElementById('homework').value),
+            project: parseInt(document.getElementById('project').value),
+            assignment: parseInt(document.getElementById('assignment').value),
             absence: parseInt(document.getElementById('absence').value),
             quiz: parseInt(document.getElementById('quiz').value)
         };
@@ -247,8 +252,8 @@ function getCsrfToken() {
         const percentageData = {
             midterm_percentage: parseInt(document.getElementById('midterm_percentage').value),
             final_percentage: parseInt(document.getElementById('final_percentage').value),
-            proje_percentage: parseInt(document.getElementById('proje_percentage').value),
-            homework_percentage: parseInt(document.getElementById('homework_percentage').value),
+            project_percentage: parseInt(document.getElementById('project_percentage').value),
+            assignment_percentage: parseInt(document.getElementById('assignment_percentage').value),
             absence_percentage: parseInt(document.getElementById('absence_percentage').value),
             quiz_percentage: parseInt(document.getElementById('quiz_percentage').value)
         };
@@ -284,8 +289,8 @@ function getCsrfToken() {
         const assessmentMapping = {
             'midterm_percentage': { count: 'midterm', name: 'Midterm' },
             'final_percentage': { count: 'final', name: 'Final' },
-            'proje_percentage': { count: 'proje', name: 'Proje' },
-            'homework_percentage': { count: 'homework', name: 'Homework' },
+            'project_percentage': { count: 'project', name: 'Project' },
+            'assignment_percentage': { count: 'assignment', name: 'Assignment' },
             'absence_percentage': { count: 'absence', name: 'Absence' },
             'quiz_percentage': { count: 'quiz', name: 'Quiz' }
         };
@@ -304,16 +309,16 @@ function getCsrfToken() {
         const countToPercentageMapping = {
             'midterm': 'midterm_percentage',
             'final': 'final_percentage',
-            'proje': 'proje_percentage',
-            'homework': 'homework_percentage',
+            'project': 'project_percentage',
+            'assignment': 'assignment_percentage',
             'absence': 'absence_percentage',
             'quiz': 'quiz_percentage'
         };
         const countToNameMapping = {
             'midterm': 'Midterm',
             'final': 'Final',
-            'proje': 'Proje',
-            'homework': 'Homework',
+            'project': 'Project',
+            'assignment': 'Assignment',
             'absence': 'Absence',
             'quiz': 'Quiz'
         };
@@ -408,7 +413,7 @@ function getCsrfToken() {
     const percentageCountDisplay = document.getElementById('percentage-count-display');
     
     // Percentage input değişikliklerinde toplamı güncelle
-    const percentageInputs = percentagesForm.querySelectorAll('input[type="number"]');
+    const percentageInputs = percentagesForm ? percentagesForm.querySelectorAll('input[type="number"]') : [];
     percentageInputs.forEach(input => {
         input.addEventListener('input', function() {
             updatePercentageTotal();
@@ -416,16 +421,26 @@ function getCsrfToken() {
     });
     
     function updatePercentageTotal() {
+        if (!percentageCountDisplay) return;
+        
+        // Input'ları tekrar al (güncel değerler için)
+        const currentInputs = percentagesForm ? percentagesForm.querySelectorAll('input[type="number"]') : [];
         let total = 0;
-        percentageInputs.forEach(input => {
+        currentInputs.forEach(input => {
             const value = parseInt(input.value) || 0;
             total += value;
         });
         percentageCountDisplay.textContent = total;
     }
     
-    // Sayfa yüklendiğinde percentage toplamını güncelle
-    updatePercentageTotal();
+    // Sayfa yüklendiğinde percentage toplamını güncelle (DOM tamamen yüklendikten sonra)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(updatePercentageTotal, 100);
+        });
+    } else {
+        setTimeout(updatePercentageTotal, 100);
+    }
     
     // Toggle Assessment Management content
     const toggleAssessmentBtn = document.getElementById('toggle-assessment-btn');
@@ -483,8 +498,8 @@ function getCsrfToken() {
         const assessmentTypes = [
             { key: 'midterm', label: 'Midterm', count: parseInt(document.getElementById('midterm')?.value || '{{ assessment.midterm }}') || 0 },
             { key: 'final', label: 'Final', count: parseInt(document.getElementById('final')?.value || '{{ assessment.final }}') || 0 },
-            { key: 'proje', label: 'Proje', count: parseInt(document.getElementById('proje')?.value || '{{ assessment.proje }}') || 0 },
-            { key: 'homework', label: 'Homework', count: parseInt(document.getElementById('homework')?.value || '{{ assessment.homework }}') || 0 },
+            { key: 'project', label: 'Project', count: parseInt(document.getElementById('project')?.value || '{{ assessment.project }}') || 0 },
+            { key: 'assignment', label: 'Assignment', count: parseInt(document.getElementById('assignment')?.value || '{{ assessment.assignment }}') || 0 },
             { key: 'absence', label: 'Absence', count: parseInt(document.getElementById('absence')?.value || '{{ assessment.absence }}') || 0 },
             { key: 'quiz', label: 'Quiz', count: parseInt(document.getElementById('quiz')?.value || '{{ assessment.quiz }}') || 0 }
         ];
@@ -498,7 +513,7 @@ function getCsrfToken() {
                 for (let i = 1; i <= type.count; i++) {
                     const assessmentKey = `${type.key}_${i}`;
                     const box = document.createElement('div');
-                    box.style.cssText = 'padding: 20px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;';
+                    box.style.cssText = 'padding: 20px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);';
                     box.innerHTML = `
                         <h4 style="margin-top: 0; margin-bottom: 10px; color: #0f172a; font-size: 16px;">${type.label} ${i}</h4>
                         <p style="margin-bottom: 15px; color: #475569; font-size: 12px;">
@@ -508,13 +523,21 @@ function getCsrfToken() {
                             <input type="file" 
                                    id="file-${assessmentKey}" 
                                    accept=".csv" 
-                                   style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                                   style="display: none;">
+                            <button type="button" 
+                                    class="file-select-btn" 
+                                    data-target="file-${assessmentKey}"
+                                    style="width: 100%; padding: 8px 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; color: #475569; cursor: pointer; text-align: left; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 16px;">📁</span>
+                                <span>Choose File</span>
+                            </button>
+                            <div id="file-selected-${assessmentKey}" style="font-size: 12px; color: #64748b; margin-top: 4px; display: none;"></div>
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <button type="button" 
                                         class="upload-btn" 
                                         data-type="${type.key}"
                                         data-index="${i}"
-                                        style="flex: 1; padding: 8px 12px; background: #0b5fff; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                        style="flex: 1; padding: 8px 12px; background: #0b5fff; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
                                     Upload
                                 </button>
                                 <button type="button" 
@@ -522,13 +545,13 @@ function getCsrfToken() {
                                         data-type="${type.key}"
                                         data-index="${i}"
                                         title="Delete uploaded file"
-                                        style="width: 40px; height: 40px; padding: 0; background: #dc3545; color: white; border: none; border-radius: 6px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                        style="width: 40px; height: 40px; padding: 0; background: #dc3545; color: white; border: none; border-radius: 10px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
                                     🗑️
                                 </button>
                             </div>
                         </div>
-                        <div id="status-${assessmentKey}" style="margin-top: 10px; padding: 8px; border-radius: 4px; display: none; font-size: 13px;"></div>
-                        <div id="file-info-${assessmentKey}" style="margin-top: 8px; padding: 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; color: #64748b; display: none;">
+                        <div id="status-${assessmentKey}" style="margin-top: 10px; padding: 8px; border-radius: 10px; display: none; font-size: 13px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"></div>
+                        <div id="file-info-${assessmentKey}" style="margin-top: 8px; padding: 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 11px; color: #64748b; display: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
                             <div style="font-weight: 600; margin-bottom: 4px; color: #475569;">Last uploaded file:</div>
                             <div id="file-name-${assessmentKey}" style="margin-bottom: 2px;"></div>
                             <div id="file-time-${assessmentKey}" style="font-size: 10px;"></div>
@@ -547,6 +570,34 @@ function getCsrfToken() {
                             const uploadedDate = new Date(fileInfo.uploaded_at);
                             fileTimeDiv.textContent = `Uploaded: ${uploadedDate.toLocaleString()}`;
                             fileInfoDiv.style.display = 'block';
+                        }
+                    }
+                    
+                    // Add click event listener to file select button
+                    const fileSelectBtn = box.querySelector('.file-select-btn');
+                    const fileInputElement = document.getElementById(`file-${assessmentKey}`);
+                    const fileSelectedDiv = document.getElementById(`file-selected-${assessmentKey}`);
+                    
+                    if (fileSelectBtn && fileInputElement) {
+                        // When button is clicked, trigger file input
+                        fileSelectBtn.addEventListener('click', function() {
+                            fileInputElement.click();
+                        });
+                        
+                        // Update button text when file is selected
+                        if (fileInputElement) {
+                            fileInputElement.addEventListener('change', function(e) {
+                                if (e.target.files && e.target.files.length > 0) {
+                                    const fileName = e.target.files[0].name;
+                                    fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>${fileName}</span>`;
+                                    fileSelectBtn.style.color = '#059669';
+                                    fileSelectBtn.style.fontWeight = '500';
+                                } else {
+                                    fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
+                                    fileSelectBtn.style.color = '#475569';
+                                    fileSelectBtn.style.fontWeight = '400';
+                                }
+                            });
                         }
                     }
                 }
@@ -571,17 +622,17 @@ function getCsrfToken() {
             const assessmentIndex = btn.getAttribute('data-index');
             const assessmentKey = `${assessmentType}_${assessmentIndex}`;
             const fileInput = document.getElementById(`file-${assessmentKey}`);
-            const file = fileInput.files[0];
+    const file = fileInput.files[0];
             const statusDiv = document.getElementById(`status-${assessmentKey}`);
             
-            if (!file) {
+    if (!file) {
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#fee2e2';
                 statusDiv.style.color = '#dc2626';
                 statusDiv.style.border = '1px solid #fca5a5';
                 statusDiv.textContent = 'Please select a CSV file';
-                return;
-            }
+        return;
+    }
             
             // Check file type
             const fileName = file.name.toLowerCase();
@@ -600,19 +651,19 @@ function getCsrfToken() {
             statusDiv.style.color = '#1e40af';
             statusDiv.style.border = '1px solid #93c5fd';
             statusDiv.textContent = `Uploading ${file.name}...`;
-            
-            const formData = new FormData();
-            formData.append('csv_file', file);
-            
+    
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    
             console.log('Uploading file:', file.name, 'for', assessmentType, assessmentIndex);
             
             fetch(`/instructor/grades/${courseName}/upload-${assessmentType}-${assessmentIndex}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCsrfToken()
-                },
-                body: formData
-            })
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: formData
+    })
             .then(response => {
                 // Try to parse as JSON first (even for error responses)
                 const contentType = response.headers.get('content-type');
@@ -647,18 +698,12 @@ function getCsrfToken() {
                     throw new Error('Server returned non-JSON response: ' + text.substring(0, 100));
                 });
             })
-            .then(data => {
-                    if (data.status === 'ok') {
+    .then(data => {
+        if (data.status === 'ok') {
                     statusDiv.style.background = '#d1fae5';
                     statusDiv.style.color = '#065f46';
                     statusDiv.style.border = '1px solid #6ee7b7';
-                    let message = 'Successfully uploaded grades';
-                    if (data.files_uploaded < data.total_required) {
-                        message += ` (${data.files_uploaded}/${data.total_required} files uploaded - average will be calculated when all files are uploaded)`;
-                    } else {
-                        message += ' (All files uploaded)';
-                    }
-                    statusDiv.textContent = message;
+                    statusDiv.textContent = 'Successfully uploaded grades.';
                     
                     // Update file info display
                     if (data.file_info) {
@@ -673,17 +718,28 @@ function getCsrfToken() {
                         }
                     }
                     
-                    // Clear file input
+                    // Clear file input and update button
                     fileInput.value = '';
+                    const fileSelectBtn = document.querySelector(`.file-select-btn[data-target="file-${assessmentKey}"]`);
+                    if (fileSelectBtn) {
+                        fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
+                        fileSelectBtn.style.color = '#475569';
+                        fileSelectBtn.style.fontWeight = '400';
+                    }
                     
                     // Show warnings if any
                     if (data.warnings && data.warnings.length > 0) {
                         const warningsDiv = document.createElement('div');
-                        warningsDiv.style.cssText = 'margin-top: 8px; padding: 8px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 4px; font-size: 12px;';
+                        warningsDiv.style.cssText = 'margin-top: 8px; padding: 8px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 10px; font-size: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);';
                         warningsDiv.innerHTML = '<strong>Warnings:</strong><br>' + data.warnings.join('<br>');
                         statusDiv.appendChild(warningsDiv);
                     }
-                } else {
+                    
+                    // Reload page to update grades list table
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000); // Wait 1 second to show success message
+        } else {
                     statusDiv.style.background = '#fee2e2';
                     statusDiv.style.color = '#dc2626';
                     statusDiv.style.border = '1px solid #fca5a5';
@@ -696,9 +752,9 @@ function getCsrfToken() {
                     }
                     statusDiv.textContent = errorMessage;
                     statusDiv.style.whiteSpace = 'pre-line'; // Allow line breaks
-                }
-            })
-            .catch(error => {
+        }
+    })
+    .catch(error => {
                 console.error('Upload error:', error);
                 statusDiv.style.background = '#fee2e2';
                 statusDiv.style.color = '#dc2626';
@@ -744,14 +800,14 @@ function getCsrfToken() {
             statusDiv.textContent = 'Deleting...';
             
             fetch(`/instructor/grades/${courseName}/delete-${assessmentType}-${assessmentIndex}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCsrfToken()
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
                     statusDiv.style.background = '#d1fae5';
                     statusDiv.style.color = '#065f46';
                     statusDiv.style.border = '1px solid #6ee7b7';
@@ -765,9 +821,20 @@ function getCsrfToken() {
                     // Remove from global uploadedFilesInfo
                     delete uploadedFilesInfo[assessmentKey];
                     
-                    // Clear file input
+                    // Clear file input and update button
                     fileInput.value = '';
-                } else {
+                    const fileSelectBtnDelete = document.querySelector(`.file-select-btn[data-target="file-${assessmentKey}"]`);
+                    if (fileSelectBtnDelete) {
+                        fileSelectBtnDelete.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
+                        fileSelectBtnDelete.style.color = '#475569';
+                        fileSelectBtnDelete.style.fontWeight = '400';
+                    }
+                    
+                    // Reload page to update grades list table
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000); // Wait 1 second to show success message
+            } else {
                     statusDiv.style.background = '#fee2e2';
                     statusDiv.style.color = '#dc2626';
                     statusDiv.style.border = '1px solid #fca5a5';
@@ -779,10 +846,10 @@ function getCsrfToken() {
                 statusDiv.style.color = '#dc2626';
                 statusDiv.style.border = '1px solid #fca5a5';
                 statusDiv.textContent = 'Delete error: ' + error.message;
-            });
-        }
+        });
+    }
     });
-    
+
     // Initialize upload boxes on page load
     createUploadBoxes();
     
@@ -838,6 +905,12 @@ function getCsrfToken() {
         thOverall.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
         headerRow.appendChild(thOverall);
         
+        // Letter Grade column
+        const thLetterGrade = document.createElement('th');
+        thLetterGrade.textContent = 'Letter Grade';
+        thLetterGrade.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
+        headerRow.appendChild(thLetterGrade);
+        
         tableHead.appendChild(headerRow);
         
         // Create data rows
@@ -882,11 +955,27 @@ function getCsrfToken() {
                 row.appendChild(td);
             });
             
-            // Overall Score cell (empty for now)
+            // Overall Score cell
             const tdOverall = document.createElement('td');
-            tdOverall.textContent = '-';
-            tdOverall.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; color: #94a3b8;';
+            if (student.overall_score !== undefined && student.overall_score !== null) {
+                tdOverall.textContent = student.overall_score.toFixed(1);
+                tdOverall.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
+            } else {
+                tdOverall.textContent = '-';
+                tdOverall.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; color: #94a3b8;';
+            }
             row.appendChild(tdOverall);
+            
+            // Letter Grade cell
+            const tdLetterGrade = document.createElement('td');
+            if (student.letter_grade !== undefined && student.letter_grade !== null) {
+                tdLetterGrade.textContent = student.letter_grade;
+                tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
+            } else {
+                tdLetterGrade.textContent = '-';
+                tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; color: #94a3b8;';
+            }
+            row.appendChild(tdLetterGrade);
             
             tableBody.appendChild(row);
         });
@@ -925,9 +1014,17 @@ function getCsrfToken() {
     
     // Make table cell editable
     function makeCellEditable(cell) {
-        // If another cell is being edited, cancel it first
+        // If another cell is being edited, save it first (if value changed)
         if (currentEditingCell && currentEditingCell !== cell) {
-            cancelCellEdit();
+            // If there's an input, update display first
+            if (currentEditingInput) {
+                updateCellDisplay();
+            }
+            // Note: We don't auto-save here, user must click Save button
+            // Just clear the editing state
+            currentEditingCell = null;
+            currentEditingInput = null;
+            currentEditingOriginalValue = null;
         }
         
         const currentValue = cell.textContent.trim();
@@ -940,7 +1037,7 @@ function getCsrfToken() {
         input.min = '0';
         input.max = '100';
         input.value = currentEditingOriginalValue;
-        input.style.cssText = 'width: 80px; padding: 4px 8px; border: 2px solid #0b5fff; border-radius: 4px; font-size: 14px; text-align: center;';
+        input.style.cssText = 'width: 80px; padding: 4px 8px; border: 2px solid #0b5fff; border-radius: 8px; font-size: 14px; text-align: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);';
         
         // Replace cell content with input
         cell.innerHTML = '';
@@ -985,11 +1082,29 @@ function getCsrfToken() {
             }
         });
         
-        // Escape key to cancel
+        // Update cell display on blur (when input loses focus) - show value but don't save yet
+        input.addEventListener('blur', function() {
+            // Small delay to allow click events to fire first
+            setTimeout(() => {
+                if (currentEditingCell === cell && currentEditingInput === input) {
+                    updateCellDisplay();
+                }
+            }, 200);
+        });
+        
+        // Handle keyboard events
         input.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 e.preventDefault();
                 cancelCellEdit();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                updateCellDisplay();
+                // Focus save button
+                const saveBtn = document.getElementById('save-grade-changes-btn');
+                if (saveBtn) {
+                    saveBtn.focus();
+                }
             }
         });
     }
@@ -1059,8 +1174,8 @@ function getCsrfToken() {
         return numValue;
     }
     
-    // Save current edit
-    function saveCellEdit() {
+    // Update cell display without saving (show value in cell)
+    function updateCellDisplay() {
         if (!currentEditingCell || !currentEditingInput) {
             return;
         }
@@ -1068,44 +1183,94 @@ function getCsrfToken() {
         const input = currentEditingInput;
         const cell = currentEditingCell;
         const newValue = input.value.trim();
-        const studentId = cell.dataset.studentId;
-        const assessmentKey = cell.dataset.assessmentKey;
         
         // Validate
         if (newValue !== '' && !validateGradeInput(input)) {
-            return; // Don't save if validation fails
+            return; // Don't update if validation fails
         }
         
         // Format score
         const formattedScore = formatScore(newValue);
-        const scoreToSave = formattedScore !== null ? formattedScore : null;
+        const scoreToDisplay = formattedScore !== null ? formattedScore : null;
         
-        // Update cell display immediately
-        if (scoreToSave === null || scoreToSave === '') {
+        // Remove input from cell first
+        if (cell.contains(input)) {
+            cell.removeChild(input);
+        }
+        
+        // Update cell display immediately (show value)
+        if (scoreToDisplay === null || scoreToDisplay === '') {
             cell.textContent = '-';
             cell.style.color = '#94a3b8';
         } else {
-            // Display with 1 decimal place
-            cell.textContent = scoreToSave.toFixed(1);
+            // Display with 1 decimal place (e.g., 85 -> 85.0)
+            cell.textContent = scoreToDisplay.toFixed(1);
             cell.style.color = '';
         }
         
+        // Clear input reference but keep cell reference for saving
+        currentEditingInput = null;
+    }
+    
+    // Save current edit to server
+    function saveCellEdit() {
+        // If there's still an input, update display first
+        if (currentEditingCell && currentEditingInput) {
+            updateCellDisplay();
+        }
+        
+        if (!currentEditingCell) {
+            return;
+        }
+        
+        const cell = currentEditingCell;
+        const studentId = cell.dataset.studentId;
+        const assessmentKey = cell.dataset.assessmentKey;
+        
+        if (!studentId || !assessmentKey) {
+            console.error('Missing student_id or assessment_key');
+            return;
+        }
+        
+        // Get value from cell display (already formatted)
+        const cellText = cell.textContent.trim();
+        let scoreToSave = null;
+        
+        if (cellText !== '-' && cellText !== '') {
+            scoreToSave = parseFloat(cellText);
+            if (isNaN(scoreToSave)) {
+                scoreToSave = null;
+            }
+        }
+        
+        console.log('Saving grade:', { studentId, assessmentKey, scoreToSave });
+        
         // Save to server
         fetch(`/instructor/grades/${courseName}/update-individual-grade/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            },
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
             body: JSON.stringify({
                 student_id: studentId,
                 assessment_key: assessmentKey,
                 score: scoreToSave
             })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'ok') {
+    })
+    .then(response => response.json())
+    .then(data => {
+            console.log('Save response:', data);
+        if (data.status === 'ok') {
+                // Update cell display with saved value (keep it visible)
+                if (data.score !== null && data.score !== undefined) {
+                    cell.textContent = parseFloat(data.score).toFixed(1);
+                    cell.style.color = '';
+        } else {
+                    cell.textContent = '-';
+                    cell.style.color = '#94a3b8';
+                }
+                
                 // Update local data
                 const studentIndex = gradesData.findIndex(s => s.student_id === studentId);
                 if (studentIndex !== -1) {
@@ -1114,6 +1279,52 @@ function getCsrfToken() {
                     } else {
                         delete gradesData[studentIndex].grades[assessmentKey];
                     }
+                    
+                    // Update overall_score in local data
+                    if (data.overall_score !== undefined) {
+                        gradesData[studentIndex].overall_score = data.overall_score;
+                        
+                        // Update overall_score cell in table
+                        const row = cell.closest('tr');
+                        if (row) {
+                            const overallCell = row.querySelector('td:nth-last-child(2)'); // Second to last (before Letter Grade)
+                            if (overallCell) {
+                                if (data.overall_score !== null && data.overall_score !== undefined) {
+                                    overallCell.textContent = parseFloat(data.overall_score).toFixed(1);
+                                    overallCell.style.color = '';
+                                    overallCell.style.fontWeight = '600';
+            } else {
+                                    overallCell.textContent = '-';
+                                    overallCell.style.color = '#94a3b8';
+                                    overallCell.style.fontWeight = '';
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Update letter_grade in local data
+                    if (data.letter_grade !== undefined) {
+                        gradesData[studentIndex].letter_grade = data.letter_grade;
+                        
+                        // Update letter_grade cell in table
+                        const row = cell.closest('tr');
+                        if (row) {
+                            const letterGradeCell = row.querySelector('td:last-child'); // Last cell
+                            if (letterGradeCell) {
+                                if (data.letter_grade !== null && data.letter_grade !== undefined) {
+                                    letterGradeCell.textContent = data.letter_grade;
+                                    letterGradeCell.style.color = '';
+                                    letterGradeCell.style.fontWeight = '600';
+                                } else {
+                                    letterGradeCell.textContent = '-';
+                                    letterGradeCell.style.color = '#94a3b8';
+                                    letterGradeCell.style.fontWeight = '';
+                                }
+                            }
+                        }
+                    }
+            } else {
+                    console.warn('Student not found in gradesData:', studentId);
                 }
                 
                 // Update last changes timestamp
@@ -1136,23 +1347,32 @@ function getCsrfToken() {
                     saveBtn.style.opacity = '0.6';
                 }
                 
-                // Clear editing state
-                cancelCellEdit();
+                // Clear editing state (but keep the displayed value)
+                currentEditingCell = null;
+                currentEditingInput = null;
+                currentEditingOriginalValue = null;
+                
+                // Clear error message
+                const errorDiv = document.getElementById('grade-edit-error');
+                if (errorDiv) {
+                    errorDiv.style.display = 'none';
+                    errorDiv.textContent = '';
+                }
             } else {
                 alert('Error updating grade: ' + (data.error || 'Unknown error'));
-                // Revert to original value
+                // Keep the current value visible (don't revert)
                 const saveBtn = document.getElementById('save-grade-changes-btn');
                 if (saveBtn) {
-                    saveBtn.disabled = true;
-                    saveBtn.style.background = '#94a3b8';
-                    saveBtn.style.cursor = 'not-allowed';
-                    saveBtn.style.opacity = '0.6';
+                    saveBtn.disabled = false;
+                    saveBtn.style.background = '#0b5fff';
+                    saveBtn.style.cursor = 'pointer';
+                    saveBtn.style.opacity = '1';
                 }
-                cancelCellEdit();
+                // Don't clear editing state, let user try again
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            console.error('Error saving grade:', error);
             alert('Error updating grade. Please try again.');
             // Revert to original value
             const saveBtn = document.getElementById('save-grade-changes-btn');
@@ -1162,7 +1382,8 @@ function getCsrfToken() {
                 saveBtn.style.cursor = 'not-allowed';
                 saveBtn.style.opacity = '0.6';
             }
-            cancelCellEdit();
+            // Don't cancel edit, keep the value visible so user can try again
+            // cancelCellEdit();
         });
     }
     
@@ -1174,6 +1395,11 @@ function getCsrfToken() {
         
         const cell = currentEditingCell;
         const originalValue = currentEditingOriginalValue;
+        
+        // Remove input if still present
+        if (currentEditingInput && cell.contains(currentEditingInput)) {
+            cell.removeChild(currentEditingInput);
+        }
         
         // Restore original value
         if (originalValue === '' || originalValue === null || originalValue === undefined) {
