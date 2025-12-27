@@ -5,25 +5,88 @@
     <title>{% block title %}Faculty Head{% endblock %}</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .header-top {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 60px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-icons {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            background-color: #f3f4f6;
+        }
+        .header-icon:hover {
+            background-color: #e5e7eb;
+        }
+        .header-icon svg {
+            width: 20px;
+            height: 20px;
+            color: #374151;
+        }
+        .profile-popup {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+            padding: 20px;
+            min-width: 250px;
+            z-index: 1001;
+            display: none;
+        }
+        .profile-popup.show {
+            display: block;
+        }
+        .profile-popup-item {
+            margin-bottom: 12px;
+        }
+        .profile-popup-label {
+            font-weight: 600;
+            color: #374151;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .profile-popup-value {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .content-wrapper {
+            margin-top: 60px;
+        }
+        body .sidebar {
+            top: 60px;
+            height: calc(100% - 60px);
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-<!-- Sidebar -->
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li><a href="{% url 'faculty-head-grades' %}">Grades</a></li>
-        <li><a href="{% url 'all_courses' %}">All Courses</a></li>
-        <li><a href="{% url 'my_courses' %}">My Courses</a></li>
-        <li><a href="{% url 'program_outcomes' %}">Program Outcomes</a></li>
-        <li><a href="{% url 'faculty-head-announcements' %}">Announcements</a></li>
-    </ul>
-</div>
 
-<!-- Main content -->
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    
-    <!-- Header with Profile and Notifications -->
-    <div style="position: fixed; top: 0; right: 0; padding: 12px 24px; display: flex; align-items: center; gap: 12px; z-index: 1000; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-bottom: 1px solid #e5e7eb;">
+<div class="header-top">
+    <div class="header-icons">
         <!-- Notifications Bell with Dropdown -->
         <div style="position: relative;">
             <button id="notification-btn" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: transparent; border: none; cursor: pointer; transition: all 0.2s; color: #64748b;" 
@@ -61,8 +124,8 @@
             </button>
             <div id="profile-dropdown" style="display: none; position: absolute; top: 50px; right: 0; width: 200px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001;">
                 <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
-                    <div style="font-size: 14px; font-weight: 600; color: #111827;">{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}</div>
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">{{ request.user.username|default:"Faculty Head" }}</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #111827;">{% if faculty_head_info %}{{ faculty_head_info.name }}{% else %}{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}{% endif %}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">{% if faculty_head_info %}{{ faculty_head_info.username }}{% else %}{{ request.user.username|default:"Faculty Head" }}{% endif %}</div>
                 </div>
                 <a href="{% url 'faculty_head_profile' %}" style="display: block; padding: 12px 16px; color: #374151; text-decoration: none; font-size: 14px; transition: background 0.2s;" 
                    onmouseover="this.style.background='#f9fafb';" 
@@ -90,8 +153,25 @@
             </div>
         </div>
     </div>
-    
-    {% block content %}{% endblock %}
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li><a href="{% url 'faculty-head' %}">Main Page</a></li>
+        <li><a href="{% url 'faculty-head-grades' %}">Grades</a></li>
+        <li><a href="{% url 'all_courses' %}">All Courses</a></li>
+        <li><a href="{% url 'my_courses' %}">My Courses</a></li>
+        <li><a href="{% url 'program_outcomes' %}">Program Outcomes</a></li>
+        <li><a href="{% url 'faculty-head-announcements' %}">Announcements</a></li>
+    </ul>
+</div>
+
+<div class="content-wrapper">
+    <div class="content" id="content">
+        <button class="menu-btn" id="menu-btn">☰</button>
+        {% block content %}{% endblock %}
+    </div>
 </div>
 
 <script src="{% static 'js/faculty_head.js' %}"></script>

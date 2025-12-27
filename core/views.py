@@ -416,7 +416,12 @@ def student_dashboard(request):
         year_display = f"{student.year}. Year" if student.year else "-"
         department_display = student.department or "-"
         
-        advisor_name = "Prof. Dr. Ahmet Bulut"
+        # Get advisor information
+        advisor_name = "-"
+        advisor_username = None
+        if student.advisor:
+            advisor_name = f"{student.advisor.first_name} {student.advisor.last_name}".strip() or student.advisor.username
+            advisor_username = student.advisor.username
         
         courses = student.courses.all().select_related('instructor')
         courses_list = []
@@ -437,6 +442,7 @@ def student_dashboard(request):
         year_display = "-"
         department_display = "-"
         advisor_name = "-"
+        advisor_username = None
         courses_list = []
     
     latest_announcements = Announcement.objects.filter(
@@ -446,9 +452,17 @@ def student_dashboard(request):
     announcements_list = []
     for ann in latest_announcements:
         sender_name = ann.sender.get_full_name() or ann.sender.username
+        
+        # Remove course marker from subject for display
+        display_subject = ann.subject
+        if display_subject.startswith('__COURSE:'):
+            marker_end = display_subject.find('__', 9)
+            if marker_end > 0:
+                display_subject = display_subject[marker_end + 2:]
+        
         announcements_list.append({
             'id': ann.id,
-            'subject': ann.subject,
+            'subject': display_subject,
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -460,6 +474,7 @@ def student_dashboard(request):
         'year_display': year_display,
         'department_display': department_display,
         'advisor_name': advisor_name,
+        'advisor_username': advisor_username,
         'courses_list': courses_list,
     })
 
@@ -539,15 +554,22 @@ def instructor_dashboard(request):
     total_students = len(total_students_set)
     
     latest_announcements = Announcement.objects.filter(
-        Q(sender=instructor_user) | Q(receiver=instructor_user) | Q(receiver__isnull=True)
-    ).select_related('sender', 'receiver').order_by('-created_at')[:5]
+        Q(receiver=instructor_user) | Q(receiver__isnull=True)
+    ).exclude(sender=instructor_user).select_related('sender', 'receiver').order_by('-created_at')[:5]
     
     announcements_list = []
     for ann in latest_announcements:
         sender_name = ann.sender.get_full_name() or ann.sender.username
+        
+        display_subject = ann.subject
+        if display_subject.startswith('__COURSE:'):
+            marker_end = display_subject.find('__', 9)
+            if marker_end > 0:
+                display_subject = display_subject[marker_end + 2:]
+        
         announcements_list.append({
             'id': ann.id,
-            'subject': ann.subject,
+            'subject': display_subject,
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -673,12 +695,19 @@ def instructor_my_courses(request):
         'students': course['students']
     } for course in courses_data])
     
-    return render(request, 'instructor.html', {
-        'show_welcome': False,
-        'page': 'my_courses',
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_info = {
+        'username': instructor_user.username,
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
+    
+    return render(request, 'instructor/my_courses.html', {
         'courses': courses_data,
         'courses_json': courses_json,
-        'all_assignments': all_assignments
+        'all_assignments': all_assignments,
+        'instructor_info': instructor_info,
     })
 
 @instructor_required
@@ -1992,12 +2021,22 @@ def instructor_announcements(request):
         'is_sent': ann['is_sent']
     } for ann in announcements_data})
     
+    # Prepare instructor_info for header
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_info = {
+        'username': instructor_user.username,
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
+    
     return render(request, 'instructor/instructor_announcements.html', {
         'all_announcements': announcements_data,
         'announcements_json': announcements_json,
         'sent_messages': sent_messages,
         'received_messages': received_messages,
         'recipients': recipients,
+        'instructor_info': instructor_info,
     })
 
 
@@ -2032,7 +2071,8 @@ def faculty_head_dashboard(request):
     faculty_head_user = request.user
     profile = getattr(faculty_head_user, 'profile', None)
     faculty_head_data = get_faculty_head_data(faculty_head_user.username)
-    faculty_head_department = faculty_head_data.get('department')
+    # Use profile.department as primary source, fallback to JSON data
+    faculty_head_department = profile.department if profile and profile.department else faculty_head_data.get('department')
     
     faculty_head_info = {
         'username': faculty_head_user.username,
@@ -2057,7 +2097,12 @@ def faculty_head_dashboard(request):
     chart_data = {'labels': [], 'data': []}
     
     if faculty_head_department:
-        courses = Course.objects.filter(department=faculty_head_department).select_related('instructor').prefetch_related('students')
+        # Filter courses by department - case-insensitive match and exclude empty departments
+        courses = Course.objects.filter(
+            department__iexact=faculty_head_department
+        ).exclude(
+            department=''
+        ).select_related('instructor').prefetch_related('students')
         for course in courses:
             students = course.students.all()
             student_count = students.count()
@@ -2089,15 +2134,23 @@ def faculty_head_dashboard(request):
     total_instructors = len(total_instructors_set)
     
     latest_announcements = Announcement.objects.filter(
-        Q(sender=faculty_head_user) | Q(receiver=faculty_head_user) | Q(receiver__isnull=True)
-    ).select_related('sender', 'receiver').order_by('-created_at')[:5]
+        Q(receiver=faculty_head_user) | Q(receiver__isnull=True)
+    ).exclude(sender=faculty_head_user).select_related('sender', 'receiver').order_by('-created_at')[:5]
     
     announcements_list = []
     for ann in latest_announcements:
         sender_name = ann.sender.get_full_name() or ann.sender.username
+        
+        # Remove course marker from subject for display
+        display_subject = ann.subject
+        if display_subject and display_subject.startswith('__COURSE:'):
+            marker_end = display_subject.find('__', 9)
+            if marker_end > 0:
+                display_subject = display_subject[marker_end + 2:]
+        
         announcements_list.append({
             'id': ann.id,
-            'subject': ann.subject,
+            'subject': display_subject,
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -3249,18 +3302,30 @@ def give_grade(request, course_id):
 def faculty_head_grades(request):
     profile = getattr(request.user, 'profile', None)
     
-    # Get faculty head's department
     faculty_head_data = get_faculty_head_data(request.user.username)
-    faculty_head_department = faculty_head_data.get('department')
+    faculty_head_department = profile.department if profile and profile.department else faculty_head_data.get('department')
     
     courses = []
-    if profile:
-        # Get courses from profile, filtered by department
-        all_courses = profile.courses.all()
-        for course in all_courses:
-            if faculty_head_department and course.department != faculty_head_department:
-                continue
-            courses.append(course.name)
+    if profile and faculty_head_department:
+        # Normalize department for comparison
+        fh_dept_normalized = faculty_head_department.strip().lower()
+        
+        # Get courses directly from database filtered by department (case-insensitive)
+        # This ensures we only get courses that actually belong to the faculty head's department
+        from core.models import Course
+        department_courses = Course.objects.filter(
+            department__iexact=faculty_head_department
+        ).exclude(
+            department=''
+        )
+        
+        # Also check that the course is in the profile (additional security check)
+        profile_course_names = set(profile.courses.values_list('name', flat=True))
+        
+        for course in department_courses:
+            # Only include courses that are also in the profile
+            if course.name in profile_course_names:
+                courses.append(course.name)
     
     context = {
         'faculty_head_courses': courses,
@@ -3271,25 +3336,46 @@ def faculty_head_grades(request):
 
 @faculty_head_required
 def faculty_head_course_grades(request, course_name):
-    from django.utils import timezone
-    from datetime import datetime
+    from .models import Assessment
     
     profile = getattr(request.user, 'profile', None)
     faculty_head_data = get_faculty_head_data(request.user.username)
-    faculty_head_department = faculty_head_data.get('department')
+    faculty_head_department = profile.department if profile and profile.department else faculty_head_data.get('department')
     
     try:
         course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return redirect('faculty-head-grades')
     
-    # Check if faculty head has access to this course
     if profile and course not in profile.courses.all():
         return HttpResponseForbidden("You don't have access to this course")
     
-    # Check department match
-    if faculty_head_department and course.department != faculty_head_department:
-        return HttpResponseForbidden("You don't have access to this course")
+    # Check department match (case-insensitive)
+    if faculty_head_department:
+        course_dept_normalized = course.department.strip().lower() if course.department else ''
+        fh_dept_normalized = faculty_head_department.strip().lower()
+        if course_dept_normalized != fh_dept_normalized:
+            return HttpResponseForbidden("You don't have access to this course")
+    
+    # Assessment'ı al veya oluştur (default değerlerle)
+    assessment, created = Assessment.objects.get_or_create(
+        course=course,
+        defaults={
+            'midterm': 2,
+            'final': 1,
+            'proje': 0,
+            'homework': 0,
+            'absence': 0,
+            'quiz': 0,
+            'assessment_count': 3,
+            'midterm_percentage': 60,
+            'final_percentage': 40,
+            'proje_percentage': 0,
+            'homework_percentage': 0,
+            'absence_percentage': 0,
+            'quiz_percentage': 0
+        }
+    )
     
     # Course'a kayıtlı öğrencileri al
     students = Student.objects.filter(courses=course).order_by('username')
@@ -3300,19 +3386,43 @@ def faculty_head_course_grades(request, course_name):
         is_finalized = False
         
         if grade_obj:
-            # Yeni JSONField'dan notları al
-            if grade_obj.grades:
-                grades_dict = grade_obj.grades
+            # Assessment scores'dan notları al
+            if grade_obj.assessment_scores:
+                # Get individual scores from assessment_scores
+                assessment_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+                for assessment_type in assessment_types:
+                    count = getattr(assessment, assessment_type, 0)
+                    for i in range(1, count + 1):
+                        key = f'{assessment_type}_{i}'
+                        score = grade_obj.get_individual_score(key)
+                        if score is not None:
+                            assessment_type_labels = {
+                                'midterm': 'Midterm',
+                                'final': 'Final',
+                                'proje': 'Proje',
+                                'homework': 'Homework',
+                                'absence': 'Absence',
+                                'quiz': 'Quiz'
+                            }
+                            label = assessment_type_labels.get(assessment_type, assessment_type.capitalize())
+                            grades_dict[f'{label} {i}'] = score
+            
             # Eski alanlardan notları al (geriye dönük uyumluluk)
-            elif grade_obj.midterm is not None or grade_obj.assignment is not None or grade_obj.final is not None:
+            if not grades_dict:
                 if grade_obj.midterm is not None:
                     grades_dict['Midterm'] = grade_obj.midterm
-                if grade_obj.assignment is not None:
-                    grades_dict['Assignment'] = grade_obj.assignment
                 if grade_obj.final is not None:
                     grades_dict['Final'] = grade_obj.final
+                if grade_obj.proje is not None:
+                    grades_dict['Proje'] = grade_obj.proje
+                if grade_obj.homework is not None:
+                    grades_dict['Homework'] = grade_obj.homework
+                if grade_obj.absence is not None:
+                    grades_dict['Absence'] = grade_obj.absence
+                if grade_obj.quiz is not None:
+                    grades_dict['Quiz'] = grade_obj.quiz
             
-            is_finalized = grade_obj.is_finalized
+            is_finalized = getattr(grade_obj, 'is_finalized', False)
         
         students_with_grades.append({
             'student': student,
@@ -3320,14 +3430,20 @@ def faculty_head_course_grades(request, course_name):
             'is_finalized': is_finalized
         })
     
-    # Uploaded file bilgisini al (course'daki herhangi bir grade'den)
-    uploaded_file = None
-    grade_with_file = Grade.objects.filter(course=course).exclude(uploaded_file_name='').first()
-    if grade_with_file and grade_with_file.uploaded_file_name:
-        uploaded_file = {
-            'name': grade_with_file.uploaded_file_name,
-            'uploaded_at': grade_with_file.uploaded_at
-        }
+    uploaded_files_info = {}
+    sample_grade = Grade.objects.filter(course=course).first()
+    if sample_grade and sample_grade.assessment_scores:
+        assessment_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+        for assessment_type in assessment_types:
+            count = getattr(assessment, assessment_type, 0)
+            for i in range(1, count + 1):
+                key = f'{assessment_type}_{i}'
+                file_name, uploaded_at = sample_grade.get_uploaded_file_info(key)
+                if file_name:
+                    uploaded_files_info[key] = {
+                        'file_name': file_name,
+                        'uploaded_at': uploaded_at
+                    }
     
     is_finalized = all(item['is_finalized'] for item in students_with_grades if item['grades'])
     students_with_grades_json = json.dumps([
@@ -3344,10 +3460,11 @@ def faculty_head_course_grades(request, course_name):
     
     return render(request, 'faculty/faculty_head_course_grades.html', {
         'course': course,
+        'assessment': assessment,
         'students': students,
         'students_with_grades': students_with_grades,
         'students_with_grades_json': students_with_grades_json,
-        'uploaded_file': uploaded_file,
+        'uploaded_files_info': json.dumps(uploaded_files_info),
         'is_finalized': is_finalized
     })
 
@@ -3385,14 +3502,30 @@ def faculty_head_delete_uploaded_csv(request, course_name):
     if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
-    if faculty_head_department and course.department != faculty_head_department:
-        return JsonResponse({'error': 'Access denied'}, status=403)
+    if faculty_head_department:
+        course_dept_normalized = course.department.strip().lower() if course.department else ''
+        fh_dept_normalized = faculty_head_department.strip().lower()
+        if course_dept_normalized != fh_dept_normalized:
+            return JsonResponse({'error': 'Access denied'}, status=403)
     
     # Course'daki tüm grade'lerden uploaded file bilgisini temizle
-    Grade.objects.filter(course=course).update(
-        uploaded_file_name='',
-        uploaded_at=None
-    )
+    # assessment_scores JSONField'ından file_name ve uploaded_at bilgilerini kaldır
+    from django.db import transaction
+    with transaction.atomic():
+        grades = Grade.objects.filter(course=course)
+        for grade in grades:
+            if grade.assessment_scores:
+                # Remove file_name and uploaded_at from all assessment entries
+                updated_scores = {}
+                for key, value in grade.assessment_scores.items():
+                    if isinstance(value, dict):
+                        # Keep only the score, remove file_name and uploaded_at
+                        updated_scores[key] = {'score': value.get('score')}
+                    else:
+                        # Legacy format, keep as is
+                        updated_scores[key] = value
+                grade.assessment_scores = updated_scores
+                grade.save()
     
     return JsonResponse({'status': 'ok'})
 
@@ -3649,20 +3782,29 @@ def course_learning_outcomes(request, course_name):
                 else:
                     # Error case: Reuse same logic as GET request
                     outcomes_qs = ProgramOutcome.objects.filter(
-                        course_name=course_name
+                        course_name__iexact=course_name
                     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
                     
-                    course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
+                    course = Course.objects.filter(name__iexact=course_name, instructor=instructor_user).first()
+                    if not course:
+                        profile = getattr(instructor_user, 'profile', None)
+                        if profile:
+                            course = profile.courses.filter(name__iexact=course_name).first()
+                        if not course:
+                            course = instructor_user.instructor_courses.filter(name__iexact=course_name).first()
                     course_id = course.id if course else None
                     
                     # Use helper function to build outcomes data
                     outcomes_data = build_learning_outcomes_data(outcomes_qs)
                     
+                    # Use title() to capitalize first letter of each word
+                    display_course_name = course.name.title() if course and course.name else course_name.title()
+                    
                     return render(
                         request,
                         'instructor/course_learning_outcomes.html',
                         {
-                            'course_name': course_name,
+                            'course_name': display_course_name,
                             'course_id': course_id,
                             'outcomes_data': outcomes_data,
                             'program_outcomes': program_outcomes,
@@ -3678,39 +3820,52 @@ def course_learning_outcomes(request, course_name):
                 course_name_slug = generate_course_slug(course_name)
                 return redirect('course_learning_outcomes', course_name=course_name_slug)
     
+    # Use case-insensitive search for course_name to handle name variations
     outcomes_qs = ProgramOutcome.objects.filter(
-        course_name=course_name
+        course_name__iexact=course_name
     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
     
     # CRITICAL: Verify instructor owns this course
     # Try to find course - first by instructor, then by name, then from profile
-    course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
+    # Use case-insensitive search (iexact) to handle name variations
+    course = Course.objects.filter(name__iexact=course_name, instructor=instructor_user).first()
     if not course:
         # Try to find from instructor's profile courses
         profile = getattr(instructor_user, 'profile', None)
         if profile:
-            course = profile.courses.filter(name=course_name).first()
+            course = profile.courses.filter(name__iexact=course_name).first()
         if not course:
-            # Try from instructor_courses
-            course = instructor_user.instructor_courses.filter(name=course_name).first()
+            course = instructor_user.instructor_courses.filter(name__iexact=course_name).first()
     
     # CRITICAL: If course not found or instructor doesn't own it, deny access
     if not course:
         return HttpResponseForbidden("You don't have access to this course.")
     
     course_id = course.id if course else None
+    # Use title() to capitalize first letter of each word (e.g., "computer architecture" -> "Computer Architecture")
+    display_course_name = course.name.title() if course.name else course_name.title()
     
     # Use helper function to build outcomes data
     outcomes_data = build_learning_outcomes_data(outcomes_qs)
+    
+    # Prepare instructor_info for header
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_info = {
+        'username': instructor_user.username,
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
     
     return render(
         request,
         'instructor/course_learning_outcomes.html',
         {
-            'course_name': course_name,
+            'course_name': display_course_name,
             'course_id': course_id,
             'outcomes_data': outcomes_data,
             'program_outcomes': program_outcomes,
+            'instructor_info': instructor_info,
         }
     )
 
@@ -3753,6 +3908,14 @@ def learning_outcome_detail(request, course_id, outcome_id):
     
     course_name_slug = generate_course_slug(outcome.course_name)
     
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_info = {
+        'username': instructor_user.username,
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
+    
     return render(
         request,
         'instructor/learning_outcome_detail.html',
@@ -3763,6 +3926,7 @@ def learning_outcome_detail(request, course_id, outcome_id):
             'available_program_outcomes': available_program_outcomes,
             'course_name_slug': course_name_slug,
             'is_faculty_head': is_faculty_head,
+            'instructor_info': instructor_info,
         }
     )
 
@@ -3779,6 +3943,16 @@ def learning_outcome_graph(request, course_id, outcome_id):
     
     course_name_slug = generate_course_slug(outcome.course_name)
     
+    instructor_info = None
+    if instructor_user and not is_faculty_head:
+        profile = getattr(instructor_user, 'profile', None)
+        instructor_info = {
+            'username': instructor_user.username,
+            'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+            'faculty': profile.faculty.name if profile and profile.faculty else '-',
+            'department': profile.department if profile else '-',
+        }
+    
     return render(
         request,
         'instructor/learning_outcome_graph.html',
@@ -3788,6 +3962,7 @@ def learning_outcome_graph(request, course_id, outcome_id):
             'program_outcomes': program_outcomes_data,
             'course_name_slug': course_name_slug,
             'is_faculty_head': is_faculty_head,
+            'instructor_info': instructor_info,
         }
     )
 
@@ -4060,6 +4235,15 @@ def create_learning_outcome(request):
             course_names_from_json = instructor_data.get('courses', []) or []
             course_names = list(set(course_names_from_db + course_names_from_json))
             
+            # Prepare instructor_info for header
+            profile = getattr(instructor_user, 'profile', None)
+            instructor_info = {
+                'username': instructor_user.username,
+                'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+                'faculty': profile.faculty.name if profile and profile.faculty else '-',
+                'department': profile.department if profile else '-',
+            }
+            
             return render(
                 request,
                 'instructor/create_learning_outcome.html',
@@ -4067,6 +4251,7 @@ def create_learning_outcome(request):
                     'error': 'Outcome text and course are required.',
                     'course_name': course_name,
                     'instructor_courses': course_names,
+                    'instructor_info': instructor_info,
                 }
             )
         
@@ -4083,12 +4268,22 @@ def create_learning_outcome(request):
     
     course_name_from_get = request.GET.get('course', '')
     
+    # Prepare instructor_info for header
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_info = {
+        'username': instructor_user.username,
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
+    
     return render(
         request,
         'instructor/create_learning_outcome.html',
         {
             'course_name': course_name_from_get,
             'instructor_courses': course_names,
+            'instructor_info': instructor_info,
         }
     )
 
@@ -4550,10 +4745,19 @@ def instructor_program_outcomes(request):
             'linked_learning_outcomes': linked_learning_outcomes,
         })
     
+    # Prepare instructor_info for header
+    profile = getattr(instructor_user, 'profile', None)
+    instructor_info = {
+        'username': instructor_user.username,
+        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
+        'faculty': profile.faculty.name if profile and profile.faculty else '-',
+        'department': profile.department if profile else '-',
+    }
+    
     return render(request, "instructor/program_outcomes.html", {
         'outcomes_data': outcomes_data,
         'department': instructor_department,
-        'department': instructor_department,
+        'instructor_info': instructor_info,
     })
 
 def student_program_outcomes(request):
@@ -5164,12 +5368,21 @@ def advisor_profile(request, username):
         advisor = User.objects.get(username=username)
         profile = getattr(advisor, 'profile', None)
         
+        # Get courses from profile or instructor_courses
+        courses_list = []
+        if profile:
+            courses_list = [course.name for course in profile.courses.all()]
+        # Also check instructor_courses (reverse ForeignKey from Course.instructor)
+        instructor_courses = [course.name for course in advisor.instructor_courses.all()]
+        courses_list = list(set(courses_list + instructor_courses))  # Remove duplicates
+        
         advisor_data = {
             'username': advisor.username,
             'name': f"{advisor.first_name} {advisor.last_name}".strip() or advisor.username,
+            'role': profile.role if profile else '-',
             'department': profile.department if profile else '-',
             'faculty': profile.faculty.name if profile and profile.faculty else '-',
-            'email': advisor.email or '-',
+            'courses': courses_list,
         }
         
         return render(request, 'student/advisor_profile.html', {

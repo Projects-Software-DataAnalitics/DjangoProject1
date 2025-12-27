@@ -1,35 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Learning Outcomes - {{ course_name }}</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <script>
-        (function() {
-            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
-            if (!instructorData) {
-                window.location.href = "/";
-                return;
-            }
-        })();
-    </script>
-</head>
-<body>
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li>
-            <a href="{% url 'instructor' %}">Main Page</a>
-        </li>
-        <li id="my-courses-btn">My Courses</li>
-        <li id="grades-btn">Grades</li>
-        <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
-        <li id="announcements-btn">Announcements</li>
-    </ul>
-</div>
+{% extends "instructor_base.html" %}
+{% load static %}
 
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
+{% block title %}Learning Outcomes - {{ display_course_name }}{% endblock %}
+
+{% block content %}
     <div style="margin-left: 0; margin-top: 10px;">
         <a href="{% url 'instructor_my_courses' %}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: #3b82f6; font-size: 16px; font-weight: 500; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#3b82f6';">
             <span style="font-size: 20px;">←</span>
@@ -576,7 +550,5 @@
         });
     })();
 </script>
-</div>
-</body>
-</html>
+{% endblock %}
 

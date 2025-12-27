@@ -6,12 +6,10 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0020_merge_20251227_1433'),
-        ('core', '0025_add_last_changes_at'),
+        ('core', '0027_add_course_name_unique'),
+        ('core', '0028_assignmentsubmission'),
     ]
 
     operations = [
     ]
-
-
 
