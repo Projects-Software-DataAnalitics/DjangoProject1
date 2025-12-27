@@ -635,10 +635,533 @@ def instructor_course_grades(request, course_name):
         }
     )
     
+    # Get students enrolled in this course
+    students = course.students.all().order_by('first_name', 'last_name', 'username')
+    students_list = [{'id': student.id, 'student_id': student.student_id, 'name': f"{student.first_name} {student.last_name}".strip() or student.username} for student in students]
+    
+    # Get uploaded file info for each assessment (from first student as sample)
+    uploaded_files_info = {}
+    sample_grade = Grade.objects.filter(course=course).first()
+    if sample_grade and sample_grade.assessment_scores:
+        assessment_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+        for assessment_type in assessment_types:
+            count = getattr(assessment, assessment_type, 0)
+            for i in range(1, count + 1):
+                key = f'{assessment_type}_{i}'
+                file_name, uploaded_at = sample_grade.get_uploaded_file_info(key)
+                if file_name:
+                    uploaded_files_info[key] = {
+                        'file_name': file_name,
+                        'uploaded_at': uploaded_at
+                    }
+    
+    # Prepare grades data for the grades list table
+    grades_data = []
+    assessment_columns = []  # List of assessment column names (e.g., ["Midterm 1", "Midterm 2", "Final"])
+    
+    # Build assessment columns based on assessment counts
+    assessment_type_labels = {
+        'midterm': 'Midterm',
+        'final': 'Final',
+        'proje': 'Proje',
+        'homework': 'Homework',
+        'absence': 'Absence',
+        'quiz': 'Quiz'
+    }
+    
+    for assessment_type in ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']:
+        count = getattr(assessment, assessment_type, 0)
+        label = assessment_type_labels[assessment_type]
+        for i in range(1, count + 1):
+            assessment_columns.append({
+                'key': f'{assessment_type}_{i}',
+                'label': f'{label} {i}',
+                'type': assessment_type
+            })
+    
+    # Get grades for all students
+    for student in students:
+        grade_obj = Grade.objects.filter(student=student, course=course).first()
+        student_data = {
+            'student_id': student.student_id,
+            'full_name': f"{student.first_name} {student.last_name}".strip() or student.username,
+            'grades': {}
+        }
+        
+        if grade_obj:
+            # Get individual scores for each assessment column
+            for col in assessment_columns:
+                score = grade_obj.get_individual_score(col['key'])
+                if score is not None:
+                    student_data['grades'][col['key']] = score
+                else:
+                    # If individual score doesn't exist, check if average is available
+                    # But for table display, we show individual scores only
+                    student_data['grades'][col['key']] = None
+        
+        grades_data.append(student_data)
+    
+    # Get last changes timestamp (from any grade in this course)
+    last_changes_at = None
+    any_grade = Grade.objects.filter(course=course).exclude(last_changes_at__isnull=True).order_by('-last_changes_at').first()
+    if any_grade and any_grade.last_changes_at:
+        last_changes_at = any_grade.last_changes_at.isoformat()
+    
     return render(request, 'instructor/course_grades.html', {
         'course': course,
         'assessment': assessment,
+        'students_json': json.dumps(students_list),
+        'uploaded_files_info': json.dumps(uploaded_files_info),
+        'grades_data': json.dumps(grades_data),
+        'assessment_columns': json.dumps(assessment_columns),
+        'last_changes_at': last_changes_at,
     })
+
+@instructor_required
+@csrf_exempt
+def upload_assessment_grades(request, course_name, assessment_type, assessment_index):
+    """
+    Upload grades for a specific assessment file (e.g., midterm_1, midterm_2)
+    CSV format: student_id, score (single column for scores)
+    Only calculates average when ALL files for that assessment type are uploaded
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    # Valid assessment types
+    valid_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+    if assessment_type not in valid_types:
+        return JsonResponse({'error': f'Invalid assessment type. Must be one of: {", ".join(valid_types)}'}, status=400)
+    
+    try:
+        assessment_index = int(assessment_index)
+        if assessment_index < 1:
+            return JsonResponse({'error': 'Assessment index must be >= 1'}, status=400)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid assessment index'}, status=400)
+    
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    # Get assessment for this course
+    try:
+        assessment = Assessment.objects.get(course=course)
+    except Assessment.DoesNotExist:
+        return JsonResponse({'error': 'Assessment not found for this course. Please configure assessment first.'}, status=404)
+    
+    # Get the count for this assessment type
+    assessment_count = getattr(assessment, assessment_type, 0)
+    if assessment_count == 0:
+        return JsonResponse({'error': f'No {assessment_type} assessments configured for this course'}, status=400)
+    
+    if assessment_index > assessment_count:
+        return JsonResponse({'error': f'Assessment index {assessment_index} exceeds configured count of {assessment_count}'}, status=400)
+    
+    csv_file = request.FILES.get('csv_file')
+    if not csv_file:
+        return JsonResponse({'error': 'CSV file required'}, status=400)
+    
+    # Read CSV file into memory for validation
+    try:
+        csv_file.file.seek(0)  # Reset file pointer
+        text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
+        csv_content = text_file.read()
+        csv_file.file.seek(0)  # Reset again for processing
+        text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
+        reader = csv.DictReader(text_file)
+    except Exception as e:
+        return JsonResponse({'error': f'Invalid CSV file: {str(e)}'}, status=400)
+    
+    def normalize(name):
+        if not name:
+            return ''
+        return name.strip().lower().lstrip('\ufeff')
+    
+    # Expected columns: student_id, score
+    normalized_fields = {normalize(col): col for col in (reader.fieldnames or [])}
+    
+    # Check for student_id
+    if 'student_id' not in normalized_fields:
+        return JsonResponse({'error': 'CSV must include "student_id" column'}, status=400)
+    
+    # Check for score column (can be named 'score' or assessment_type_index)
+    score_column = None
+    possible_score_names = ['score', f'{assessment_type}_{assessment_index}', f'{assessment_type}{assessment_index}']
+    for name in possible_score_names:
+        if normalize(name) in normalized_fields:
+            score_column = normalized_fields[normalize(name)]
+            break
+    
+    if not score_column:
+        return JsonResponse({'error': f'CSV must include a score column (named: score, {assessment_type}_{assessment_index}, or {assessment_type}{assessment_index})'}, status=400)
+    
+    student_id_source = normalized_fields['student_id']
+    assessment_key = f'{assessment_type}_{assessment_index}'
+    
+    # First pass: Validate all scores (0-100 range) before processing
+    validation_errors = []
+    csv_file.file.seek(0)  # Reset file pointer
+    text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
+    validation_reader = csv.DictReader(text_file)
+    normalized_fields_validation = {normalize(col): col for col in (validation_reader.fieldnames or [])}
+    score_column_validation = None
+    for name in possible_score_names:
+        if normalize(name) in normalized_fields_validation:
+            score_column_validation = normalized_fields_validation[normalize(name)]
+            break
+    
+    for row_num, row in enumerate(validation_reader, start=2):
+        score_value = (row.get(score_column_validation, '') or '').strip()
+        if score_value != '':  # Only validate non-empty values (empty is allowed)
+            try:
+                score = float(score_value)
+                if score < 0:
+                    validation_errors.append(f'Row {row_num}: Grade cannot be below 0 (value: {score_value})')
+                elif score > 100:
+                    validation_errors.append(f'Row {row_num}: Grade cannot be over 100 (value: {score_value})')
+            except ValueError:
+                validation_errors.append(f'Row {row_num}: Invalid number format (value: {score_value})')
+    
+    # If there are validation errors, return early without processing
+    if validation_errors:
+        return JsonResponse({
+            'error': "Grades can't be below 0 and over 100. Please check your grades.",
+            'details': validation_errors[:20]  # Show first 20 errors
+        }, status=400)
+    
+    # Second pass: Process valid scores
+    csv_file.file.seek(0)  # Reset file pointer again
+    text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
+    reader = csv.DictReader(text_file)
+    normalized_fields = {normalize(col): col for col in (reader.fieldnames or [])}
+    student_id_source = normalized_fields['student_id']
+    score_column = None
+    for name in possible_score_names:
+        if normalize(name) in normalized_fields:
+            score_column = normalized_fields[normalize(name)]
+            break
+    
+    try:
+        with transaction.atomic():
+            def parse_score(raw_value, label):
+                value = (raw_value or '').strip()
+                if value == '':
+                    return None  # Allow empty values
+                try:
+                    # Convert to float
+                    score = float(value)
+                    # Validate range: 0 <= score <= 100 (already validated in first pass, but double-check)
+                    if score < 0:
+                        raise ValueError(f'{label} cannot be below 0')
+                    if score > 100:
+                        raise ValueError(f'{label} cannot be over 100')
+                    # If it's a whole number (like 95), ensure it's stored as 95.0
+                    # If it has decimals (like 95.5), keep it as is
+                    # float() already handles this, but we ensure consistency
+                    return score
+                except ValueError as e:
+                    # Re-raise with original message if it's our validation error
+                    if 'cannot be' in str(e):
+                        raise e
+                    raise ValueError(f'{label} must be a valid number')
+            
+            updated_count = 0
+            errors = []
+            from django.utils import timezone
+            
+            for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
+                try:
+                    student_id_str = (row[student_id_source] or '').strip()
+                    if not student_id_str:
+                        errors.append(f'Row {row_num}: student_id is required')
+                        continue
+                    
+                    # Get student by student_id (not by id)
+                    try:
+                        student = Student.objects.get(student_id=student_id_str)
+                    except Student.DoesNotExist:
+                        errors.append(f'Row {row_num}: Student with student_id {student_id_str} not found')
+                        continue
+                    except Student.MultipleObjectsReturned:
+                        errors.append(f'Row {row_num}: Multiple students found with student_id {student_id_str}')
+                        continue
+                    
+                    # Check if student is enrolled in this course
+                    if course not in student.courses.all():
+                        errors.append(f'Row {row_num}: Student {student_id_str} is not enrolled in course {course_name}')
+                        continue
+                    
+                    # Get or create grade record
+                    grade, created = Grade.objects.get_or_create(
+                        student=student,
+                        course=course
+                    )
+                    
+                    # Parse score
+                    score = parse_score(row[score_column], 'score')
+                    
+                    # Store individual score with file name
+                    if score is not None:
+                        grade.set_individual_score(assessment_key, score, file_name=csv_file.name)
+                    else:
+                        # Remove if score is None
+                        grade.remove_individual_score(assessment_key)
+                    
+                    # Check if all files for this assessment type are uploaded
+                    all_scores = []
+                    for i in range(1, assessment_count + 1):
+                        key = f'{assessment_type}_{i}'
+                        individual_score = grade.get_individual_score(key)
+                        if individual_score is not None:
+                            all_scores.append(individual_score)
+                    
+                    # Only set average if ALL files are uploaded
+                    if len(all_scores) == assessment_count and assessment_count > 0:
+                        average_score = sum(all_scores) / len(all_scores)
+                        setattr(grade, assessment_type, average_score)
+                    else:
+                        # Not all files uploaded yet, don't set average
+                        setattr(grade, assessment_type, None)
+                    
+                    grade.save()
+                    updated_count += 1
+                        
+                except Exception as e:
+                    errors.append(f'Row {row_num}: {str(e)}')
+            
+            if errors and updated_count == 0:
+                return JsonResponse({
+                    'error': 'Failed to process CSV',
+                    'details': errors[:10]  # Show first 10 errors
+                }, status=400)
+            
+            # Count how many files are uploaded for this assessment type (check first student as sample)
+            files_uploaded = 0
+            file_info = None
+            if updated_count > 0:
+                sample_grade = Grade.objects.filter(course=course).first()
+                if sample_grade and sample_grade.assessment_scores:
+                    files_uploaded = len([k for k in sample_grade.assessment_scores.keys() if k.startswith(f'{assessment_type}_')])
+                    # Get file info for this specific assessment file
+                    file_name, uploaded_at = sample_grade.get_uploaded_file_info(assessment_key)
+                    if file_name:
+                        file_info = {
+                            'file_name': file_name,
+                            'uploaded_at': uploaded_at
+                        }
+            
+            response_data = {
+                'status': 'ok',
+                'updated_count': updated_count,
+                'assessment_type': assessment_type,
+                'assessment_index': assessment_index,
+                'files_uploaded': files_uploaded,
+                'total_required': assessment_count,
+                'file_info': file_info
+            }
+            if errors:
+                response_data['warnings'] = errors[:10]
+            
+            return JsonResponse(response_data)
+            
+    except Exception as e:
+        return JsonResponse({'error': f'CSV processing error: {str(e)}'}, status=400)
+
+@instructor_required
+@csrf_exempt
+def delete_assessment_file(request, course_name, assessment_type, assessment_index):
+    """Delete a specific assessment file (e.g., midterm_1)"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    valid_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+    if assessment_type not in valid_types:
+        return JsonResponse({'error': f'Invalid assessment type'}, status=400)
+    
+    try:
+        assessment_index = int(assessment_index)
+        if assessment_index < 1:
+            return JsonResponse({'error': 'Assessment index must be >= 1'}, status=400)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid assessment index'}, status=400)
+    
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    try:
+        assessment = Assessment.objects.get(course=course)
+    except Assessment.DoesNotExist:
+        return JsonResponse({'error': 'Assessment not found'}, status=404)
+    
+    assessment_count = getattr(assessment, assessment_type, 0)
+    if assessment_index > assessment_count:
+        return JsonResponse({'error': 'Invalid assessment index'}, status=400)
+    
+    assessment_key = f'{assessment_type}_{assessment_index}'
+    
+    try:
+        with transaction.atomic():
+            # Get all students enrolled in this course
+            students = course.students.all()
+            updated_count = 0
+            
+            for student in students:
+                try:
+                    grade = Grade.objects.get(student=student, course=course)
+                    # Remove individual score
+                    grade.remove_individual_score(assessment_key)
+                    
+                    # Recalculate average if needed
+                    all_scores = []
+                    for i in range(1, assessment_count + 1):
+                        key = f'{assessment_type}_{i}'
+                        individual_score = grade.get_individual_score(key)
+                        if individual_score is not None:
+                            all_scores.append(individual_score)
+                    
+                    # Only set average if ALL remaining files are uploaded
+                    if len(all_scores) == assessment_count and assessment_count > 0:
+                        average_score = sum(all_scores) / len(all_scores)
+                        setattr(grade, assessment_type, average_score)
+                    else:
+                        # Not all files uploaded, clear average
+                        setattr(grade, assessment_type, None)
+                    
+                    grade.save()
+                    updated_count += 1
+                except Grade.DoesNotExist:
+                    continue
+            
+            return JsonResponse({
+                'status': 'ok',
+                'updated_count': updated_count,
+                'assessment_type': assessment_type,
+                'assessment_index': assessment_index
+            })
+            
+    except Exception as e:
+        return JsonResponse({'error': f'Delete error: {str(e)}'}, status=400)
+
+@instructor_required
+@csrf_exempt
+def update_individual_grade(request, course_name):
+    """Update individual grade score from table cell edit"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    if profile and course not in profile.courses.all():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+        student_id = data.get('student_id')
+        assessment_key = data.get('assessment_key')  # e.g., "midterm_1"
+        score = data.get('score')
+        
+        if not student_id:
+            return JsonResponse({'error': 'student_id is required'}, status=400)
+        if not assessment_key:
+            return JsonResponse({'error': 'assessment_key is required'}, status=400)
+        
+        # Get student
+        try:
+            student = Student.objects.get(student_id=student_id)
+        except Student.DoesNotExist:
+            return JsonResponse({'error': 'Student not found'}, status=404)
+        
+        # Check if student is enrolled
+        if course not in student.courses.all():
+            return JsonResponse({'error': 'Student is not enrolled in this course'}, status=400)
+        
+        # Get or create grade
+        grade, created = Grade.objects.get_or_create(
+            student=student,
+            course=course
+        )
+        
+        # Parse score
+        if score is None or score == '':
+            # Remove score
+            grade.remove_individual_score(assessment_key)
+            score_value = None
+        else:
+            try:
+                score_value = float(score)
+                if score_value < 0:
+                    return JsonResponse({'error': 'Score cannot be less than 0'}, status=400)
+                if score_value > 100:
+                    return JsonResponse({'error': 'Score cannot be greater than 100'}, status=400)
+                # Set individual score (without file_name since it's manual edit)
+                # Keep existing file_name if exists
+                existing_file_name = ''
+                if grade.assessment_scores and assessment_key in grade.assessment_scores:
+                    existing_file_name = grade.assessment_scores[assessment_key].get('file_name', '')
+                grade.set_individual_score(assessment_key, score_value, file_name=existing_file_name)
+            except ValueError:
+                return JsonResponse({'error': 'Score must be a valid number'}, status=400)
+        
+        # Recalculate average for this assessment type if needed
+        assessment_type = assessment_key.split('_')[0]
+        try:
+            assessment = Assessment.objects.get(course=course)
+            assessment_count = getattr(assessment, assessment_type, 0)
+            
+            if assessment_count > 0:
+                all_scores = []
+                for i in range(1, assessment_count + 1):
+                    key = f'{assessment_type}_{i}'
+                    individual_score = grade.get_individual_score(key)
+                    if individual_score is not None:
+                        all_scores.append(individual_score)
+                
+                # Only set average if ALL files are uploaded
+                if len(all_scores) == assessment_count:
+                    average_score = sum(all_scores) / len(all_scores)
+                    setattr(grade, assessment_type, average_score)
+                else:
+                    # Not all files uploaded, clear average
+                    setattr(grade, assessment_type, None)
+        except Assessment.DoesNotExist:
+            pass
+        
+        # Update last_changes_at
+        from django.utils import timezone
+        grade.last_changes_at = timezone.now()
+        grade.save()
+        
+        return JsonResponse({
+            'status': 'ok',
+            'score': score_value,
+            'assessment_key': assessment_key,
+            'last_changes_at': grade.last_changes_at.isoformat() if grade.last_changes_at else None
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': f'Update error: {str(e)}'}, status=400)
 
 @instructor_required
 @csrf_exempt

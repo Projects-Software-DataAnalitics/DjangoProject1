@@ -39,6 +39,27 @@ urlpatterns = [
     path('student/advisor/<str:username>/', core_views.advisor_profile, name='advisor_profile'),
     path('student/logout/', core_views.logout_view, name='logout'),
     path('instructor/', core_views.instructor_dashboard, name='instructor'),
+    path('instructor/profile/', core_views.instructor_profile, name='instructor_profile'),
+    path('instructor/my-courses/', core_views.instructor_my_courses, name='instructor_my_courses'),
+    path('instructor/grades/', core_views.instructor_grades, name='instructor_grades'),
+    path('instructor/grades/<str:course_name>/', core_views.instructor_course_grades, name='instructor_course_grades'),
+    path('instructor/grades/<str:course_name>/upload-<str:assessment_type>-<int:assessment_index>/', core_views.upload_assessment_grades, name='upload_assessment_grades'),
+    path('instructor/grades/<str:course_name>/delete-<str:assessment_type>-<int:assessment_index>/', core_views.delete_assessment_file, name='delete_assessment_file'),
+    path('instructor/grades/<str:course_name>/update-individual-grade/', core_views.update_individual_grade, name='update_individual_grade'),
+    path('instructor/grades/<str:course_name>/update-assessment/', core_views.update_assessment, name='update_assessment'),
+    path('instructor/grades/<str:course_name>/update-assessment-percentages/', core_views.update_assessment_percentages, name='update_assessment_percentages'),
+    path('instructor/learning-outcomes/', core_views.learning_outcomes, name='learning_outcomes'),
+    path('instructor/learning-outcomes/<str:course_name>/', core_views.course_learning_outcomes, name='course_learning_outcomes'),
+    path('instructor/learning-outcomes/create/', core_views.create_learning_outcome, name='create_learning_outcome'),
+    path('instructor/learning-outcomes/update/<int:outcome_id>/', core_views.update_learning_outcome, name='update_learning_outcome'),
+    path('instructor/learning-outcomes/delete/<int:outcome_id>/', core_views.delete_learning_outcome, name='delete_learning_outcome'),
+    path('instructor/learning-outcomes/<int:course_id>/<int:outcome_id>/', core_views.learning_outcome_detail, name='learning_outcome_detail'),
+    path('instructor/program-outcomes/', core_views.instructor_program_outcomes, name='instructor_program_outcomes'),
+    path('instructor/announcements/', core_views.instructor_announcements, name='instructor_announcements'),
+]
+
+# Faculty Head URLs
+urlpatterns += [
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
     path('faculty-head/profile/', core_views.faculty_head_profile, name='faculty_head_profile'),
     path('faculty-head/grades/', core_views.faculty_head_grades, name='faculty-head-grades'),
