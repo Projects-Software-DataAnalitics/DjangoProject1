@@ -53,6 +53,38 @@ class Course(models.Model):
             return f"{self.code} - {self.name}"
         return self.name
 
+class Assessment(models.Model):
+    course = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='assessment')
+    midterm = models.IntegerField(default=2)
+    final = models.IntegerField(default=1)
+    proje = models.IntegerField(default=0)
+    homework = models.IntegerField(default=0)
+    absence = models.IntegerField(default=0)
+    quiz = models.IntegerField(default=0)
+    assessment_count = models.IntegerField(default=3)  # midterm + final + proje + homework + absence + quiz
+    
+    # Percentages
+    midterm_percentage = models.IntegerField(default=60)
+    final_percentage = models.IntegerField(default=40)
+    proje_percentage = models.IntegerField(default=0)
+    homework_percentage = models.IntegerField(default=0)
+    absence_percentage = models.IntegerField(default=0)
+    quiz_percentage = models.IntegerField(default=0)
+
+    def save(self, *args, **kwargs):
+        # assessment_count'u quiz dahil hesapla
+        self.assessment_count = self.midterm + self.final + self.proje + self.homework + self.absence + self.quiz
+        super().save(*args, **kwargs)
+    
+    @property
+    def percentage_count(self):
+        # percentage_count'u hesapla (tabloya kaydedilmez, sadece property)
+        return (self.midterm_percentage + self.final_percentage + self.proje_percentage + 
+                self.homework_percentage + self.absence_percentage + self.quiz_percentage)
+
+    def __str__(self):
+        return f"Assessment for {self.course.name}"
+
 class Grade(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)

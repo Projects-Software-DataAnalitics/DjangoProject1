@@ -2,157 +2,132 @@
 {% load static %}
 
 {% block content %}
-<style>
-.hidden {
-    display: none !important;
-}
-</style>
 <h1>Grades Management - {{ course.name }}</h1>
 
-<div style="margin: 20px 0;">
-    <button id="csv-upload-btn" style="padding: 10px 20px; margin-right: 10px; background: #0b5fff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        Upload CSV
-    </button>
-    <button id="manual-entry-btn" style="padding: 10px 20px; margin-right: 10px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        Manual Entry
-    </button>
-    <button id="given-scores-btn" style="padding: 10px 20px; margin-right: 10px; background: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        Given Scores
-    </button>
-    {% if uploaded_file %}
-    <button id="delete-csv-btn" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        Delete CSV File
-    </button>
-    <span style="margin-left: 10px; color: #666;">
-        Uploaded: {{ uploaded_file.name }} ({{ uploaded_file.uploaded_at|date:"Y-m-d H:i" }})
-    </span>
-    {% endif %}
-</div>
-
-<!-- CSV Upload Section -->
-<div id="csv-upload-section" style="display: none; margin: 20px 0;">
-    <input type="file" id="csv-file-input" accept=".csv">
-    <button id="upload-btn" style="padding: 10px 20px; background: #0b5fff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
-        Upload
-    </button>
-    <p style="margin-top: 8px; color: #475569; font-size: 13px;">Expected columns: student_username, course_name, midterm, assignment, final</p>
-</div>
-
-<!-- Given Scores Section -->
-<div id="given-scores-section" style="display: none; margin: 20px 0;">
-    <h2 style="margin-bottom: 20px;">Given Scores for {{ course.name }}</h2>
-    <div style="overflow-x: auto;">
-        <table id="given-scores-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-            <thead>
-                <tr style="background-color: #17a2b8; color: white;">
-                    <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Student Name</th>
-                    <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Grades</th>
-                    <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Status</th>
-                </tr>
-            </thead>
-            <tbody id="given-scores-tbody">
-                {% for item in students_with_grades %}
-                <tr>
-                    <td style="padding: 12px; border: 1px solid #ddd;">
-                        {% if item.student.first_name or item.student.last_name %}
-                            {{ item.student.first_name }} {{ item.student.last_name }}
-                        {% else %}
-                            {{ item.student.username }}
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px; border: 1px solid #ddd;">
-                        {% if item.grades %}
-                            <div style="display: flex; flex-direction: column; gap: 5px;">
-                                {% for grade_name, grade_value in item.grades.items %}
-                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px; background-color: #f8f9fa; border-radius: 4px; min-width: 200px;">
-                                    <span style="font-weight: 600;">{{ grade_name }}:</span>
-                                    <span style="color: #17a2b8; font-weight: bold;">{{ grade_value }}</span>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <span style="color: #666;">No grades entered</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px; border: 1px solid #ddd;">
-                        {% if item.grades %}
-                            {% if item.is_finalized %}
-                                <span style="color: #dc3545; font-weight: bold;">Finalized</span>
-                            {% else %}
-                                <span style="color: #ffc107; font-weight: bold;">Draft</span>
-                            {% endif %}
-                        {% else %}
-                            <span style="color: #666;">No grades</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Manual Entry Section -->
-<div id="manual-entry-section" style="display: none; margin: 20px 0;">
-    <div style="overflow-x: auto;">
-        <table id="grades-table" style="width: 100%; border-collapse: collapse; margin-top: 20px; min-width: 800px;">
-            <thead>
-                <tr style="background-color: #0b5fff; color: white;">
-                    <th style="padding: 12px; border: 1px solid #ddd; position: sticky; left: 0; background-color: #0b5fff; z-index: 10; min-width: 200px;">
-                        Student Name
-                    </th>
-                    <th id="grade-columns-header" style="padding: 12px; border: 1px solid #ddd;">
-                        <!-- Dinamik sütunlar buraya gelecek -->
-                    </th>
-                    <th style="padding: 12px; border: 1px solid #ddd; width: 50px;">
-                        <button id="add-grade-column-btn" class="{% if is_finalized %}hidden{% endif %}" style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer;" title="Add Grade Column">
-                            +
-                        </button>
-                    </th>
-                </tr>
-            </thead>
-            <tbody id="grades-tbody">
-                {% for student in students %}
-                <tr data-student-id="{{ student.id }}">
-                    <td style="padding: 12px; border: 1px solid #ddd; position: sticky; left: 0; background-color: white; z-index: 5;">
-                        {% if student.first_name or student.last_name %}
-                            {{ student.first_name }} {{ student.last_name }}
-                        {% else %}
-                            {{ student.username }}
-                        {% endif %}
-                    </td>
-                    <td id="grade-cells-{{ student.id }}" class="grade-cells" style="padding: 12px; border: 1px solid #ddd;">
-                        <!-- Dinamik not hücreleri buraya gelecek -->
-                    </td>
-                    <td style="padding: 12px; border: 1px solid #ddd;"></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<!-- Assessment Management Section -->
+<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 8px; border: 1px solid #dee2e6;">
+    <h2 style="margin-top: 0; margin-bottom: 20px; color: #0f172a;">Assessment Management</h2>
+    
+    <!-- Assessment Counts Section -->
+    <div style="margin-bottom: 30px;">
+        <h3 style="margin-top: 0; margin-bottom: 15px; color: #0f172a; font-size: 18px;">Assessment Counts</h3>
+        <form id="assessment-form" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
+            <div style="flex: 0 0 auto;">
+                <label for="midterm" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Midterm</label>
+                <input type="number" id="midterm" name="midterm" value="{{ assessment.midterm }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="final" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Final</label>
+                <input type="number" id="final" name="final" value="{{ assessment.final }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="proje" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Proje</label>
+                <input type="number" id="proje" name="proje" value="{{ assessment.proje }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="homework" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Homework</label>
+                <input type="number" id="homework" name="homework" value="{{ assessment.homework }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="absence" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Absence</label>
+                <input type="number" id="absence" name="absence" value="{{ assessment.absence }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="quiz" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Quiz</label>
+                <input type="number" id="quiz" name="quiz" value="{{ assessment.quiz }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto; margin-left: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Total Count</label>
+                <div id="assessment-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center;">
+                    {{ assessment.assessment_count }}
+                </div>
+            </div>
+        </form>
     </div>
     
-    <div style="margin-top: 20px;">
-        <button id="update-grades-btn" class="{% if is_finalized %}hidden{% endif %}" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            Update
-        </button>
-        <span id="finalized-status" class="{% if not is_finalized %}hidden{% endif %}" style="color: #dc3545; font-weight: bold; margin-left: 10px;">
-            Finalized
-        </span>
-        <button id="finalize-btn" class="{% if is_finalized %}hidden{% endif %}" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
-            Finalize
-        </button>
+    <!-- Assessment Percentages Section -->
+    <div>
+        <h3 style="margin-top: 0; margin-bottom: 15px; color: #0f172a; font-size: 18px;">Assessment Percentages</h3>
+        <form id="assessment-percentages-form" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
+            <div style="flex: 0 0 auto;">
+                <label for="midterm_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Midterm %</label>
+                <input type="number" id="midterm_percentage" name="midterm_percentage" value="{{ assessment.midterm_percentage }}" 
+                       min="0" max="100" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="final_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Final %</label>
+                <input type="number" id="final_percentage" name="final_percentage" value="{{ assessment.final_percentage }}" 
+                       min="0" max="100" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="proje_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Proje %</label>
+                <input type="number" id="proje_percentage" name="proje_percentage" value="{{ assessment.proje_percentage }}" 
+                       min="0" max="100" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="homework_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Homework %</label>
+                <input type="number" id="homework_percentage" name="homework_percentage" value="{{ assessment.homework_percentage }}" 
+                       min="0" max="100" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="absence_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Absence %</label>
+                <input type="number" id="absence_percentage" name="absence_percentage" value="{{ assessment.absence_percentage }}" 
+                       min="0" max="100" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="quiz_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Quiz %</label>
+                <input type="number" id="quiz_percentage" name="quiz_percentage" value="{{ assessment.quiz_percentage }}" 
+                       min="0" max="100" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            </div>
+            
+            <div style="flex: 0 0 auto; margin-left: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Total %</label>
+                <div id="percentage-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center;">
+                    {{ assessment.percentage_count }}
+                </div>
+            </div>
+        </form>
     </div>
+    
+    <!-- Combined Save Button -->
+    <button type="button" id="save-all-btn" 
+            style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer;">
+        Save
+    </button>
+    
+    <!-- Combined Message Display -->
+    <div id="combined-message" style="margin-top: 15px; padding: 12px; border-radius: 6px; display: none;"></div>
 </div>
 
-<script id="course-grades-data" type="application/json">
-{% autoescape off %}
-{
-    "courseName": "{{ course.name|escapejs }}",
-    "isFinalized": {{ is_finalized|yesno:"true,false" }},
-    "studentsData": {{ students_with_grades_json|safe }}
-}
-{% endautoescape %}
-</script>
 <script>
 function getCsrfToken() {
     const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
@@ -161,257 +136,231 @@ function getCsrfToken() {
 
 (function() {
     'use strict';
-    const dataScript = document.getElementById('course-grades-data');
-    const data = JSON.parse(dataScript.textContent);
-    const courseName = data.courseName;
-    const isFinalized = data.isFinalized;
-    const studentsData = data.studentsData;
-
-    // Varsayılan 2 not sütunu oluştur
-    let gradeColumns = [
-        {name: '', score: ''},
-        {name: '', score: ''}
-    ];
-
-    // Mevcut notları yükle (eğer varsa ve tüm öğrencilerde aynı sütunlar varsa)
-    if (studentsData.length > 0) {
-    // İlk öğrencinin notlarını kontrol et
-    const firstStudent = studentsData[0];
-    if (firstStudent.grades && Object.keys(firstStudent.grades).length > 0) {
-        gradeColumns = Object.keys(firstStudent.grades).map(name => ({
-            name: name,
-            score: firstStudent.grades[name]
-        }));
-    }
-    }
-
-    // Sütun başlıklarını oluştur
-    function renderGradeColumns() {
-    const headerCell = document.getElementById('grade-columns-header');
-    headerCell.innerHTML = '';
     
-    gradeColumns.forEach((col, index) => {
-        const th = document.createElement('th');
-        th.style.cssText = 'padding: 12px; border: 1px solid #ddd; min-width: 200px;';
-        th.innerHTML = `
-            <div style="display: flex; gap: 5px; flex-direction: column;">
-                <input type="text" class="grade-name-input" data-index="${index}" 
-                       value="${col.name}" placeholder="Grade name (e.g., 1. Vize)" 
-                       style="padding: 5px; border: 1px solid #ccc; border-radius: 3px;"
-                       ${isFinalized ? 'disabled' : ''}>
-            </div>
-        `;
-        headerCell.appendChild(th);
-    });
-    }
-
-    // Öğrenci satırlarını oluştur
-    function renderStudentRows() {
-    studentsData.forEach(student => {
-        const row = document.querySelector(`tr[data-student-id="${student.id}"]`);
-        if (!row) return;
-        
-        const gradeCells = row.querySelector('.grade-cells');
-        if (!gradeCells) return;
-        
-        gradeCells.innerHTML = '';
-        
-        gradeColumns.forEach((col, index) => {
-            const td = document.createElement('td');
-            td.style.cssText = 'padding: 12px; border: 1px solid #ddd;';
-            const studentGrade = student.grades && student.grades[col.name] ? student.grades[col.name] : '';
-            td.innerHTML = `
-                <input type="number" step="0.01" 
-                       class="student-grade-input" 
-                       data-student-id="${student.id}" 
-                       data-grade-index="${index}"
-                       value="${studentGrade}" 
-                       placeholder="Score"
-                       style="padding: 5px; border: 1px solid #ccc; border-radius: 3px; width: 100%;"
-                       ${isFinalized ? 'disabled' : ''}>
-            `;
-            gradeCells.appendChild(td);
+    const courseName = "{{ course.name|escapejs }}";
+    const assessmentForm = document.getElementById('assessment-form');
+    const saveAllBtn = document.getElementById('save-all-btn');
+    const combinedMessageDiv = document.getElementById('combined-message');
+    const countDisplay = document.getElementById('assessment-count-display');
+    
+    // Input değişikliklerinde toplamı güncelle
+    const inputs = assessmentForm.querySelectorAll('input[type="number"]');
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            updateTotal();
         });
     });
-    }
-
-    // İlk render
-    renderGradeColumns();
-    renderStudentRows();
-
-    // + Butonuna tıklandığında yeni sütun ekle
-    document.getElementById('add-grade-column-btn')?.addEventListener('click', function() {
-    if (isFinalized) return;
     
-        gradeColumns.push({name: '', score: ''});
-        renderGradeColumns();
-        renderStudentRows();
-    });
-
-    // Sütun başlığındaki not adı değiştiğinde tüm satırlarda güncelle
-    document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('grade-name-input')) {
-        const index = parseInt(e.target.dataset.index);
-        gradeColumns[index].name = e.target.value;
-        // Sütun adı değiştiğinde öğrenci satırlarını yeniden render et
-        renderStudentRows();
-    }
-    });
-
-    // Manuel giriş butonu
-    document.getElementById('manual-entry-btn')?.addEventListener('click', function() {
-    document.getElementById('manual-entry-section').style.display = 'block';
-        document.getElementById('csv-upload-section').style.display = 'none';
-        document.getElementById('given-scores-section').style.display = 'none';
-    });
-
-    // CSV yükleme butonu
-    document.getElementById('csv-upload-btn')?.addEventListener('click', function() {
-        document.getElementById('csv-upload-section').style.display = 'block';
-        document.getElementById('manual-entry-section').style.display = 'none';
-        document.getElementById('given-scores-section').style.display = 'none';
-    });
-
-    // Given Scores butonu
-    document.getElementById('given-scores-btn')?.addEventListener('click', function() {
-        document.getElementById('given-scores-section').style.display = 'block';
-        document.getElementById('csv-upload-section').style.display = 'none';
-        document.getElementById('manual-entry-section').style.display = 'none';
-    });
-
-    // CSV yükleme
-    document.getElementById('upload-btn')?.addEventListener('click', function() {
-    const fileInput = document.getElementById('csv-file-input');
-    const file = fileInput.files[0];
-    if (!file) {
-        alert('Please select a CSV file');
-        return;
+    function updateTotal() {
+        let total = 0;
+        inputs.forEach(input => {
+            const value = parseInt(input.value) || 0;
+            total += value;
+        });
+        countDisplay.textContent = total;
     }
     
-    const formData = new FormData();
-    formData.append('csv_file', file);
+    // Sayfa yüklendiğinde toplamı güncelle
+    updateTotal();
     
-    fetch('/grades/upload/', {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCsrfToken()
-        },
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'ok') {
-            alert('CSV uploaded successfully!');
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Upload failed'));
+    // Combined Save butonu
+    saveAllBtn.addEventListener('click', function() {
+        // Mesaj div'ini temizle
+        combinedMessageDiv.style.display = 'none';
+        combinedMessageDiv.innerHTML = '';
+        
+        // Assessment Count verilerini al
+        const countData = {
+            midterm: parseInt(document.getElementById('midterm').value),
+            final: parseInt(document.getElementById('final').value),
+            proje: parseInt(document.getElementById('proje').value),
+            homework: parseInt(document.getElementById('homework').value),
+            absence: parseInt(document.getElementById('absence').value),
+            quiz: parseInt(document.getElementById('quiz').value)
+        };
+        
+        // Assessment Percentage verilerini al
+        const percentageData = {
+            midterm_percentage: parseInt(document.getElementById('midterm_percentage').value),
+            final_percentage: parseInt(document.getElementById('final_percentage').value),
+            proje_percentage: parseInt(document.getElementById('proje_percentage').value),
+            homework_percentage: parseInt(document.getElementById('homework_percentage').value),
+            absence_percentage: parseInt(document.getElementById('absence_percentage').value),
+            quiz_percentage: parseInt(document.getElementById('quiz_percentage').value)
+        };
+        
+        // Validation: Assessment Count - Integer kontrolü ve 10'dan küçük olması
+        let countErrors = [];
+        for (const [key, value] of Object.entries(countData)) {
+            if (isNaN(value) || !Number.isInteger(value)) {
+                countErrors.push(`${key.charAt(0).toUpperCase() + key.slice(1)} must be an integer. If there is no value, enter 0.`);
+            } else if (value < 0) {
+                countErrors.push(`You have to write a positive number.`);
+                break; // İlk negatif değerde dur
+            } else if (value >= 10) {
+                countErrors.push(`${key.charAt(0).toUpperCase() + key.slice(1)} must be less than 10.`);
+            }
         }
-    })
-    .catch(error => {
-        alert('Upload error: ' + error);
-    });
-    });
-
-    // CSV dosyasını sil
-    document.getElementById('delete-csv-btn')?.addEventListener('click', function() {
-    if (confirm('Are you sure you want to delete the CSV file information? Grades will not be deleted.')) {
-        fetch(`/instructor/grades/${courseName}/delete-csv/`, {
+        
+        // Validation: Assessment Percentage - Integer kontrolü
+        let percentageErrors = [];
+        for (const [key, value] of Object.entries(percentageData)) {
+            if (isNaN(value) || !Number.isInteger(value)) {
+                percentageErrors.push(`${key.replace('_', ' ')} must be an integer.`);
+            } else if (value < 0) {
+                percentageErrors.push(`You have to write a positive number.`);
+                break; // İlk negatif değerde dur
+            } else if (value > 100) {
+                percentageErrors.push(`${key.replace('_', ' ')} cannot be greater than 100.`);
+            }
+        }
+        
+        // Assessment Count kontrolü: Percentage > 0 ise, count > 0 olmalı
+        const missingAssessments = [];
+        const assessmentMapping = {
+            'midterm_percentage': { count: 'midterm', name: 'Midterm' },
+            'final_percentage': { count: 'final', name: 'Final' },
+            'proje_percentage': { count: 'proje', name: 'Proje' },
+            'homework_percentage': { count: 'homework', name: 'Homework' },
+            'absence_percentage': { count: 'absence', name: 'Absence' },
+            'quiz_percentage': { count: 'quiz', name: 'Quiz' }
+        };
+        
+        for (const [percentageKey, percentageValue] of Object.entries(percentageData)) {
+            if (percentageValue > 0) {
+                const mapping = assessmentMapping[percentageKey];
+                if (countData[mapping.count] === 0) {
+                    missingAssessments.push(`You haven't assigned a ${mapping.name} yet.`);
+                }
+            }
+        }
+        
+        // Important mesajları: Count > 0 ama percentage == 0
+        const importantWarnings = [];
+        const countToPercentageMapping = {
+            'midterm': 'midterm_percentage',
+            'final': 'final_percentage',
+            'proje': 'proje_percentage',
+            'homework': 'homework_percentage',
+            'absence': 'absence_percentage',
+            'quiz': 'quiz_percentage'
+        };
+        const countToNameMapping = {
+            'midterm': 'Midterm',
+            'final': 'Final',
+            'proje': 'Proje',
+            'homework': 'Homework',
+            'absence': 'Absence',
+            'quiz': 'Quiz'
+        };
+        
+        for (const [countKey, countValue] of Object.entries(countData)) {
+            if (countValue > 0) {
+                const percentageKey = countToPercentageMapping[countKey];
+                const percentageValue = percentageData[percentageKey] || 0;
+                if (percentageValue === 0) {
+                    const name = countToNameMapping[countKey];
+                    importantWarnings.push(`You haven't assigned a percentage for ${name}.`);
+                }
+            }
+        }
+        
+        // Toplam 100 kontrolü
+        const totalPercentage = Object.values(percentageData).reduce((sum, val) => sum + val, 0);
+        if (totalPercentage !== 100) {
+            percentageErrors.push(`Total percentage must be exactly 100. Current total: ${totalPercentage}`);
+        }
+        
+        // Tüm hataları birleştir
+        const allErrors = [...countErrors, ...percentageErrors, ...missingAssessments, ...importantWarnings];
+        
+        if (allErrors.length > 0) {
+            combinedMessageDiv.style.display = 'block';
+            combinedMessageDiv.style.background = '#fee2e2';
+            combinedMessageDiv.style.color = '#dc2626';
+            combinedMessageDiv.style.border = '1px solid #fca5a5';
+            combinedMessageDiv.innerHTML = allErrors.join('<br>');
+            return;
+        }
+        
+        // Her iki API'ye de gönder
+        const countPromise = fetch(`/instructor/grades/${courseName}/update-assessment/`, {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRFToken': getCsrfToken()
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'ok') {
-                alert('CSV file information deleted!');
-                location.reload();
-            } else {
-                alert('Error: ' + (data.error || 'Delete failed'));
-            }
-        });
-    }
-    });
-
-    // Güncelle butonu
-    document.getElementById('update-grades-btn')?.addEventListener('click', function() {
-    const studentsDataToSend = [];
-    
-    studentsData.forEach(student => {
-        const grades = [];
-        gradeColumns.forEach((col, index) => {
-            const input = document.querySelector(
-                `.student-grade-input[data-student-id="${student.id}"][data-grade-index="${index}"]`
-            );
-            const gradeName = col.name.trim();
-            const gradeScore = input ? input.value.trim() : '';
-            
-            if (gradeName && gradeScore) {
-                grades.push({
-                    name: gradeName,
-                    score: parseFloat(gradeScore)
-                });
-            }
-        });
+            },
+            body: JSON.stringify(countData)
+        }).then(response => response.json());
         
-        studentsDataToSend.push({
-            student_id: student.id,
-            grades: grades
-        });
-    });
-    
-    fetch(`/instructor/grades/${courseName}/update-manual/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
-        },
-        body: JSON.stringify({students: studentsDataToSend})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'ok') {
-            alert('Grades updated successfully!');
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Update failed'));
-        }
-    })
-    .catch(error => {
-        alert('Update error: ' + error);
-    });
-    });
-
-    // Kesinleştir butonu
-    document.getElementById('finalize-btn')?.addEventListener('click', function() {
-    if (confirm('Are you sure you want to finalize grades? This action cannot be undone.')) {
-        fetch(`/instructor/grades/${courseName}/finalize/`, {
+        const percentagePromise = fetch(`/instructor/grades/${courseName}/update-assessment-percentages/`, {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRFToken': getCsrfToken()
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'ok') {
-                alert('Grades finalized successfully!');
-                location.reload();
+            },
+            body: JSON.stringify(percentageData)
+        }).then(response => response.json());
+        
+        Promise.all([countPromise, percentagePromise])
+        .then(([countResult, percentageResult]) => {
+            if (countResult.status === 'ok' && percentageResult.status === 'ok') {
+                combinedMessageDiv.style.display = 'block';
+                combinedMessageDiv.style.background = '#d1fae5';
+                combinedMessageDiv.style.color = '#065f46';
+                combinedMessageDiv.style.border = '1px solid #6ee7b7';
+                combinedMessageDiv.textContent = 'Assessment data saved successfully!';
+                
+                // Count'u güncelle
+                if (countResult.assessment_count) {
+                    countDisplay.textContent = countResult.assessment_count;
+                }
             } else {
-                alert('Error: ' + (data.error || 'Finalize failed'));
+                const errors = [];
+                if (countResult.error) errors.push(`Counts: ${countResult.error}`);
+                if (percentageResult.error) errors.push(`Percentages: ${percentageResult.error}`);
+                
+                combinedMessageDiv.style.display = 'block';
+                combinedMessageDiv.style.background = '#fee2e2';
+                combinedMessageDiv.style.color = '#dc2626';
+                combinedMessageDiv.style.border = '1px solid #fca5a5';
+                combinedMessageDiv.innerHTML = errors.length > 0 ? errors.join('<br>') : 'Save failed';
             }
         })
         .catch(error => {
-            alert('Finalize error: ' + error);
+            combinedMessageDiv.style.display = 'block';
+            combinedMessageDiv.style.background = '#fee2e2';
+            combinedMessageDiv.style.color = '#dc2626';
+            combinedMessageDiv.style.border = '1px solid #fca5a5';
+            combinedMessageDiv.textContent = error;
         });
-    }
     });
     
-    // Export to global scope for compatibility
-    window.courseName = courseName;
-    window.isFinalized = isFinalized;
-    window.studentsData = studentsData;
-    window.gradeColumns = gradeColumns;
+    // Assessment Percentages Section
+    const percentagesForm = document.getElementById('assessment-percentages-form');
+    const percentageCountDisplay = document.getElementById('percentage-count-display');
+    
+    // Percentage input değişikliklerinde toplamı güncelle
+    const percentageInputs = percentagesForm.querySelectorAll('input[type="number"]');
+    percentageInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            updatePercentageTotal();
+        });
+    });
+    
+    function updatePercentageTotal() {
+        let total = 0;
+        percentageInputs.forEach(input => {
+            const value = parseInt(input.value) || 0;
+            total += value;
+        });
+        percentageCountDisplay.textContent = total;
+    }
+    
+    // Sayfa yüklendiğinde percentage toplamını güncelle
+    updatePercentageTotal();
+    
 })();
 </script>
-{% endblock %}
 
+{% endblock %}

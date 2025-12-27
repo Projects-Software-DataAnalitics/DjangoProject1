@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.core.cache import cache
-from .models import Grade, Student, Course, ProgramOutcome
+from .models import Grade, Student, Course, ProgramOutcome, Assessment
 
 User = get_user_model()
 
@@ -527,8 +527,7 @@ def instructor_grades(request):
 
 @instructor_required
 def instructor_course_grades(request, course_name):
-    from django.utils import timezone
-    from datetime import datetime
+    from .models import Assessment
     
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
@@ -540,69 +539,34 @@ def instructor_course_grades(request, course_name):
     if profile and course not in profile.courses.all():
         return HttpResponseForbidden("You don't have access to this course")
     
-    # Course'a kayıtlı öğrencileri al
-    students = Student.objects.filter(courses=course).order_by('username')
-    students_with_grades = []
-    for student in students:
-        grade_obj = Grade.objects.filter(student=student, course=course).first()
-        grades_dict = {}
-        is_finalized = False
-        
-        if grade_obj:
-            # Yeni JSONField'dan notları al
-            if grade_obj.grades:
-                grades_dict = grade_obj.grades
-            # Eski alanlardan notları al (geriye dönük uyumluluk)
-            elif grade_obj.midterm is not None or grade_obj.assignment is not None or grade_obj.final is not None:
-                if grade_obj.midterm is not None:
-                    grades_dict['Midterm'] = grade_obj.midterm
-                if grade_obj.assignment is not None:
-                    grades_dict['Assignment'] = grade_obj.assignment
-                if grade_obj.final is not None:
-                    grades_dict['Final'] = grade_obj.final
-            
-            is_finalized = grade_obj.is_finalized
-        
-        students_with_grades.append({
-            'student': student,
-            'grades': grades_dict,
-            'is_finalized': is_finalized
-        })
-    
-    # Uploaded file bilgisini al (course'daki herhangi bir grade'den)
-    uploaded_file = None
-    grade_with_file = Grade.objects.filter(course=course).exclude(uploaded_file_name='').first()
-    if grade_with_file and grade_with_file.uploaded_file_name:
-        uploaded_file = {
-            'name': grade_with_file.uploaded_file_name,
-            'uploaded_at': grade_with_file.uploaded_at
+    # Assessment'ı al veya oluştur (default değerlerle)
+    assessment, created = Assessment.objects.get_or_create(
+        course=course,
+        defaults={
+            'midterm': 2,
+            'final': 1,
+            'proje': 0,
+            'homework': 0,
+            'absence': 0,
+            'quiz': 0,
+            'assessment_count': 3,
+            'midterm_percentage': 60,
+            'final_percentage': 40,
+            'proje_percentage': 0,
+            'homework_percentage': 0,
+            'absence_percentage': 0,
+            'quiz_percentage': 0
         }
-    
-    is_finalized = all(item['is_finalized'] for item in students_with_grades if item['grades'])
-    students_with_grades_json = json.dumps([
-        {
-            'id': item['student'].id,
-            'username': item['student'].username,
-            'first_name': item['student'].first_name or '',
-            'last_name': item['student'].last_name or '',
-            'grades': item['grades'],
-            'is_finalized': item['is_finalized']
-        }
-        for item in students_with_grades
-    ])
+    )
     
     return render(request, 'instructor/course_grades.html', {
         'course': course,
-        'students': students,
-        'students_with_grades': students_with_grades,
-        'students_with_grades_json': students_with_grades_json,
-        'uploaded_file': uploaded_file,
-        'is_finalized': is_finalized
+        'assessment': assessment,
     })
 
 @instructor_required
 @csrf_exempt
-def delete_uploaded_csv(request, course_name):
+def update_assessment(request, course_name):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
@@ -616,81 +580,75 @@ def delete_uploaded_csv(request, course_name):
     
     if profile and course not in profile.courses.all():
         return JsonResponse({'error': 'Access denied'}, status=403)
-    
-    # Course'daki tüm grade'lerden uploaded file bilgisini temizle
-    Grade.objects.filter(course=course).update(
-        uploaded_file_name='',
-        uploaded_at=None
-    )
-    
-    return JsonResponse({'status': 'ok'})
-
-@instructor_required
-@csrf_exempt
-def update_manual_grades(request, course_name):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
-    instructor_user = request.instructor_user
-    profile = getattr(instructor_user, 'profile', None)
-    
-    try:
-        course = Course.objects.get(name=course_name)
-    except Course.DoesNotExist:
-        return JsonResponse({'error': 'Course not found'}, status=404)
-    
-    # Instructor'ın bu course'a erişimi var mı kontrol et
-    if profile and course not in profile.courses.all():
-        return JsonResponse({'error': 'Access denied'}, status=403)
-    
-    # Grade'ler finalized mi kontrol et
-    finalized_grades = Grade.objects.filter(course=course, is_finalized=True).exists()
-    if finalized_grades:
-        return JsonResponse({'error': 'Grades are finalized and cannot be updated'}, status=400)
     
     try:
         data = json.loads(request.body)
-        students_data = data.get('students', [])
+        midterm = data.get('midterm')
+        final = data.get('final')
+        proje = data.get('proje')
+        homework = data.get('homework')
+        absence = data.get('absence')
+        quiz = data.get('quiz')
         
-        with transaction.atomic():
-            for student_data in students_data:
-                student_id = student_data.get('student_id')
-                grades_list = student_data.get('grades', [])
-                
-                try:
-                    student = Student.objects.get(id=student_id)
-                except Student.DoesNotExist:
-                    continue
-                
-                # Grades dict'ini oluştur
-                grades_dict = {}
-                for grade_item in grades_list:
-                    grade_name = grade_item.get('name', '').strip()
-                    grade_score = grade_item.get('score')
-                    if grade_name and grade_score is not None:
-                        try:
-                            grades_dict[grade_name] = float(grade_score)
-                        except (ValueError, TypeError):
-                            continue
-                
-                # Grade objesini güncelle veya oluştur
-                Grade.objects.update_or_create(
-                    student=student,
-                    course=course,
-                    defaults={'grades': grades_dict}
-                )
+        # Validation: Integer kontrolü ve 10'dan küçük olması
+        values = {
+            'midterm': midterm,
+            'final': final,
+            'proje': proje,
+            'homework': homework,
+            'absence': absence,
+            'quiz': quiz
+        }
         
-        return JsonResponse({'status': 'ok'})
+        for key, value in values.items():
+            if value is None:
+                return JsonResponse({'error': f'{key} is required'}, status=400)
+            try:
+                int_value = int(value)
+            except (ValueError, TypeError):
+                return JsonResponse({'error': f'{key} must be an integer'}, status=400)
+            if int_value >= 10:
+                return JsonResponse({'error': f'{key} must be less than 10'}, status=400)
+            if int_value < 0:
+                return JsonResponse({'error': f'{key} cannot be negative'}, status=400)
+            values[key] = int_value
+        
+        # Assessment'ı güncelle veya oluştur
+        assessment, created = Assessment.objects.get_or_create(
+            course=course,
+            defaults={
+                'midterm': values['midterm'],
+                'final': values['final'],
+                'proje': values['proje'],
+                'homework': values['homework'],
+                'absence': values['absence'],
+                'quiz': values['quiz'],
+            }
+        )
+        
+        if not created:
+            assessment.midterm = values['midterm']
+            assessment.final = values['final']
+            assessment.proje = values['proje']
+            assessment.homework = values['homework']
+            assessment.absence = values['absence']
+            assessment.quiz = values['quiz']
+            # save() metodu assessment_count'u otomatik hesaplayacak
+            assessment.save()
+        
+        return JsonResponse({
+            'status': 'ok',
+            'assessment_count': assessment.assessment_count
+        })
+        
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
 
 @instructor_required
 @csrf_exempt
-def finalize_grades(request, course_name):
+def update_assessment_percentages(request, course_name):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
-    from django.utils import timezone
     
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
@@ -700,18 +658,75 @@ def finalize_grades(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Instructor'ın bu course'a erişimi var mı kontrol et
     if profile and course not in profile.courses.all():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
-    # Course'daki tüm grade'leri finalized yap
-    with transaction.atomic():
-        Grade.objects.filter(course=course).update(
-            is_finalized=True,
-            finalized_at=timezone.now()
+    try:
+        data = json.loads(request.body)
+        midterm_percentage = data.get('midterm_percentage')
+        final_percentage = data.get('final_percentage')
+        proje_percentage = data.get('proje_percentage')
+        homework_percentage = data.get('homework_percentage')
+        absence_percentage = data.get('absence_percentage')
+        quiz_percentage = data.get('quiz_percentage')
+        
+        # Validation: Integer kontrolü
+        values = {
+            'midterm_percentage': midterm_percentage,
+            'final_percentage': final_percentage,
+            'proje_percentage': proje_percentage,
+            'homework_percentage': homework_percentage,
+            'absence_percentage': absence_percentage,
+            'quiz_percentage': quiz_percentage
+        }
+        
+        for key, value in values.items():
+            if value is None:
+                return JsonResponse({'error': f'{key} is required'}, status=400)
+            try:
+                int_value = int(value)
+            except (ValueError, TypeError):
+                return JsonResponse({'error': f'{key} must be an integer'}, status=400)
+            if int_value < 0:
+                return JsonResponse({'error': f'{key} cannot be negative'}, status=400)
+            if int_value > 100:
+                return JsonResponse({'error': f'{key} cannot be greater than 100'}, status=400)
+            values[key] = int_value
+        
+        # Toplam 100 kontrolü
+        total = sum(values.values())
+        if total != 100:
+            return JsonResponse({'error': f'Total percentage must be exactly 100. Current total: {total}'}, status=400)
+        
+        # Assessment'ı güncelle veya oluştur
+        assessment, created = Assessment.objects.get_or_create(
+            course=course,
+            defaults={
+                'midterm_percentage': values['midterm_percentage'],
+                'final_percentage': values['final_percentage'],
+                'proje_percentage': values['proje_percentage'],
+                'homework_percentage': values['homework_percentage'],
+                'absence_percentage': values['absence_percentage'],
+                'quiz_percentage': values['quiz_percentage'],
+            }
         )
-    
-    return JsonResponse({'status': 'ok'})
+        
+        if not created:
+            assessment.midterm_percentage = values['midterm_percentage']
+            assessment.final_percentage = values['final_percentage']
+            assessment.proje_percentage = values['proje_percentage']
+            assessment.homework_percentage = values['homework_percentage']
+            assessment.absence_percentage = values['absence_percentage']
+            assessment.quiz_percentage = values['quiz_percentage']
+            assessment.save()
+        
+        return JsonResponse({
+            'status': 'ok'
+        })
+        
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
+
 
 @instructor_required
 def instructor_announcements(request):
@@ -2907,9 +2922,6 @@ def student_grades(request):
                 'course_name': course.name,
                 'grades': grades_dict,
                 'credits': course.credits,
-                'midterm': grade_obj.midterm if grade_obj else None,
-                'assignment': grade_obj.assignment if grade_obj else None,
-                'final': grade_obj.final if grade_obj else None,
             })
     except Student.DoesNotExist:
         courses_with_grades = []
