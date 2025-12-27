@@ -1418,15 +1418,12 @@ def send_announcements(sender, message, subject, receivers_list):
     
     with transaction.atomic():
         for receiver_username in receivers_list:
-            # Check if it's a course selection (format: course_CourseName)
             if receiver_username.startswith('course_'):
                 course_name = receiver_username.replace('course_', '', 1)
                 try:
                     course = Course.objects.get(name=course_name)
-                    # Verify sender has access to this course
                     profile = getattr(sender, 'profile', None)
                     if profile and profile.courses.filter(id=course.id).exists():
-                        # Get all students enrolled in this course
                         students = Student.objects.filter(courses=course).select_related('user')
                         # TODO: Technical debt - Course marker hack in subject field
                         # Better approach: Add course=ForeignKey and is_course_broadcast=BooleanField to Announcement model
