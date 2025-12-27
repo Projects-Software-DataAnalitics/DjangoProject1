@@ -36,7 +36,7 @@
 
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <h2 style="margin: 0;">Courses</h2>
-        <button id="edit-toggle-btn" style="padding: 8px 20px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Edit</button>
+        <a href="{% url 'faculty_head_department_graph' %}" style="padding: 8px 20px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; text-decoration: none; display: inline-block; transition: background 0.2s;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">See Graph</a>
     </div>
 
     <table class="grades-table">
@@ -45,12 +45,15 @@
             <th>Course</th>
             <th>Instructor</th>
             <th>Credits</th>
-            <th>Learning Outcomes</th>
         </tr>
         </thead>
         <tbody id="all-courses-body">
         </tbody>
     </table>
+    
+    <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
+        <button id="edit-toggle-btn" style="padding: 8px 20px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Edit</button>
+    </div>
 
     <script>
         function getCookie(name) {
@@ -271,44 +274,16 @@
             creditsTd.className = 'credits-cell';
             creditsTd.textContent = credits;
             
-            const loTd = document.createElement('td');
-            if (courseId && firstLoId) {
-                const viewLink = document.createElement('a');
-                viewLink.href = '/faculty-head/courses/' + courseId + '/learning-outcomes/' + firstLoId + '/';
-                viewLink.textContent = 'View';
-                viewLink.style.display = 'inline-block';
-                viewLink.style.padding = '8px 16px';
-                viewLink.style.background = '#2563eb';
-                viewLink.style.color = '#ffffff';
-                viewLink.style.textDecoration = 'none';
-                viewLink.style.borderRadius = '6px';
-                viewLink.style.fontSize = '13px';
-                viewLink.style.fontWeight = '500';
-                viewLink.style.cursor = 'pointer';
-                viewLink.style.transition = 'all 0.2s';
-                viewLink.addEventListener('mouseenter', function() {
-                    this.style.background = '#1d4ed8';
-                });
-                viewLink.addEventListener('mouseleave', function() {
-                    this.style.background = '#2563eb';
-                });
-                loTd.appendChild(viewLink);
-            } else {
-                loTd.textContent = '-';
-                loTd.style.color = '#9ca3af';
-            }
-            
             tr.appendChild(courseTd);
             tr.appendChild(instructorTd);
             tr.appendChild(creditsTd);
-            tr.appendChild(loTd);
             tbody.appendChild(tr);
         }
         
         function renderTable() {
             tbody.innerHTML = '';
             if (!facultyCourses || facultyCourses.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4">No courses found in your department.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3">No courses found in your department.</td></tr>';
             } else {
                 facultyCourses.forEach(item => {
                     addRowToTable(item);
