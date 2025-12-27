@@ -16,6 +16,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: test_djangoproject2
+          POSTGRES_USER: postgres
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -42,9 +43,26 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+    
+    - name: Run migrations
+      run: |
+        python manage.py migrate
+      env:
+        DB_HOST: localhost
+        DB_NAME: test_djangoproject2
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_PORT: 5432
+    
     - name: Run tests
       run: |
-        python manage.py test core.tests
+        python manage.py test core.tests --verbosity=2
       env:
         DB_HOST: localhost
         DB_NAME: test_djangoproject2
