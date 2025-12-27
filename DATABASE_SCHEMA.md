@@ -262,7 +262,7 @@ CREATE TABLE core_grade (
     "Final": 88.5,
     "Project": 95.0,
     "Quiz": 80.0,
-    "Homework": 92.0
+    "Assignment": 92.0
 }
 ```
 
@@ -270,7 +270,7 @@ CREATE TABLE core_grade (
 
 ## 6. core_assessment
 
-Stores course assessment criteria. Defines assessment types (midterm, final, project, homework, absence, quiz) and their percentages for each course.
+Stores course assessment criteria. Defines assessment types (midterm, final, project, assignment, absence, quiz) and their percentages for each course.
 
 ### Table Structure
 
@@ -282,8 +282,8 @@ CREATE TABLE core_assessment (
     -- Assessment Counts
     midterm INTEGER DEFAULT 2 NOT NULL,
     final INTEGER DEFAULT 1 NOT NULL,
-    proje INTEGER DEFAULT 0 NOT NULL,
-    homework INTEGER DEFAULT 0 NOT NULL,
+    project INTEGER DEFAULT 0 NOT NULL,
+    assignment INTEGER DEFAULT 0 NOT NULL,
     absence INTEGER DEFAULT 0 NOT NULL,
     quiz INTEGER DEFAULT 0 NOT NULL,
     assessment_count INTEGER DEFAULT 3 NOT NULL,
@@ -291,8 +291,8 @@ CREATE TABLE core_assessment (
     -- Percentages
     midterm_percentage INTEGER DEFAULT 60 NOT NULL,
     final_percentage INTEGER DEFAULT 40 NOT NULL,
-    proje_percentage INTEGER DEFAULT 0 NOT NULL,
-    homework_percentage INTEGER DEFAULT 0 NOT NULL,
+    project_percentage INTEGER DEFAULT 0 NOT NULL,
+    assignment_percentage INTEGER DEFAULT 0 NOT NULL,
     absence_percentage INTEGER DEFAULT 0 NOT NULL,
     quiz_percentage INTEGER DEFAULT 0 NOT NULL,
     
@@ -310,15 +310,15 @@ CREATE TABLE core_assessment (
 | `course_id` | BIGINT | NO | YES | - | Course ID (Foreign Key, Unique) |
 | `midterm` | INTEGER | NO | NO | 2 | Number of midterms |
 | `final` | INTEGER | NO | NO | 1 | Number of finals |
-| `proje` | INTEGER | NO | NO | 0 | Number of projects |
-| `homework` | INTEGER | NO | NO | 0 | Number of homework assignments |
+| `project` | INTEGER | NO | NO | 0 | Number of projects |
+| `assignment` | INTEGER | NO | NO | 0 | Number of assignments |
 | `absence` | INTEGER | NO | NO | 0 | Number of absence records |
 | `quiz` | INTEGER | NO | NO | 0 | Number of quizzes |
 | `assessment_count` | INTEGER | NO | NO | 3 | Total assessment count (auto-calculated) |
 | `midterm_percentage` | INTEGER | NO | NO | 60 | Midterm percentage |
 | `final_percentage` | INTEGER | NO | NO | 40 | Final percentage |
-| `proje_percentage` | INTEGER | NO | NO | 0 | Project percentage |
-| `homework_percentage` | INTEGER | NO | NO | 0 | Homework percentage |
+| `project_percentage` | INTEGER | NO | NO | 0 | Project percentage |
+| `assignment_percentage` | INTEGER | NO | NO | 0 | Assignment percentage |
 | `absence_percentage` | INTEGER | NO | NO | 0 | Absence percentage |
 | `quiz_percentage` | INTEGER | NO | NO | 0 | Quiz percentage |
 
@@ -328,7 +328,7 @@ CREATE TABLE core_assessment (
 
 ### Notes
 
-- The `assessment_count` field is automatically calculated: `midterm + final + proje + homework + absence + quiz`
+- The `assessment_count` field is automatically calculated: `midterm + final + project + assignment + absence + quiz`
 - Only one assessment record per course (unique constraint)
 
 ---
