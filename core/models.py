@@ -36,6 +36,7 @@ class Student(models.Model):
     department = models.CharField(max_length=200, blank=True)
     year = models.IntegerField(null=True, blank=True)
     user = models.OneToOneField(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='student_profile')
+    advisor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='advised_students', limit_choices_to={'profile__role__in': ['instructor', 'faculty_head']})
     courses = models.ManyToManyField('Course', blank=True, related_name='students')
 
     def __str__(self):
@@ -112,6 +113,8 @@ class Announcement(models.Model):
     sender_role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     receiver_role = models.CharField(max_length=20, choices=ROLE_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    read_by = models.ManyToManyField(User, related_name='read_announcements', blank=True)
+    is_pinned = models.BooleanField(default=False)
     
     class Meta:
         ordering = ['-created_at']

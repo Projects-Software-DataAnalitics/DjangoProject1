@@ -91,9 +91,9 @@
                         {% if outcome.related_program_outcomes %}
                         <div style="margin: 8px 0; display: flex; align-items: center; gap: 8px;">
                             <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to:</span>
-                            <a href="{% url 'faculty_head_learning_outcome_detail' course_id outcome.id %}" onclick="event.stopPropagation(); return true;" style="font-size: 13px; color: #ffffff; font-weight: 500; text-decoration: none; cursor: pointer; display: inline-block; padding: 8px 16px; background: #2563eb; border-radius: 6px; transition: all 0.2s; border: none;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
+                            <span style="font-size: 13px; color: #64748b; font-weight: 500;">
                                 {{ outcome.related_program_outcomes|length }} Program Outcome{{ outcome.related_program_outcomes|length|pluralize }}
-                            </a>
+                            </span>
                         </div>
                         {% endif %}
                         <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">
@@ -101,7 +101,7 @@
                         </p>
                     </div>
                     <div style="display: flex; gap: 8px; margin-left: 16px; align-items: center;">
-                        <a href="{% url 'faculty_head_learning_outcome_detail' course_id outcome.id %}" style="display: inline-block; padding: 8px 16px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500; transition: background 0.2s; cursor: pointer;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+                        <a href="{% url 'faculty_head_learning_outcome_detail' course_id outcome.id %}" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 500; transition: background 0.2s; cursor: pointer;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
                             View
                         </a>
                     </div>

@@ -22,7 +22,7 @@
         <tbody>
         {% if faculty_head_courses %}
             {% for course_name in faculty_head_courses %}
-            <tr class="course-row" style="cursor: pointer;" data-course-url="{% url 'faculty_head_course_learning_outcomes' course_name|slugify %}">
+            <tr style="cursor: pointer;" data-url="{% url 'faculty_head_course_learning_outcomes' course_name|slugify %}" onclick="window.location.href=this.getAttribute('data-url')">
                 <td>{{ course_name }}</td>
             </tr>
             {% endfor %}
@@ -35,14 +35,5 @@
     </table>
 </div>
 
-<script>
-    (function() {
-        document.querySelectorAll('.course-row').forEach(function(row) {
-            row.addEventListener('click', function() {
-                window.location.href = this.dataset.courseUrl;
-            });
-        });
-    })();
-</script>
 {% endblock %}
 

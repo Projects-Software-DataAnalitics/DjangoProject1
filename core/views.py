@@ -335,36 +335,101 @@ def faculty_head_login(request):
 
 
 def student_dashboard(request):
-    username = request.GET.get('username', '')
+    if not request.user.is_authenticated:
+        return redirect('student-login')
     
-    courses_with_grades = []
-    if username:
-        try:
-            student = Student.objects.get(username=username)
-            grades_qs = Grade.objects.filter(student=student).select_related('course')
-            
-            students_data = get_students_data()
-            
-            user_courses = []
-            for entry in students_data:
-                if entry.get('username') == username:
-                    user_courses = entry.get('courses', []) or []
-                    break
-            
-            for course_name in user_courses:
-                grade_obj = next((g for g in grades_qs if g.course.name == course_name), None)
-                courses_with_grades.append({
-                    'course_name': course_name,
-                    'midterm': grade_obj.midterm if grade_obj else None,
-                    'assignment': grade_obj.assignment if grade_obj else None,
-                    'final': grade_obj.final if grade_obj else None,
-                })
-        except Student.DoesNotExist:
-            pass
+    from datetime import datetime
+    from .models import Announcement
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        student_info = {
+            'username': student.username,
+            'name': f"{student.first_name} {student.last_name}".strip() or student.username,
+            'student_id': student.student_id,
+        }
+        
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        
+        if current_month >= 9:
+            academic_term = f"{current_year}-{current_year + 1} Fall"
+        elif current_month >= 2:
+            academic_term = f"{current_year - 1}-{current_year} Spring"
+        else:
+            academic_term = f"{current_year - 1}-{current_year} Fall"
+        
+        year_display = f"{student.year}. Year" if student.year else "-"
+        department_display = student.department or "-"
+        
+        advisor_name = "-"
+        advisor_username = None
+        advisor_role = None
+        if student.advisor:
+            advisor_user = student.advisor
+            advisor_username = advisor_user.username
+            profile = getattr(advisor_user, 'profile', None)
+            if profile:
+                advisor_role = profile.role
+                # Get advisor name from profile or user
+                if advisor_user.first_name or advisor_user.last_name:
+                    advisor_name = f"{advisor_user.first_name} {advisor_user.last_name}".strip()
+                else:
+                    advisor_name = advisor_user.username
+        
+        courses = student.courses.all().select_related('instructor')
+        courses_list = []
+        for course in courses:
+            courses_list.append({
+                'name': course.name,
+                'code': course.code,
+                'credits': course.credits,
+            })
+        
+    except Student.DoesNotExist:
+        student_info = {
+            'username': request.user.username,
+            'name': request.user.get_full_name() or request.user.username,
+            'student_id': '-',
+        }
+        academic_term = "-"
+        year_display = "-"
+        department_display = "-"
+        advisor_name = "-"
+        courses_list = []
+    
+    latest_announcements = Announcement.objects.filter(
+        Q(receiver=request.user) | Q(receiver__isnull=True)
+    ).select_related('sender').order_by('-is_pinned', '-created_at')[:5]
+    
+    announcements_list = []
+    for ann in latest_announcements:
+        sender_name = ann.sender.get_full_name() or ann.sender.username
+        
+        clean_subject = ann.subject
+        if ann.subject.startswith('__COURSE:'):
+            marker_end = ann.subject.find('__', 9)
+            if marker_end > 0:
+                clean_subject = ann.subject[marker_end + 2:]
+        
+        announcements_list.append({
+            'id': ann.id,
+            'subject': clean_subject,
+            'sender': sender_name,
+            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
+            'is_pinned': ann.is_pinned,
+        })
     
     return render(request, 'student.html', {
-        'grades': None,
-        'courses_with_grades': courses_with_grades
+        'student_info': student_info,
+        'latest_announcements': announcements_list,
+        'academic_term': academic_term,
+        'year_display': year_display,
+        'department_display': department_display,
+        'advisor_name': advisor_name,
+        'advisor_username': advisor_username,
+        'advisor_role': advisor_role,
+        'courses_list': courses_list,
     })
 
 
@@ -745,10 +810,15 @@ def instructor_announcements(request):
     # ORM ile announcements'ları çek - select_related ile JOIN optimizasyonu
     announcements = Announcement.objects.filter(
         Q(sender=instructor_user) | Q(receiver=instructor_user)
-    ).select_related('sender', 'receiver').order_by('-created_at')
+    ).select_related('sender', 'receiver').prefetch_related('read_by').order_by('-is_pinned', '-created_at')
     
     all_announcements = []
     for ann in announcements:
+        # Check if announcement is read by instructor (only for received messages)
+        is_read = True
+        if ann.receiver == instructor_user or ann.receiver is None:
+            is_read = ann.read_by.filter(id=instructor_user.id).exists()
+        
         all_announcements.append({
             'id': ann.id,
             'subject': ann.subject,
@@ -764,6 +834,8 @@ def instructor_announcements(request):
             'sender_role': ann.sender_role,
             'receiver_role': ann.receiver_role,
             'created_at': ann.created_at,
+            'is_read': is_read,
+            'is_pinned': ann.is_pinned,
         })
     
     # Group announcements sent to course students
@@ -864,6 +936,8 @@ def instructor_announcements(request):
                     'receiver_username': None,
                     'is_sent': True,
                     'created_at': created_at_formatted,
+                    'is_read': ann.get('is_read', True),
+                    'is_pinned': ann.get('is_pinned', False),
                 })
                 for ma in matching_anns:
                     processed_ids.add(ma['id'])
@@ -907,8 +981,13 @@ def instructor_announcements(request):
                 'receiver_username': receiver_username,
                 'is_sent': is_sent,
                 'created_at': created_at_formatted,
+                'is_read': ann.get('is_read', True),
+                'is_pinned': ann.get('is_pinned', False),
             })
             processed_ids.add(ann['id'])
+    
+    # Calculate unread count for received messages
+    unread_count = sum(1 for ann in announcements_data if not ann.get('is_sent', False) and not ann.get('is_read', True))
     
     recipients = []
     
@@ -990,6 +1069,7 @@ def instructor_announcements(request):
         'sent_messages': sent_messages,
         'received_messages': received_messages,
         'recipients': recipients,
+        'unread_count': unread_count,
     })
 
 
@@ -1039,6 +1119,45 @@ def faculty_head_profile(request):
         'page': 'profile',
         'profile': profile_data
     })
+
+def advisor_profile(request, username):
+    """View to display advisor's profile (accessible by students)"""
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        advisor_user = User.objects.get(username=username)
+        profile = getattr(advisor_user, 'profile', None)
+        
+        if not profile or profile.role not in ['instructor', 'faculty_head']:
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("Advisor not found")
+        
+        faculty = profile.faculty if profile else None
+        courses = []
+        if profile:
+            courses = [course.name for course in profile.courses.all()]
+        
+        profile_data = {
+            'name': f"{advisor_user.first_name} {advisor_user.last_name}".strip() or advisor_user.username,
+            'username': advisor_user.username,
+            'department': profile.department if profile else '-',
+            'faculty': faculty.name if faculty else '-',
+            'courses': courses,
+        }
+        
+        # Use appropriate template based on role
+        template_name = 'faculty_head.html' if profile.role == 'faculty_head' else 'instructor.html'
+        
+        return render(request, template_name, {
+            'show_welcome': False,
+            'page': 'profile',
+            'profile': profile_data,
+            'is_advisor_view': True,  # Flag to indicate this is advisor view, not own profile
+        })
+    except User.DoesNotExist:
+        from django.http import HttpResponseNotFound
+        return HttpResponseNotFound("Advisor not found")
 
 @faculty_head_required
 def all_courses(request):
@@ -1093,14 +1212,24 @@ def all_courses(request):
         all_course_names.update(all_courses_in_dept)
     
     for course_name in sorted(all_course_names):
+        course = Course.objects.filter(name=course_name).first()
+        if course:
+            if faculty_head_department and course.department != faculty_head_department:
+                continue
+        elif faculty_head_department:
+            # If course doesn't exist in DB, skip it (can't verify department)
+            continue
+        
         instructors = course_instructor_map.get(course_name, [])
         
-        course = Course.objects.filter(name=course_name).first()
         if course and course.instructor:
             instructor_full_name = (course.instructor.first_name + ' ' + course.instructor.last_name).strip()
             instructor_name = instructor_full_name if instructor_full_name else course.instructor.username
             if instructor_name not in instructors:
-                instructors.append(instructor_name)
+                instructors.insert(0, instructor_name)
+            instructors = [instructor_name] + [inst for inst in instructors if inst != instructor_name]
+        elif not instructors:
+            instructors = []
         
         instructor_display = ', '.join(instructors) if instructors else 'Unknown'
         
@@ -1117,6 +1246,7 @@ def all_courses(request):
         })
     
     available_instructors_list = []
+    # Add instructors
     available_instructors_qs = User.objects.filter(profile__role='instructor').select_related('profile')
     for user in available_instructors_qs:
         profile = user.profile
@@ -1132,6 +1262,22 @@ def all_courses(request):
             'name': instructor_name,
         })
     
+    # Add faculty heads (they can also teach courses)
+    available_faculty_heads_qs = User.objects.filter(profile__role='faculty_head').select_related('profile')
+    for user in available_faculty_heads_qs:
+        profile = user.profile
+        fh_department = profile.department
+        if faculty_head_department:
+            if fh_department != faculty_head_department:
+                continue
+        
+        full_name = (user.first_name + ' ' + user.last_name).strip()
+        faculty_head_name = full_name if full_name else user.username
+        available_instructors_list.append({
+            'username': user.username,
+            'name': faculty_head_name,
+        })
+    
     import json as json_module
     context = {
         'faculty_head': faculty_head_data,
@@ -1141,6 +1287,76 @@ def all_courses(request):
         'available_instructors_json': json_module.dumps(available_instructors_list),
     }
     return render(request, 'faculty/all_courses.html', context)
+
+@faculty_head_required
+def faculty_head_department_graph(request):
+    """Show graph view for all learning outcomes and program outcomes in the department"""
+    profile = getattr(request.user, 'profile', None)
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    from .models import Faculty, LearningOutcomeProgramOutcome
+    faculty = None
+    if profile:
+        faculty = profile.faculty
+    
+    # Get all program outcomes (POs) for the faculty
+    program_outcomes = []
+    if faculty:
+        po_qs = ProgramOutcome.objects.filter(
+            faculty=faculty,
+            course_name=''
+        ).order_by('id')
+        for po in po_qs:
+            program_outcomes.append({
+                'id': po.id,
+                'text': po.text,
+            })
+    
+    # Get all learning outcomes (LOs) for courses in the department
+    learning_outcomes = []
+    if faculty_head_department:
+        # Get all courses in the department
+        dept_courses = Course.objects.filter(department=faculty_head_department)
+        course_names = [course.name for course in dept_courses]
+        
+        # Get all learning outcomes for these courses
+        lo_qs = ProgramOutcome.objects.filter(
+            course_name__in=course_names
+        ).order_by('course_name', 'id')
+        
+        for lo in lo_qs:
+            # Get linked program outcomes for this LO
+            related_pos = lo.related_program_outcomes.all()
+            linked_pos = []
+            for po in related_pos:
+                try:
+                    lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=lo, program_outcome=po)
+                    percentage = lo_po.percentage
+                except LearningOutcomeProgramOutcome.DoesNotExist:
+                    percentage = 0
+                linked_pos.append({
+                    'id': po.id,
+                    'text': po.text,
+                    'percentage': percentage,
+                })
+            
+            learning_outcomes.append({
+                'id': lo.id,
+                'text': lo.text,
+                'course': lo.course_name,
+                'linked_pos': linked_pos,
+            })
+    
+    return render(
+        request,
+        'faculty/department_graph.html',
+        {
+            'program_outcomes': program_outcomes,
+            'learning_outcomes': learning_outcomes,
+            'department': faculty_head_department,
+        }
+    )
 
 @faculty_head_required
 def my_courses(request):
@@ -1439,6 +1655,8 @@ def create_program_outcome(request):
 
 @faculty_head_required
 def faculty_head_learning_outcomes(request):
+    """Redirect to my_courses page - learning outcomes page is no longer accessible directly"""
+    return redirect('my_courses')
     """Show learning outcomes for faculty head's own courses"""
     profile = getattr(request.user, 'profile', None)
     courses = []
@@ -2030,42 +2248,7 @@ def faculty_head_finalize_grades(request, course_name):
 
 @instructor_required
 def learning_outcomes(request):
-    """Show learning outcomes for instructor's own courses only"""
-    instructor_user = request.instructor_user
-    username = instructor_user.username
-    
-    instructor_courses = Course.objects.filter(instructor=instructor_user)
-    course_names_from_db = [course.name for course in instructor_courses]
-    
-    instructor_data = get_instructor_data(username)
-    course_names_from_json = instructor_data.get('courses', []) or []
-    
-    course_names = list(set(course_names_from_db + course_names_from_json))
-    
-    outcomes_qs = ProgramOutcome.objects.filter(
-        course_name__in=course_names
-    ).select_related('created_by').order_by('-created_at')
-    
-    outcomes_data = []
-    for o in outcomes_qs:
-        creator_name = o.created_by.get_full_name() or o.created_by.username
-        outcomes_data.append(
-            {
-                'text': o.text,
-                'course': o.course_name or '',
-                'created_by': creator_name,
-                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
-            }
-        )
-    
-    return render(
-        request,
-        'instructor/learning_outcomes.html',
-        {
-            'outcomes_data': outcomes_data,
-            'instructor_courses': course_names,
-        }
-    )
+    return redirect('instructor_my_courses')
 
 
 @instructor_required
@@ -2784,7 +2967,105 @@ def student_grades(request):
 
 
 def student_announcements(request):
-    return render(request, "student/student_announcement.html")
+    if not request.user.is_authenticated:
+        from django.shortcuts import redirect
+        return redirect('student-login')
+    
+    from .models import Announcement
+    from django.db.models import Q
+    
+    # Get all announcements for the student (received directly or broadcast to all)
+    # Order by: pinned first, then by created_at
+    from django.db.models import Case, When, IntegerField
+    all_announcements = Announcement.objects.filter(
+        Q(receiver=request.user) | Q(receiver__isnull=True)
+    ).select_related('sender').prefetch_related('read_by').annotate(
+        pin_priority=Case(
+            When(is_pinned=True, then=0),
+            default=1,
+            output_field=IntegerField()
+        )
+    ).order_by('pin_priority', '-created_at')
+    
+    received_messages = []
+    unread_count = 0
+    for ann in all_announcements:
+        sender_name = ann.sender.get_full_name() or ann.sender.username
+        is_read = ann.read_by.filter(id=request.user.id).exists()
+        if not is_read:
+            unread_count += 1
+        
+        clean_subject = ann.subject
+        if ann.subject.startswith('__COURSE:'):
+            marker_end = ann.subject.find('__', 9)
+            if marker_end > 0:
+                clean_subject = ann.subject[marker_end + 2:]
+        
+        received_messages.append({
+            'id': ann.id,
+            'subject': clean_subject,
+            'message': ann.message,
+            'sender': sender_name,
+            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
+            'is_read': is_read,
+            'is_pinned': ann.is_pinned,
+        })
+    
+    return render(request, "student/student_announcement.html", {
+        'received_messages': received_messages,
+        'all_announcements': received_messages,  # For JavaScript popup
+        'unread_count': unread_count,
+    })
+
+
+def mark_announcement_as_read(request, announcement_id):
+    """Mark an announcement as read by the current user"""
+    if not request.user.is_authenticated:
+        from django.http import JsonResponse
+        return JsonResponse({'status': 'error', 'message': 'Not authenticated'}, status=401)
+    
+    if request.method == 'POST':
+        from .models import Announcement
+        from django.http import JsonResponse
+        
+        try:
+            announcement = Announcement.objects.get(id=announcement_id)
+            if announcement.receiver == request.user or announcement.receiver is None:
+                announcement.read_by.add(request.user)
+                return JsonResponse({'status': 'success'})
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Access denied'}, status=403)
+        except Announcement.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Announcement not found'}, status=404)
+    
+    from django.http import JsonResponse
+    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
+
+
+def toggle_announcement_pin(request, announcement_id):
+    """Toggle pin status of an announcement"""
+    if not request.user.is_authenticated:
+        from django.http import JsonResponse
+        return JsonResponse({'status': 'error', 'message': 'Not authenticated'}, status=401)
+    
+    if request.method == 'POST':
+        from .models import Announcement
+        from django.http import JsonResponse
+        
+        try:
+            announcement = Announcement.objects.get(id=announcement_id)
+            if announcement.receiver == request.user or announcement.receiver is None:
+                announcement.is_pinned = not announcement.is_pinned
+                announcement.save()
+                return JsonResponse({'status': 'success', 'is_pinned': announcement.is_pinned})
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Access denied'}, status=403)
+        except Announcement.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Announcement not found'}, status=404)
+    
+    from django.http import JsonResponse
+    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
+
 
 @instructor_required
 def instructor_program_outcomes(request):
@@ -3136,10 +3417,15 @@ def faculty_head_announcements(request):
     # ORM ile announcements'ları çek - select_related ile JOIN optimizasyonu
     announcements = Announcement.objects.filter(
         Q(sender=faculty_head_user) | Q(receiver=faculty_head_user)
-    ).select_related('sender', 'receiver').order_by('-created_at')
+    ).select_related('sender', 'receiver').prefetch_related('read_by').order_by('-is_pinned', '-created_at')
     
     all_announcements = []
     for ann in announcements:
+        # Check if announcement is read by faculty head (only for received messages)
+        is_read = True
+        if ann.receiver == faculty_head_user or ann.receiver is None:
+            is_read = ann.read_by.filter(id=faculty_head_user.id).exists()
+        
         all_announcements.append({
             'id': ann.id,
             'subject': ann.subject,
@@ -3155,6 +3441,8 @@ def faculty_head_announcements(request):
             'sender_role': ann.sender_role,
             'receiver_role': ann.receiver_role,
             'created_at': ann.created_at,
+            'is_read': is_read,
+            'is_pinned': ann.is_pinned,
         })
     
     # Group announcements sent to course students
@@ -3255,6 +3543,8 @@ def faculty_head_announcements(request):
                     'receiver_username': None,
                     'is_sent': True,
                     'created_at': created_at_formatted,
+                    'is_read': ann.get('is_read', True),
+                    'is_pinned': ann.get('is_pinned', False),
                 })
                 for ma in matching_anns:
                     processed_ids.add(ma['id'])
@@ -3300,6 +3590,9 @@ def faculty_head_announcements(request):
                 'created_at': created_at_formatted,
             })
             processed_ids.add(ann['id'])
+    
+    # Calculate unread count for received messages
+    unread_count = sum(1 for ann in announcements_data if not ann.get('is_sent', False) and not ann.get('is_read', True))
     
     recipients = []
     
@@ -3362,7 +3655,7 @@ def faculty_head_announcements(request):
     # Faculty head can see ALL students in their department (not just from their courses)
     if faculty_head_department:
         students = Student.objects.filter(
-            user__profile__department=faculty_head_department
+            Q(department=faculty_head_department) | Q(user__profile__department=faculty_head_department)
         ).distinct().select_related('user')
         
         students_list = []
@@ -3378,6 +3671,8 @@ def faculty_head_announcements(request):
             })
         
         students_list.sort(key=lambda x: x['name'])
+        if students_list:
+            students_list[0]['show_students_heading'] = True
         recipients.extend(students_list)
     
     sent_messages = [ann for ann in announcements_data if ann['is_sent']]
@@ -3398,6 +3693,7 @@ def faculty_head_announcements(request):
         'sent_messages': sent_messages,
         'received_messages': received_messages,
         'recipients': recipients,
+        'unread_count': unread_count,
     })
 
 def faculty_head_logout(request):

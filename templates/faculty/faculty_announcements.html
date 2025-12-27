@@ -197,14 +197,19 @@
     <!-- Messages Received Tab -->
     <div id="content-received" class="tab-content" style="display: none;">
         <div style="background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
-            <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Messages Received</h2>
+            <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a; display: flex; align-items: center; gap: 12px;">
+                Messages Received
+                {% if unread_count > 0 %}
+                <span id="unread-count-badge" style="background: #3b82f6; color: #ffffff; font-size: 14px; font-weight: 600; padding: 4px 10px; border-radius: 12px; min-width: 24px; text-align: center;">{{ unread_count }}</span>
+                {% endif %}
+            </h2>
             {% if received_messages %}
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     {% for ann in received_messages %}
-                        <div class="message-item" data-ann-id="{{ ann.id }}" style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.2s;" 
+                        <div class="message-item" data-ann-id="{{ ann.id }}" data-is-read="{% if ann.is_read %}true{% else %}false{% endif %}" data-is-pinned="{% if ann.is_pinned %}true{% else %}false{% endif %}" style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.2s; position: relative;" 
                              onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.15)';"
                              onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div style="flex: 1;">
                                     <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 16px;">
                                         {{ ann.subject }}
@@ -216,9 +221,27 @@
                                         {{ ann.created_at }}
                                     </div>
                                 </div>
-                                <span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #10b981; color: #ffffff; height: fit-content;">
-                                    Received
-                                </span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button class="pin-button" data-ann-id="{{ ann.id }}" onclick="event.stopPropagation(); togglePin({{ ann.id }}, this);" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s;" 
+                                            onmouseover="this.style.background='#f1f5f9';" 
+                                            onmouseout="this.style.background='none';"
+                                            title="{% if ann.is_pinned %}Unpin{% else %}Pin{% endif %}">
+                                        {% if ann.is_pinned %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#3b82f6" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                                            <line x1="4" y1="22" x2="4" y2="15"></line>
+                                        </svg>
+                                        {% else %}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                                            <line x1="4" y1="22" x2="4" y2="15"></line>
+                                        </svg>
+                                        {% endif %}
+                                    </button>
+                                    {% if not ann.is_read %}
+                                    <span class="unread-dot" style="width: 20px; height: 20px; background: #3b82f6; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     {% endfor %}
@@ -307,9 +330,15 @@
                 newItem.addEventListener('click', function (e) {
                     e.stopPropagation();
                     const annId = this.getAttribute('data-ann-id');
+                    const isRead = this.getAttribute('data-is-read') === 'true';
                     const message = messagesData[annId];
                     if (message) {
                         showMessagePopup(message);
+                        
+                        // Mark as read if not already read (only for received messages)
+                        if (!isRead && !message.is_sent) {
+                            markAsRead(annId, newItem);
+                        }
                     }
                 });
             });
@@ -514,6 +543,126 @@
         }
     });
 
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function markAsRead(announcementId, messageElement) {
+        const csrftoken = getCookie('csrftoken');
+        
+        fetch(`/faculty-head/announcements/${announcementId}/mark-read/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const unreadDot = messageElement.querySelector('.unread-dot');
+                if (unreadDot) {
+                    unreadDot.remove();
+                }
+                messageElement.setAttribute('data-is-read', 'true');
+                updateUnreadCount();
+            }
+        })
+        .catch(error => {
+            console.error('Error marking as read:', error);
+        });
+    }
+    
+    function updateUnreadCount() {
+        const unreadDots = document.querySelectorAll('.unread-dot');
+        const count = unreadDots.length;
+        const countBadge = document.getElementById('unread-count-badge');
+        
+        if (count > 0) {
+            if (countBadge) {
+                countBadge.textContent = count;
+            } else {
+                const h2 = document.querySelector('#content-received h2');
+                if (h2) {
+                    const badge = document.createElement('span');
+                    badge.id = 'unread-count-badge';
+                    badge.style.cssText = 'background: #3b82f6; color: #ffffff; font-size: 14px; font-weight: 600; padding: 4px 10px; border-radius: 12px; min-width: 24px; text-align: center;';
+                    badge.textContent = count;
+                    h2.appendChild(badge);
+                }
+            }
+        } else {
+            if (countBadge) {
+                countBadge.remove();
+            }
+        }
+    }
+    
+    function togglePin(announcementId, buttonElement) {
+        const csrftoken = getCookie('csrftoken');
+        const messageItem = buttonElement.closest('.message-item');
+        const isPinned = messageItem.getAttribute('data-is-pinned') === 'true';
+        
+        fetch(`/faculty-head/announcements/${announcementId}/toggle-pin/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const newPinnedState = data.is_pinned;
+                messageItem.setAttribute('data-is-pinned', newPinnedState);
+                
+                // Update icon
+                const svg = buttonElement.querySelector('svg');
+                if (newPinnedState) {
+                    svg.setAttribute('fill', '#3b82f6');
+                    svg.setAttribute('stroke', '#3b82f6');
+                    buttonElement.setAttribute('title', 'Unpin');
+                } else {
+                    svg.setAttribute('fill', 'none');
+                    svg.setAttribute('stroke', '#64748b');
+                    buttonElement.setAttribute('title', 'Pin');
+                }
+                
+                // Reorder messages - move pinned to top
+                const messagesContainer = messageItem.parentElement;
+                const allMessages = Array.from(messagesContainer.children);
+                const pinnedMessages = allMessages.filter(msg => msg.getAttribute('data-is-pinned') === 'true');
+                const unpinnedMessages = allMessages.filter(msg => msg.getAttribute('data-is-pinned') === 'false');
+                
+                // Clear container
+                messagesContainer.innerHTML = '';
+                
+                // Add pinned first, then unpinned
+                pinnedMessages.forEach(msg => messagesContainer.appendChild(msg));
+                unpinnedMessages.forEach(msg => messagesContainer.appendChild(msg));
+                
+                // Re-attach handlers
+                setTimeout(attachMessageItemHandlers, 50);
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling pin:', error);
+        });
+    }
+    
     function showMessagePopup(message) {
         const popupContent = document.getElementById('popup-content');
         const direction = message.is_sent ? 'To' : 'From';

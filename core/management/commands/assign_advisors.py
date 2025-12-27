@@ -11,7 +11,6 @@ class Command(BaseCommand):
         
         # Get advisors from database
         try:
-            #Burdan emin değilim, bir bakın.
             # Computer Engineering advisor: Ahmet Bulut (faculty_head)
             computer_eng_advisor = User.objects.get(username='ahmet.bulut')
             
@@ -21,6 +20,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'Advisor not found: {e}'))
             return
         
+        # Assign advisors based on department
         computer_eng_students = Student.objects.filter(
             department__icontains='Computer Engineering'
         )
