@@ -3727,3 +3727,126 @@ def faculty_head_announcements(request):
 def faculty_head_logout(request):
     logout(request)
     return redirect("home")
+
+
+@csrf_exempt
+def mark_announcement_as_read(request, announcement_id):
+    """Mark an announcement as read by the current user"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    try:
+        from .models import Announcement
+        announcement = get_object_or_404(Announcement, id=announcement_id)
+        
+        # Check if user has permission to read this announcement
+        if announcement.receiver and announcement.receiver != request.user:
+            # Check if it's a broadcast (receiver is None) or user is the receiver
+            if announcement.receiver is not None:
+                return JsonResponse({'error': 'Permission denied'}, status=403)
+        
+        # Add user to read_by
+        announcement.read_by.add(request.user)
+        
+        return JsonResponse({'status': 'success', 'message': 'Announcement marked as read'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def toggle_announcement_pin(request, announcement_id):
+    """Toggle pin status of an announcement"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    try:
+        from .models import Announcement
+        announcement = get_object_or_404(Announcement, id=announcement_id)
+        
+        # Check if user has permission (must be the receiver)
+        if announcement.receiver and announcement.receiver != request.user:
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+        
+        # Toggle pin status
+        announcement.is_pinned = not announcement.is_pinned
+        announcement.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'is_pinned': announcement.is_pinned,
+            'message': 'Announcement pinned' if announcement.is_pinned else 'Announcement unpinned'
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def advisor_profile(request, username):
+    """Show advisor profile page"""
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        advisor = User.objects.get(username=username)
+        profile = getattr(advisor, 'profile', None)
+        
+        advisor_data = {
+            'username': advisor.username,
+            'name': f"{advisor.first_name} {advisor.last_name}".strip() or advisor.username,
+            'department': profile.department if profile else '-',
+            'faculty': profile.faculty.name if profile and profile.faculty else '-',
+            'email': advisor.email or '-',
+        }
+        
+        return render(request, 'student/advisor_profile.html', {
+            'advisor': advisor_data
+        })
+    except User.DoesNotExist:
+        return redirect('student')
+
+
+@faculty_head_required
+def faculty_head_department_graph(request):
+    """Show department graph for faculty head"""
+    from .models import Course, Student
+    from django.db.models import Count
+    
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    if not faculty_head_department:
+        return render(request, 'faculty/department_graph.html', {
+            'error': 'No department assigned'
+        })
+    
+    # Get courses in the department
+    courses = Course.objects.filter(department=faculty_head_department)
+    
+    # Get statistics
+    total_courses = courses.count()
+    total_students = Student.objects.filter(courses__department=faculty_head_department).distinct().count()
+    
+    # Course statistics
+    course_data = []
+    for course in courses:
+        student_count = course.students.count()
+        course_data.append({
+            'name': course.name,
+            'code': course.code,
+            'students': student_count,
+            'credits': course.credits or 0,
+        })
+    
+    # Prepare chart data
+    chart_data = {
+        'labels': [c['name'] for c in course_data],
+        'data': [c['students'] for c in course_data],
+    }
+    
+    return render(request, 'faculty/department_graph.html', {
+        'department': faculty_head_department,
+        'total_courses': total_courses,
+        'total_students': total_students,
+        'course_data': course_data,
+        'chart_data': chart_data,
+        'chart_data_json': json.dumps(chart_data),
+    })
