@@ -22,13 +22,9 @@
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.instructor }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.credits|default:"-" }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">
-                    {% if course.first_lo_id %}
-                    <a href="{% url 'faculty_head_learning_outcome_detail' course.id course.first_lo_id %}" style="display: inline-block; padding: 8px 16px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
+                    <a href="{% url 'faculty_head_course_learning_outcomes' course.name|slugify %}" style="display: inline-block; padding: 8px 16px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
                         View
                     </a>
-                    {% else %}
-                    <span style="color: #9ca3af;">-</span>
-                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

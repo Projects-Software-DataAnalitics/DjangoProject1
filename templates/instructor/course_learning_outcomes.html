@@ -21,7 +21,6 @@
         <li id="personal-info-btn">Personal Information</li>
         <li id="my-courses-btn">My Courses</li>
         <li id="grades-btn">Grades</li>
-        <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
         <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
         <li id="announcements-btn">Announcements</li>
         <li id="logout-btn">Logout</li>
@@ -31,7 +30,7 @@
 <div class="content" id="content">
     <button class="menu-btn" id="menu-btn">☰</button>
     <div style="margin-left: 0; margin-top: 10px;">
-        <a href="{% url 'learning_outcomes' %}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: #3b82f6; font-size: 16px; font-weight: 500; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#3b82f6';">
+        <a href="{% url 'instructor_my_courses' %}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: #3b82f6; font-size: 16px; font-weight: 500; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#3b82f6';">
             <span style="font-size: 20px;">←</span>
             <span>Go back</span>
         </a>
@@ -137,16 +136,19 @@
                             {% if outcome.related_program_outcomes %}
                             <div style="margin: 8px 0; display: flex; align-items: center; gap: 8px;">
                                 <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to:</span>
-                                <a href="{% url 'learning_outcome_detail' course_id outcome.id %}" onclick="event.stopPropagation(); return true;" style="font-size: 13px; color: #ffffff; font-weight: 500; text-decoration: none; cursor: pointer; display: inline-block; padding: 8px 16px; background: #2563eb; border-radius: 6px; transition: all 0.2s; border: none;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
+                                <span style="font-size: 13px; color: #64748b; font-weight: 500;">
                                     {{ outcome.related_program_outcomes|length }} Program Outcome{{ outcome.related_program_outcomes|length|pluralize }}
-                                </a>
+                                </span>
                             </div>
                             {% endif %}
                             <p style="margin: 0; font-size: 14px; color: #6b7280;">
                                 Created by <strong>{{ outcome.created_by }}</strong> on {{ outcome.created_at }}
                             </p>
                         </div>
-                        <div style="display: flex; gap: 8px; margin-left: 16px;">
+                        <div style="display: flex; gap: 8px; margin-left: 16px; align-items: center;">
+                            <a href="{% url 'learning_outcome_detail' course_id outcome.id %}" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 500; transition: background 0.2s; cursor: pointer;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+                                View
+                            </a>
                             <button class="edit-outcome-btn" data-outcome-id="{{ outcome.id }}" data-outcome-text="{{ outcome.text|escapejs }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #3b82f6;" title="Edit">✏️</button>
                             <button class="delete-outcome-btn" data-outcome-id="{{ outcome.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444;" title="Delete">🗑️</button>
                         </div>

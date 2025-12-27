@@ -1,0 +1,73 @@
+name: Django Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11.9", "3.13.0", "3.13.3"]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Wait for PostgreSQL
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+        echo "PostgreSQL is ready!"
+      env:
+        PGPASSWORD: postgres
+    
+    - name: Verify PostgreSQL connection
+      run: |
+        psql -h localhost -U postgres -d postgres -c "SELECT version();"
+      env:
+        PGPASSWORD: postgres
+    
+    - name: Run tests
+      run: |
+        python manage.py test core.tests --verbosity=2 --noinput
+      env:
+        DB_HOST: localhost
+        DB_NAME: djangoproject2
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+        DB_PORT: 5432
+        DJANGO_SETTINGS_MODULE: DjangoProject2.settings

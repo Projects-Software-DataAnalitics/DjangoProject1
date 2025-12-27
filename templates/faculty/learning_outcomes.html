@@ -22,7 +22,7 @@
         <tbody>
         {% if faculty_head_courses %}
             {% for course_name in faculty_head_courses %}
-            <tr style="cursor: pointer;" onclick="window.location.href='{% url 'faculty_head_course_learning_outcomes' course_name|slugify|default:course_name %}'">
+            <tr style="cursor: pointer;" data-url="{% url 'faculty_head_course_learning_outcomes' course_name|slugify %}" onclick="window.location.href=this.getAttribute('data-url')">
                 <td>{{ course_name }}</td>
             </tr>
             {% endfor %}
@@ -34,5 +34,6 @@
         </tbody>
     </table>
 </div>
+
 {% endblock %}
 

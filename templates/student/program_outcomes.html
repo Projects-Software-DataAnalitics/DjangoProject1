@@ -19,19 +19,6 @@
                         <p style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500;">
                             {{ outcome.text }}
                         </p>
-                        {% if outcome.linked_learning_outcomes %}
-                        <div style="margin: 8px 0;">
-                            <span style="font-size: 12px; color: #64748b; font-weight: 500;">Linked to:</span>
-                            <div style="margin-top: 8px; padding-left: 16px;">
-                                {% for lo in outcome.linked_learning_outcomes %}
-                                <div style="margin-bottom: 6px; font-size: 13px; color: #475569;">
-                                    <span style="font-weight: 500;">{{ lo.course }}</span>
-                                    <span style="color: #94a3b8;"> - {{ lo.instructor }}</span>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% endif %}
                     </div>
                 </li>
             {% endfor %}
@@ -45,4 +32,3 @@
     {% endif %}
 </div>
 {% endblock %}
-

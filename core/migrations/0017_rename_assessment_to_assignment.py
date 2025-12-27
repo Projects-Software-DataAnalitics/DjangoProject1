@@ -3,6 +3,30 @@
 from django.db import migrations
 
 
+def rename_assessment_to_assignment_if_exists(apps, schema_editor):
+    db_alias = schema_editor.connection.alias
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='core_grade' AND column_name='assessment'
+        """)
+        if cursor.fetchone():
+            cursor.execute("ALTER TABLE core_grade RENAME COLUMN assessment TO assignment;")
+
+
+def reverse_rename(apps, schema_editor):
+    db_alias = schema_editor.connection.alias
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='core_grade' AND column_name='assignment'
+        """)
+        if cursor.fetchone():
+            cursor.execute("ALTER TABLE core_grade RENAME COLUMN assignment TO assessment;")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,8 +34,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="ALTER TABLE core_grade RENAME COLUMN assessment TO assignment;",
-            reverse_sql="ALTER TABLE core_grade RENAME COLUMN assignment TO assessment;",
+        migrations.RunPython(
+            rename_assessment_to_assignment_if_exists,
+            reverse_rename,
         ),
     ]
