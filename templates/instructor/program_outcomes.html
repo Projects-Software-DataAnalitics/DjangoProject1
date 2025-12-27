@@ -18,13 +18,12 @@
 <body>
 <div class="sidebar" id="sidebar">
     <ul>
-        <li><a href="{% url 'instructor_profile' %}">Personal Information</a></li>
+        <li><a href="{% url 'instructor' %}">Main Page</a></li>
         <li><a href="{% url 'instructor_my_courses' %}">My Courses</a></li>
         <li><a href="{% url 'instructor_grades' %}">Grades</a></li>
         <li><a href="{% url 'learning_outcomes' %}">Learning Outcomes</a></li>
         <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
         <li><a href="{% url 'instructor_announcements' %}">Announcements</a></li>
-        <li id="logout-btn">Logout</li>
     </ul>
 </div>
 
@@ -74,14 +73,6 @@
 
 <script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
 <script src="{% static 'js/instructor.js' %}"></script>
-<script>
-    (function() {
-        document.getElementById("logout-btn").addEventListener("click", function() {
-            sessionStorage.clear();
-            window.location.href = "/";
-        });
-    })();
-</script>
 </body>
 </html>
 
