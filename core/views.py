@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.core.cache import cache
-from .models import Grade, Student, Course, ProgramOutcome, Assessment
+from .models import Grade, Student, Course, ProgramOutcome, Assessment, UserProfile
 
 User = get_user_model()
 
