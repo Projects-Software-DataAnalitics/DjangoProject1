@@ -21,12 +21,10 @@
         <li>
             <a href="{% url 'instructor' %}">Main Page</a>
         </li>
-        <li id="personal-info-btn">Personal Information</li>
         <li id="my-courses-btn">My Courses</li>
         <li id="grades-btn">Grades</li>
         <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
         <li id="announcements-btn">Announcements</li>
-        <li id="logout-btn">Logout</li>
     </ul>
 </div>
 
@@ -149,9 +147,15 @@
                             </p>
                         </div>
                         <div style="display: flex; gap: 8px; margin-left: 16px; align-items: center;">
+                            {% if course_id %}
                             <a href="{% url 'learning_outcome_detail' course_id outcome.id %}" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 500; transition: background 0.2s; cursor: pointer;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
                                 View
                             </a>
+                            {% else %}
+                            <span style="display: inline-block; padding: 12px 24px; background: #94a3b8; color: #ffffff; border-radius: 6px; font-size: 16px; font-weight: 500; cursor: not-allowed;" title="Course not found">
+                                View
+                            </span>
+                            {% endif %}
                             <button class="edit-outcome-btn" data-outcome-id="{{ outcome.id }}" data-outcome-text="{{ outcome.text|escapejs }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #3b82f6;" title="Edit">✏️</button>
                             <button class="delete-outcome-btn" data-outcome-id="{{ outcome.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444;" title="Delete">🗑️</button>
                         </div>
@@ -561,9 +565,6 @@
 <script src="{% static 'js/instructor.js' %}"></script>
 <script>
     (function() {
-        document.getElementById("personal-info-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor_profile' %}";
-        });
         document.getElementById("my-courses-btn").addEventListener("click", function() {
             window.location.href = "{% url 'instructor_my_courses' %}";
         });
@@ -572,10 +573,6 @@
         });
         document.getElementById("announcements-btn").addEventListener("click", function() {
             window.location.href = "{% url 'instructor_announcements' %}";
-        });
-        document.getElementById("logout-btn").addEventListener("click", function() {
-            sessionStorage.clear();
-            window.location.href = "/";
         });
     })();
 </script>

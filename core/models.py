@@ -12,6 +12,22 @@ class Faculty(models.Model):
 
 
 class UserProfile(models.Model):
+    """
+    User profile with role and course associations.
+    
+    NOTE: Course-Instructor relationship is stored in multiple places:
+    1. Course.instructor (ForeignKey) - PRIMARY source of truth
+    2. UserProfile.courses (ManyToMany) - Secondary relationship for convenience
+    3. User.instructor_courses (reverse ForeignKey) - Derived from Course.instructor
+    
+    This creates potential synchronization issues:
+    - Course.instructor can differ from UserProfile.courses
+    - Views must check both sources (see all_courses view)
+    
+    For academic purposes this is acceptable, but in production:
+    - Choose ONE source of truth
+    - Use signals or methods to keep them in sync
+    """
     ROLE_CHOICES = [
         ('student', 'Student'),
         ('instructor', 'Instructor'),
@@ -22,6 +38,7 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     faculty = models.ForeignKey(Faculty, null=True, blank=True, on_delete=models.SET_NULL)
     department = models.CharField(max_length=200, blank=True)
+    # NOTE: Secondary course relationship - see docstring above
     courses = models.ManyToManyField('Course', blank=True, related_name='user_profiles')
 
     def __str__(self):
@@ -43,8 +60,29 @@ class Student(models.Model):
         return self.username
 
 class Course(models.Model):
-    name = models.CharField(max_length=100)
+    """
+    Course model.
+    
+    CRITICAL DESIGN ASSUMPTION: Course.name is assumed to be unique system-wide.
+    This is used throughout the system for:
+    - ProgramOutcome.course_name (string reference)
+    - Course lookup by name in views
+    - Announcement course markers
+    
+    If Course.name is not unique, the following will break:
+    - ProgramOutcome relationships (orphaned data)
+    - Course lookups (wrong course selected)
+    - Grade associations (wrong grades shown)
+    
+    NOTE: Model-level uniqueness constraint is required to enforce this assumption.
+    """
+    name = models.CharField(max_length=100, unique=True)  # CRITICAL: Must be unique system-wide
     code = models.CharField(max_length=20, blank=True)
+    # NOTE: Course-Instructor relationship is stored in multiple places:
+    # 1. Course.instructor (ForeignKey) - Primary source of truth
+    # 2. UserProfile.courses (ManyToMany) - Secondary relationship
+    # 3. User.instructor_courses (reverse ForeignKey) - Derived from Course.instructor
+    # This creates potential synchronization issues but is acceptable for academic purposes.
     instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='instructor_courses')
     department = models.CharField(max_length=200, blank=True)
     credits = models.IntegerField(null=True, blank=True)
@@ -55,6 +93,14 @@ class Course(models.Model):
         return self.name
 
 class Assessment(models.Model):
+    """
+    Assessment configuration for a course.
+    
+    CRITICAL: OneToOneField with CASCADE means:
+    - Deleting a Course will permanently delete its Assessment
+    - This is intentional: Assessment has no meaning without Course
+    - If you need to preserve assessment data, change to PROTECT or SET_NULL
+    """
     course = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='assessment')
     midterm = models.IntegerField(default=2)
     final = models.IntegerField(default=1)
@@ -91,15 +137,19 @@ class Grade(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     
     # Grade fields - stored as average scores (float) for each assessment type
+    # NOTE: These fields are JSONField but store float values (not JSON objects)
+    # This is a design inconsistency - consider using FloatField(null=True, blank=True) instead
+    # Current implementation: JSONField stores float as JSON number
+    # Usage: get_assessment_score() returns float, set_assessment_score() accepts float
     # If multiple assessments exist (e.g., 2 midterms), the average is calculated and stored
     # Example: midterm_1=60, midterm_2=50 -> midterm = 55.0 (average)
     # If assessment count is 0, the field remains empty (None)
-    midterm = models.JSONField(default=None, blank=True, null=True)  # Average midterm score
-    final = models.JSONField(default=None, blank=True, null=True)  # Average final score
-    proje = models.JSONField(default=None, blank=True, null=True)  # Average project score
-    homework = models.JSONField(default=None, blank=True, null=True)  # Average homework score
-    absence = models.JSONField(default=None, blank=True, null=True)  # Average absence score
-    quiz = models.JSONField(default=None, blank=True, null=True)  # Average quiz score
+    midterm = models.JSONField(default=None, blank=True, null=True)  # Average midterm score (stored as float in JSON)
+    final = models.JSONField(default=None, blank=True, null=True)  # Average final score (stored as float in JSON)
+    proje = models.JSONField(default=None, blank=True, null=True)  # Average project score (stored as float in JSON)
+    homework = models.JSONField(default=None, blank=True, null=True)  # Average homework score (stored as float in JSON)
+    absence = models.JSONField(default=None, blank=True, null=True)  # Average absence score (stored as float in JSON)
+    quiz = models.JSONField(default=None, blank=True, null=True)  # Average quiz score (stored as float in JSON)
     
     # Store individual assessment scores for tracking uploaded files
     # Format: {"midterm_1": {score: 60, uploaded_at: "..."}, "midterm_2": {...}}
@@ -109,7 +159,10 @@ class Grade(models.Model):
     last_changes_at = models.DateTimeField(null=True, blank=True)  # Last time grades were modified
 
     class Meta:
-        unique_together = ['student', 'course']
+        # Modern Django: Use constraints instead of deprecated unique_together
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'course'], name='unique_student_course')
+        ]
 
     def __str__(self):
         return f"{self.student.username} - {self.course.name}"
@@ -204,7 +257,9 @@ class LearningOutcomeProgramOutcome(models.Model):
     percentage = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
 
     class Meta:
-        unique_together = [['learning_outcome', 'program_outcome']]
+        constraints = [
+            models.UniqueConstraint(fields=['learning_outcome', 'program_outcome'], name='unique_lo_po')
+        ]
 
 class Announcement(models.Model):
     ROLE_CHOICES = [

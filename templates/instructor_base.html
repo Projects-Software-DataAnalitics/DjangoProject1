@@ -86,32 +86,69 @@
 
 <div class="header-top">
     <div class="header-icons">
-        <a href="{% url 'instructor_announcements' %}" class="header-icon" title="Announcements">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-        </a>
-        <div class="header-icon" id="profile-icon" title="Profile" style="position: relative;">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            <div class="profile-popup" id="profile-popup">
-                <div class="profile-popup-item">
-                    <div class="profile-popup-label">Username</div>
-                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.username }}{% else %}{{ request.user.username|default:"-" }}{% endif %}</div>
+        <!-- Notifications Bell with Dropdown -->
+        <div style="position: relative;">
+            <button id="notification-btn" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: transparent; border: none; cursor: pointer; transition: all 0.2s; color: #64748b;" 
+                    onmouseover="this.style.background='#f3f4f6'; this.style.color='#3b82f6';" 
+                    onmouseout="this.style.background='transparent'; this.style.color='#64748b';"
+                    onclick="toggleNotificationDropdown()"
+                    title="Notifications">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+            </button>
+            <div id="notification-dropdown" style="display: none; position: absolute; top: 50px; right: 0; width: 320px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001; max-height: 400px; overflow-y: auto;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Notifications</h3>
+                    <a href="{% url 'instructor_announcements' %}" style="font-size: 12px; color: #3b82f6; text-decoration: none;">View all</a>
                 </div>
-                <div class="profile-popup-item">
-                    <div class="profile-popup-label">Name</div>
-                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.name }}{% else %}{% if request.user.first_name or request.user.last_name %}{{ request.user.first_name }} {{ request.user.last_name }}{% else %}-{% endif %}{% endif %}</div>
+                <div id="notification-list" style="padding: 8px 0;">
+                    <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
                 </div>
-                <div class="profile-popup-item">
-                    <div class="profile-popup-label">Faculty</div>
-                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.faculty|default:"-" }}{% else %}-{% endif %}</div>
+            </div>
+        </div>
+        
+        <!-- Profile Icon with Dropdown -->
+        <div style="position: relative;">
+            <button id="profile-btn" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #3b82f6; border: none; cursor: pointer; transition: all 0.2s; color: white;" 
+                    onmouseover="this.style.background='#2563eb'; this.style.transform='scale(1.05)';" 
+                    onmouseout="this.style.background='#3b82f6'; this.style.transform='scale(1)';"
+                    onclick="toggleProfileDropdown()"
+                    title="Profile">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </button>
+            <div id="profile-dropdown" style="display: none; position: absolute; top: 50px; right: 0; width: 200px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
+                    <div style="font-size: 14px; font-weight: 600; color: #111827;">{% if instructor_info %}{{ instructor_info.name }}{% else %}{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}{% endif %}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">{% if instructor_info %}{{ instructor_info.username }}{% else %}{{ request.user.username|default:"Instructor" }}{% endif %}</div>
                 </div>
-                <div class="profile-popup-item">
-                    <div class="profile-popup-label">Department</div>
-                    <div class="profile-popup-value">{% if instructor_info %}{{ instructor_info.department|default:"-" }}{% else %}-{% endif %}</div>
-                </div>
+                <a href="{% url 'instructor_profile' %}" style="display: block; padding: 12px 16px; color: #374151; text-decoration: none; font-size: 14px; transition: background 0.2s;" 
+                   onmouseover="this.style.background='#f9fafb';" 
+                   onmouseout="this.style.background='transparent';">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        Profile
+                    </div>
+                </a>
+                <a href="{% url 'logout' %}" style="display: block; padding: 12px 16px; color: #dc2626; text-decoration: none; font-size: 14px; transition: background 0.2s; border-top: 1px solid #e5e7eb;" 
+                   onmouseover="this.style.background='#f9fafb';" 
+                   onmouseout="this.style.background='transparent';">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Logout
+                    </div>
+                </a>
             </div>
         </div>
     </div>
@@ -121,9 +158,6 @@
     <ul>
         <li>
             <a href="{% url 'instructor' %}">Main Page</a>
-        </li>
-        <li>
-            <a href="{% url 'instructor_profile' %}">Personal Information</a>
         </li>
         <li>
             <a href="{% url 'instructor_my_courses' %}">My Courses</a>
@@ -140,7 +174,6 @@
         <li>
             <a href="{% url 'instructor_announcements' %}">Announcements</a>
         </li>
-        <li id="logout-btn">Logout</li>
     </ul>
 </div>
 
@@ -161,23 +194,40 @@
 
 <script src="{% static 'js/instructor.js' %}"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const profileIcon = document.getElementById('profile-icon');
-        const profilePopup = document.getElementById('profile-popup');
-        
-        if (profileIcon && profilePopup) {
-            profileIcon.addEventListener('click', function(e) {
-                e.stopPropagation();
-                profilePopup.classList.toggle('show');
-            });
-            
-            document.addEventListener('click', function(e) {
-                if (!profileIcon.contains(e.target) && !profilePopup.contains(e.target)) {
-                    profilePopup.classList.remove('show');
-                }
-            });
+    function toggleNotificationDropdown() {
+        const dropdown = document.getElementById('notification-dropdown');
+        const profileDropdown = document.getElementById('profile-dropdown');
+        if (profileDropdown) profileDropdown.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
         }
-        
+    }
+    
+    function toggleProfileDropdown() {
+        const dropdown = document.getElementById('profile-dropdown');
+        const notificationDropdown = document.getElementById('notification-dropdown');
+        if (notificationDropdown) notificationDropdown.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('click', function(event) {
+            const notificationBtn = document.getElementById('notification-btn');
+            const notificationDropdown = document.getElementById('notification-dropdown');
+            const profileBtn = document.getElementById('profile-btn');
+            const profileDropdown = document.getElementById('profile-dropdown');
+            
+            if (notificationBtn && notificationDropdown && !notificationBtn.contains(event.target) && !notificationDropdown.contains(event.target)) {
+                notificationDropdown.style.display = 'none';
+            }
+            
+            if (profileBtn && profileDropdown && !profileBtn.contains(event.target) && !profileDropdown.contains(event.target)) {
+                profileDropdown.style.display = 'none';
+            }
+        });
     });
 </script>
 </body>

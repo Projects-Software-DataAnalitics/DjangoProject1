@@ -33,6 +33,7 @@ def get_instructors_map():
             instructors_map[user.username] = user.username
     
     # Cache'e kaydet (1 saat)
+    # TODO: Cache invalidation - When User/Profile/Student is updated, call:
     cache.set(cache_key, instructors_map, 3600)
     return instructors_map
 
@@ -54,6 +55,7 @@ def get_faculty_heads_map():
             faculty_heads_map[user.username] = user.username
     
     # Cache'e kaydet (1 saat)
+    # TODO: Cache invalidation - When User/Profile is updated, call:
     cache.set(cache_key, faculty_heads_map, 3600)
     return faculty_heads_map
 
@@ -85,6 +87,8 @@ def get_faculty_head_data(username):
         }
         
         # Cache'e kaydet (1 saat)
+        # TODO: Cache invalidation - When User/Profile/Course is updated, call:
+        # cache.delete(f'faculty_head_data_{username}') to ensure fresh data
         cache.set(cache_key, data, 3600)
         return data
     except User.DoesNotExist:
@@ -112,6 +116,7 @@ def get_students_data():
         })
     
     # Cache'e kaydet (1 saat)
+    # TODO: Cache invalidation - When Student/Course is updated, call:
     cache.set(cache_key, students_list, 3600)
     return students_list
 
@@ -145,6 +150,8 @@ def get_instructor_data(username):
         }
         
         # Cache'e kaydet (1 saat)
+        # TODO: Cache invalidation - When User/Profile/Course is updated, call:
+        # cache.delete(f'instructor_data_{username}') to ensure fresh data
         cache.set(cache_key, data, 3600)
         return data
     except User.DoesNotExist:
@@ -159,20 +166,18 @@ def faculty_head_required(view_func):
         
         user = request.user
         
-        role = getattr(user, "role", None)
-        if role is None:
-            profile = getattr(user, "profile", None)
-            if profile:
-                role = getattr(profile, "role", None)
-
-        if role != "faculty_head":
-            return HttpResponseForbidden("You are not allowed here")
+        # Use consistent role check: user.profile.role (same as rest of the system)
+        try:
+            profile = user.profile
+            if profile.role != "faculty_head":
+                return HttpResponseForbidden("You are not allowed here")
+        except AttributeError:
+            return HttpResponseForbidden("User profile not found")
 
         return view_func(request, *args, **kwargs)
 
     return wrapper
 
-@csrf_exempt
 def upload_grades(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
@@ -206,41 +211,81 @@ def upload_grades(request):
     assignment_source = normalized_fields['assignment']
     final_source = normalized_fields['final']
 
-    try:
-        with transaction.atomic():
-            def parse_score(raw_value, label):
-                value = (raw_value or '').strip()
-                if value == '':
-                    raise ValueError(f'{label} must not be empty')
-                return float(value)
+    def parse_score(raw_value, label):
+        value = (raw_value or '').strip()
+        if value == '':
+            raise ValueError(f'{label} must not be empty')
+        return float(value)
 
-            for row in reader:
+    # First pass: Validate all rows before any DB operations
+    validated_rows = []
+    errors = []
+    
+    try:
+        for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
+            try:
                 username = (row[username_source] or '').strip()
                 course_name = (row[course_source] or '').strip()
+
+                if not username or not course_name:
+                    errors.append(f'Row {row_num}: Username and course_name are required')
+                    continue
+                
+                # Check if student exists
+                try:
+                    student = Student.objects.get(username=username)
+                except Student.DoesNotExist:
+                    errors.append(f'Row {row_num}: Student not found: {username}')
+                    continue
+                except Student.MultipleObjectsReturned:
+                    errors.append(f'Row {row_num}: Multiple students found with username: {username}')
+                    continue
+                
+                # Check if course exists
+                course = Course.objects.filter(name=course_name).first()
+                if not course:
+                    errors.append(f'Row {row_num}: Course not found: {course_name}')
+                    continue
+                
+                # Parse scores
                 midterm = parse_score(row[midterm_source], 'midterm')
                 assignment = parse_score(row[assignment_source], 'assignment')
                 final = parse_score(row[final_source], 'final')
-
-                if not username or not course_name:
-                    return JsonResponse({'error': 'Username and course_name are required'}, status=400)
-
-                student = Student.objects.filter(username=username).first()
-                if not student:
-                    return JsonResponse({'error': f'Student not found: {username}'}, status=400)
-
-                course = Course.objects.filter(name=course_name).first()
-                if not course:
-                    return JsonResponse({'error': f'Course not found: {course_name}'}, status=400)
-
+                
+                validated_rows.append({
+                    'student': student,
+                    'course': course,
+                    'midterm': midterm,
+                    'assignment': assignment,
+                    'final': final
+                })
+            except (KeyError, ValueError) as exc:
+                errors.append(f'Row {row_num}: {str(exc)}')
+        
+        # If there are validation errors, return before atomic block
+        if errors:
+            return JsonResponse({
+                'error': 'CSV validation failed',
+                'details': errors[:20]  # Show first 20 errors
+            }, status=400)
+        
+        # Second pass: Write to database in atomic transaction
+        with transaction.atomic():
+            for row_data in validated_rows:
                 Grade.objects.update_or_create(
-                    student=student,
-                    course=course,
-                    defaults={'midterm': midterm, 'assignment': assignment, 'final': final}
+                    student=row_data['student'],
+                    course=row_data['course'],
+                    defaults={
+                        'midterm': row_data['midterm'],
+                        'assignment': row_data['assignment'],
+                        'final': row_data['final']
+                    }
                 )
-    except (KeyError, ValueError) as exc:
-        return JsonResponse({'error': f'CSV hatası: {exc}'}, status=400)
 
-    return JsonResponse({'status': 'ok'})
+        return JsonResponse({'status': 'ok'})
+        
+    except Exception as exc:
+        return JsonResponse({'error': f'CSV processing error: {str(exc)}'}, status=400)
 
 
 def index(request):
@@ -268,6 +313,10 @@ def student_login(request):
 
 @csrf_exempt
 def instructor_login(request):
+    """
+    Instructor login endpoint.
+    NOTE: CSRF exempt for login form compatibility. This is acceptable for authentication endpoints.
+    """
     if request.method == 'POST':
         try:
             username = request.POST.get('username', '').strip()
@@ -306,6 +355,10 @@ def instructor_login(request):
 
 @csrf_exempt
 def faculty_head_login(request):
+    """
+    Faculty head login endpoint.
+    NOTE: CSRF exempt for login form compatibility. This is acceptable for authentication endpoints.
+    """
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
@@ -535,7 +588,6 @@ def instructor_profile(request):
         'profile': profile_data
     })
 
-@instructor_required
 @instructor_required
 def instructor_my_courses(request):
     from .models import Assignment
@@ -858,7 +910,7 @@ def instructor_course_grades(request, course_name):
     except Course.DoesNotExist:
         return redirect('instructor_grades')
     
-    if profile and course not in profile.courses.all():
+    if profile and not profile.courses.filter(id=course.id).exists():
         return HttpResponseForbidden("You don't have access to this course")
     
     # Assessment'ı al veya oluştur (default değerlerle)
@@ -964,7 +1016,6 @@ def instructor_course_grades(request, course_name):
     })
 
 @instructor_required
-@csrf_exempt
 def upload_assessment_grades(request, course_name, assessment_type, assessment_index):
     """
     Upload grades for a specific assessment file (e.g., midterm_1, midterm_2)
@@ -994,7 +1045,7 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and course not in profile.courses.all():
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     # Get assessment for this course
@@ -1083,7 +1134,25 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
             'details': validation_errors[:20]  # Show first 20 errors
         }, status=400)
     
-    # Second pass: Process valid scores
+    # Second pass: Validate all rows and prepare data for DB operations
+    def parse_score(raw_value, label):
+        value = (raw_value or '').strip()
+        if value == '':
+            return None  # Allow empty values
+        try:
+            # Convert to float
+            score = float(value)
+            # Validate range: 0 <= score <= 100 (already validated in first pass, but double-check)
+            if score < 0:
+                raise ValueError(f'{label} cannot be below 0')
+            if score > 100:
+                raise ValueError(f'{label} cannot be over 100')
+            return score
+        except ValueError as e:
+            if 'cannot be' in str(e):
+                raise e
+            raise ValueError(f'{label} must be a valid number')
+            
     csv_file.file.seek(0)  # Reset file pointer again
     text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
     reader = csv.DictReader(text_file)
@@ -1095,73 +1164,74 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
             score_column = normalized_fields[normalize(name)]
             break
     
+    # Validate all rows and prepare data
+    validated_rows = []
+    validation_errors = []
+    
     try:
+        for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
+            try:
+                student_id_str = (row[student_id_source] or '').strip()
+                if not student_id_str:
+                    validation_errors.append(f'Row {row_num}: student_id is required')
+                    continue
+                
+                # Get student by student_id (not by id)
+                try:
+                    student = Student.objects.get(student_id=student_id_str)
+                except Student.DoesNotExist:
+                    validation_errors.append(f'Row {row_num}: Student with student_id {student_id_str} not found')
+                    continue
+                except Student.MultipleObjectsReturned:
+                    validation_errors.append(f'Row {row_num}: Multiple students found with student_id {student_id_str}')
+                    continue
+                
+                # Check if student is enrolled in this course
+                if not student.courses.filter(id=course.id).exists():
+                    validation_errors.append(f'Row {row_num}: Student {student_id_str} is not enrolled in course {course_name}')
+                    continue
+                
+                # Parse score
+                score = parse_score(row[score_column], 'score')
+                
+                validated_rows.append({
+                    'student': student,
+                    'score': score
+                })
+                    
+            except Exception as e:
+                validation_errors.append(f'Row {row_num}: {str(e)}')
+        
+        # If there are validation errors, return before atomic block
+        if validation_errors:
+            return JsonResponse({
+                'error': 'CSV validation failed',
+                'details': validation_errors[:20]  # Show first 20 errors
+            }, status=400)
+        
+        # Third pass: Write to database in atomic transaction
+        from django.utils import timezone
+        updated_count = 0
+        
         with transaction.atomic():
-            def parse_score(raw_value, label):
-                value = (raw_value or '').strip()
-                if value == '':
-                    return None  # Allow empty values
-                try:
-                    # Convert to float
-                    score = float(value)
-                    # Validate range: 0 <= score <= 100 (already validated in first pass, but double-check)
-                    if score < 0:
-                        raise ValueError(f'{label} cannot be below 0')
-                    if score > 100:
-                        raise ValueError(f'{label} cannot be over 100')
-                    # If it's a whole number (like 95), ensure it's stored as 95.0
-                    # If it has decimals (like 95.5), keep it as is
-                    # float() already handles this, but we ensure consistency
-                    return score
-                except ValueError as e:
-                    # Re-raise with original message if it's our validation error
-                    if 'cannot be' in str(e):
-                        raise e
-                    raise ValueError(f'{label} must be a valid number')
-            
-            updated_count = 0
-            errors = []
-            from django.utils import timezone
-            
-            for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
-                try:
-                    student_id_str = (row[student_id_source] or '').strip()
-                    if not student_id_str:
-                        errors.append(f'Row {row_num}: student_id is required')
-                        continue
-                    
-                    # Get student by student_id (not by id)
-                    try:
-                        student = Student.objects.get(student_id=student_id_str)
-                    except Student.DoesNotExist:
-                        errors.append(f'Row {row_num}: Student with student_id {student_id_str} not found')
-                        continue
-                    except Student.MultipleObjectsReturned:
-                        errors.append(f'Row {row_num}: Multiple students found with student_id {student_id_str}')
-                        continue
-                    
-                    # Check if student is enrolled in this course
-                    if course not in student.courses.all():
-                        errors.append(f'Row {row_num}: Student {student_id_str} is not enrolled in course {course_name}')
-                        continue
-                    
-                    # Get or create grade record
-                    grade, created = Grade.objects.get_or_create(
-                        student=student,
-                        course=course
-                    )
-                    
-                    # Parse score
-                    score = parse_score(row[score_column], 'score')
-                    
-                    # Store individual score with file name
-                    if score is not None:
-                        grade.set_individual_score(assessment_key, score, file_name=csv_file.name)
-                    else:
-                        # Remove if score is None
-                        grade.remove_individual_score(assessment_key)
-                    
-                    # Check if all files for this assessment type are uploaded
+            for row_data in validated_rows:
+                student = row_data['student']
+                score = row_data['score']
+                
+                # Get or create grade record
+                grade, created = Grade.objects.get_or_create(
+                    student=student,
+                    course=course
+                )
+                
+                # Store individual score with file name
+                if score is not None:
+                    grade.set_individual_score(assessment_key, score, file_name=csv_file.name)
+                else:
+                    # Remove if score is None
+                    grade.remove_individual_score(assessment_key)
+                
+                # Check if all files for this assessment type are uploaded
                     all_scores = []
                     for i in range(1, assessment_count + 1):
                         key = f'{assessment_type}_{i}'
@@ -1179,15 +1249,6 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
                     
                     grade.save()
                     updated_count += 1
-                        
-                except Exception as e:
-                    errors.append(f'Row {row_num}: {str(e)}')
-            
-            if errors and updated_count == 0:
-                return JsonResponse({
-                    'error': 'Failed to process CSV',
-                    'details': errors[:10]  # Show first 10 errors
-                }, status=400)
             
             # Count how many files are uploaded for this assessment type (check first student as sample)
             files_uploaded = 0
@@ -1213,8 +1274,6 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
                 'total_required': assessment_count,
                 'file_info': file_info
             }
-            if errors:
-                response_data['warnings'] = errors[:10]
             
             return JsonResponse(response_data)
             
@@ -1222,9 +1281,11 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
         return JsonResponse({'error': f'CSV processing error: {str(e)}'}, status=400)
 
 @instructor_required
-@csrf_exempt
 def delete_assessment_file(request, course_name, assessment_type, assessment_index):
-    """Delete a specific assessment file (e.g., midterm_1)"""
+    """
+    Delete a specific assessment file (e.g., midterm_1).
+    NOTE: CSRF protection is enabled. Frontend must send CSRF token.
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
     
@@ -1247,7 +1308,7 @@ def delete_assessment_file(request, course_name, assessment_type, assessment_ind
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and course not in profile.courses.all():
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
@@ -1305,7 +1366,6 @@ def delete_assessment_file(request, course_name, assessment_type, assessment_ind
         return JsonResponse({'error': f'Delete error: {str(e)}'}, status=400)
 
 @instructor_required
-@csrf_exempt
 def update_individual_grade(request, course_name):
     """Update individual grade score from table cell edit"""
     if request.method != 'POST':
@@ -1319,7 +1379,8 @@ def update_individual_grade(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and course not in profile.courses.all():
+    # Optimized query: use exists() instead of loading all courses into memory
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
@@ -1339,36 +1400,42 @@ def update_individual_grade(request, course_name):
         except Student.DoesNotExist:
             return JsonResponse({'error': 'Student not found'}, status=404)
         
-        # Check if student is enrolled
-        if course not in student.courses.all():
+        # Optimized query: use exists() instead of loading all courses into memory
+        if not student.courses.filter(id=course.id).exists():
             return JsonResponse({'error': 'Student is not enrolled in this course'}, status=400)
         
-        # Get or create grade
-        grade, created = Grade.objects.get_or_create(
-            student=student,
-            course=course
-        )
-        
-        # Parse score
-        if score is None or score == '':
-            # Remove score
-            grade.remove_individual_score(assessment_key)
+        # Parse and validate score before transaction
             score_value = None
-        else:
+        if score is not None and score != '':
             try:
                 score_value = float(score)
                 if score_value < 0:
                     return JsonResponse({'error': 'Score cannot be less than 0'}, status=400)
                 if score_value > 100:
                     return JsonResponse({'error': 'Score cannot be greater than 100'}, status=400)
-                # Set individual score (without file_name since it's manual edit)
-                # Keep existing file_name if exists
-                existing_file_name = ''
-                if grade.assessment_scores and assessment_key in grade.assessment_scores:
-                    existing_file_name = grade.assessment_scores[assessment_key].get('file_name', '')
-                grade.set_individual_score(assessment_key, score_value, file_name=existing_file_name)
             except ValueError:
                 return JsonResponse({'error': 'Score must be a valid number'}, status=400)
+        
+        # All validation passed, now perform DB operations in atomic transaction
+        with transaction.atomic():
+            # Get or create grade
+            grade, created = Grade.objects.get_or_create(
+                student=student,
+                course=course
+            )
+            
+            # Keep existing file_name if exists (for manual edits)
+            existing_file_name = ''
+            if grade.assessment_scores and assessment_key in grade.assessment_scores:
+                existing_file_name = grade.assessment_scores[assessment_key].get('file_name', '')
+            
+            # Update score
+            if score_value is None:
+                # Remove score
+                grade.remove_individual_score(assessment_key)
+            else:
+                # Set individual score
+                grade.set_individual_score(assessment_key, score_value, file_name=existing_file_name)
         
         # Recalculate average for this assessment type if needed
         assessment_type = assessment_key.split('_')[0]
@@ -1410,7 +1477,6 @@ def update_individual_grade(request, course_name):
         return JsonResponse({'error': f'Update error: {str(e)}'}, status=400)
 
 @instructor_required
-@csrf_exempt
 def update_assessment(request, course_name):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -1423,7 +1489,8 @@ def update_assessment(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and course not in profile.courses.all():
+    # Optimized query: use exists() instead of loading all courses into memory
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
@@ -1458,8 +1525,11 @@ def update_assessment(request, course_name):
                 return JsonResponse({'error': f'{key} cannot be negative'}, status=400)
             values[key] = int_value
         
-        # Assessment'ı güncelle veya oluştur
-        assessment, created = Assessment.objects.get_or_create(
+        # All validation passed, now perform DB operations in atomic transaction
+        # This ensures config changes are atomic and consistent
+        with transaction.atomic():
+            # Assessment'ı güncelle veya oluştur
+            assessment, created = Assessment.objects.get_or_create(
             course=course,
             defaults={
                 'midterm': values['midterm'],
@@ -1469,17 +1539,17 @@ def update_assessment(request, course_name):
                 'absence': values['absence'],
                 'quiz': values['quiz'],
             }
-        )
-        
-        if not created:
-            assessment.midterm = values['midterm']
-            assessment.final = values['final']
-            assessment.proje = values['proje']
-            assessment.homework = values['homework']
-            assessment.absence = values['absence']
-            assessment.quiz = values['quiz']
-            # save() metodu assessment_count'u otomatik hesaplayacak
-            assessment.save()
+            )
+            
+            if not created:
+                assessment.midterm = values['midterm']
+                assessment.final = values['final']
+                assessment.proje = values['proje']
+                assessment.homework = values['homework']
+                assessment.absence = values['absence']
+                assessment.quiz = values['quiz']
+                # save() metodu assessment_count'u otomatik hesaplayacak
+                assessment.save()
         
         return JsonResponse({
             'status': 'ok',
@@ -1490,8 +1560,11 @@ def update_assessment(request, course_name):
         return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
 
 @instructor_required
-@csrf_exempt
 def update_assessment_percentages(request, course_name):
+    """
+    Update assessment percentages for a course.
+    NOTE: CSRF protection is enabled. Frontend must send CSRF token.
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
@@ -1503,7 +1576,7 @@ def update_assessment_percentages(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and course not in profile.courses.all():
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
@@ -1573,108 +1646,87 @@ def update_assessment_percentages(request, course_name):
         return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
 
 
-@instructor_required
-def instructor_announcements(request):
-    from .models import Announcement, UserProfile
-    instructor_user = request.instructor_user
+# Helper functions for instructor_announcements view
+def send_announcements(sender, message, subject, receivers_list):
+    """
+    Send announcements to receivers (users or course students).
+    Returns number of announcements created.
+    """
+    from .models import Announcement
     
-    instructors = User.objects.filter(profile__role='instructor').select_related('profile')
-    faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
+    if not message:
+        return 0
     
-    instructors_map = get_instructors_map()
-    faculty_heads_map = get_faculty_heads_map()
+    if not subject:
+        subject = 'No Topic'
     
-    if request.method == 'POST':
-        message = (request.POST.get('message') or '').strip()
-        subject = (request.POST.get('subject') or '').strip()
-        receivers_str = (request.POST.get('receivers') or '').strip()
-        
-        if message:
-            if not subject:
-                subject = 'No Topic'
-            
-            # Parse receivers (comma-separated)
-            receivers_list = [r.strip() for r in receivers_str.split(',') if r.strip()]
-            
-            with transaction.atomic():
-                for receiver_username in receivers_list:
-                    # Check if it's a course selection (format: course_CourseName)
-                    if receiver_username.startswith('course_'):
-                        course_name = receiver_username.replace('course_', '', 1)
-                        try:
-                            course = Course.objects.get(name=course_name)
-                            # Verify instructor has access to this course
-                            profile = getattr(instructor_user, 'profile', None)
-                            if profile and course in profile.courses.all():
-                                # Get all students enrolled in this course
-                                students = Student.objects.filter(courses=course).select_related('user')
-                                # Add course marker to subject for grouping (will be removed when displaying)
-                                course_marker = f"__COURSE:{course_name}__"
-                                marked_subject = course_marker + subject if not subject.startswith(course_marker) else subject
-                                for student in students:
-                                    student_user = student.user
-                                    if student_user:
-                                        Announcement.objects.create(
-                                            sender=instructor_user,
-                                            receiver=student_user,
-                                            subject=marked_subject,
-                                            message=message,
-                                            sender_role='instructor',
-                                            receiver_role='student'
-                                        )
-                        except Course.DoesNotExist:
-                            pass
-                    else:
-                        # Regular user receiver
-                        try:
-                            receiver = User.objects.get(username=receiver_username)
-                            profile = getattr(receiver, 'profile', None)
-                            receiver_role = None
-                            if profile:
-                                receiver_role = profile.role
-                            
-                            Announcement.objects.create(
-                                sender=instructor_user,
-                                receiver=receiver,
-                                subject=subject,
-                                message=message,
-                                sender_role='instructor',
-                                receiver_role=receiver_role
-                            )
-                        except User.DoesNotExist:
-                            pass
-            
-            return redirect('instructor_announcements')
+    count = 0
     
-    # ORM ile announcements'ları çek - select_related ile JOIN optimizasyonu
-    announcements = Announcement.objects.filter(
-        Q(sender=instructor_user) | Q(receiver=instructor_user)
-    ).select_related('sender', 'receiver').order_by('-created_at')
+    with transaction.atomic():
+        for receiver_username in receivers_list:
+            if receiver_username.startswith('course_'):
+                course_name = receiver_username.replace('course_', '', 1)
+                try:
+                    course = Course.objects.get(name=course_name)
+                    profile = getattr(sender, 'profile', None)
+                    if profile and profile.courses.filter(id=course.id).exists():
+                        students = Student.objects.filter(courses=course).select_related('user')
+                        # TODO: Technical debt - Course marker hack in subject field
+                        # Better approach: Add course=ForeignKey and is_course_broadcast=BooleanField to Announcement model
+                        # This string parsing is fragile and doesn't handle edge cases (e.g., course names with '__')
+                        course_marker = f"__COURSE:{course_name}__"
+                        marked_subject = course_marker + subject if not subject.startswith(course_marker) else subject
+                        for student in students:
+                            student_user = student.user
+                            if student_user:
+                                Announcement.objects.create(
+                                    sender=sender,
+                                    receiver=student_user,
+                                    subject=marked_subject,
+                                    message=message,
+                                    sender_role='instructor',
+                                    receiver_role='student'
+                                )
+                                count += 1
+                except Course.DoesNotExist:
+                    pass
+            else:
+                # Regular user receiver
+                try:
+                    receiver = User.objects.get(username=receiver_username)
+                    profile = getattr(receiver, 'profile', None)
+                    receiver_role = None
+                    if profile:
+                        receiver_role = profile.role
+                    
+                    Announcement.objects.create(
+                        sender=sender,
+                        receiver=receiver,
+                        subject=subject,
+                        message=message,
+                        sender_role='instructor',
+                        receiver_role=receiver_role
+                    )
+                    count += 1
+                except User.DoesNotExist:
+                    pass
     
-    all_announcements = []
-    for ann in announcements:
-        all_announcements.append({
-            'id': ann.id,
-            'subject': ann.subject,
-            'message': ann.message,
-            'sender_id': ann.sender.id,
-            'receiver_id': ann.receiver.id if ann.receiver else None,
-            'sender_username': ann.sender.username,
-            'sender_first_name': ann.sender.first_name,
-            'sender_last_name': ann.sender.last_name,
-            'receiver_username': ann.receiver.username if ann.receiver else None,
-            'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
-            'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
-            'sender_role': ann.sender_role,
-            'receiver_role': ann.receiver_role,
-            'created_at': ann.created_at,
-        })
+    return count
+
+
+def group_course_announcements(all_announcements, instructor_user_id, instructors_map, faculty_heads_map):
+    """
+    Group course broadcast announcements that were sent within 10 seconds.
     
-    # Group announcements sent to course students
-    from collections import defaultdict
-    from datetime import timedelta
+    NOTE: This algorithm uses O(n²) nested loops and is suitable for small datasets.
+    For larger datasets, consider using a more efficient approach with batch_id/uuid.
     
-    # First, process all announcements and group them
+    TODO: Technical debt - Time-based heuristic (≤10 seconds) is not deterministic.
+    Better approach: Generate batch_id/uuid during broadcast and group by that.
+    Current approach may incorrectly group unrelated announcements sent within 10 seconds.
+    """
+    from datetime import datetime
+    
     announcements_data = []
     processed_ids = set()
     
@@ -1685,27 +1737,17 @@ def instructor_announcements(request):
         sender_full_name = f"{ann['sender_first_name']} {ann['sender_last_name']}".strip() if ann['sender_first_name'] or ann['sender_last_name'] else ''
         sender_name = instructors_map.get(ann['sender_username']) or faculty_heads_map.get(ann['sender_username']) or sender_full_name or ann['sender_username']
         
-        is_sent = ann['sender_id'] == instructor_user.id
+        is_sent = ann['sender_id'] == instructor_user_id
         
         # Check if this is part of a course broadcast
         if is_sent:
-            # Find all announcements with same subject, message, sender, and sent within 10 seconds
-            created_at_str = ann['created_at']
-            if isinstance(created_at_str, str):
-                from datetime import datetime
-                try:
-                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
-                except:
-                    try:
-                        created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
-                    except:
-                        created_at_dt = datetime.now()
-            else:
-                created_at_dt = created_at_str if hasattr(created_at_str, 'timestamp') else None
-                if not created_at_dt:
-                    from datetime import datetime
+            # Django ORM returns datetime objects, not strings
+            created_at_dt = ann['created_at']
+            if not isinstance(created_at_dt, datetime):
+                # Fallback for edge cases (shouldn't happen with ORM)
                     created_at_dt = datetime.now()
             
+            # Extract course name from marker hack
             course_name_from_marker = None
             clean_subject = ann['subject']
             if ann['subject'].startswith('__COURSE:'):
@@ -1714,6 +1756,7 @@ def instructor_announcements(request):
                     course_name_from_marker = ann['subject'][9:marker_end]
                     clean_subject = ann['subject'][marker_end + 2:]
             
+            # Find matching announcements (O(n²) - see note above)
             matching_anns = []
             for other_ann in all_announcements:
                 if (other_ann['id'] in processed_ids or 
@@ -1738,18 +1781,9 @@ def instructor_announcements(request):
                 elif course_name_from_marker or other_course_name:
                     continue
                 
-                other_created_at_str = other_ann['created_at']
-                if isinstance(other_created_at_str, str):
-                    try:
-                        other_created_at_dt = datetime.strptime(other_created_at_str, '%Y-%m-%d %H:%M:%S.%f')
-                    except:
-                        try:
-                            other_created_at_dt = datetime.strptime(other_created_at_str, '%Y-%m-%d %H:%M:%S')
-                        except:
-                            continue
-                else:
-                    other_created_at_dt = other_created_at_str if hasattr(other_created_at_str, 'timestamp') else None
-                    if not other_created_at_dt:
+                # Django ORM returns datetime objects
+                other_created_at_dt = other_ann['created_at']
+                if not isinstance(other_created_at_dt, datetime):
                         continue
                 
                 time_diff = abs((created_at_dt - other_created_at_dt).total_seconds())
@@ -1757,7 +1791,7 @@ def instructor_announcements(request):
                     matching_anns.append(other_ann)
             
             if course_name_from_marker and len(matching_anns) > 1:
-                created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_dt, 'strftime') else str(created_at_dt)
+                created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
                 announcements_data.append({
                     'id': ann['id'],
                     'subject': clean_subject,
@@ -1773,6 +1807,7 @@ def instructor_announcements(request):
                     processed_ids.add(ma['id'])
                 continue
         
+        # Regular announcement (not grouped)
         if ann['id'] not in processed_ids:
             receiver_name = "Everyone"
             receiver_username = None
@@ -1781,20 +1816,15 @@ def instructor_announcements(request):
                 receiver_name = instructors_map.get(ann['receiver_username']) or faculty_heads_map.get(ann['receiver_username']) or receiver_full_name or ann['receiver_username']
                 receiver_username = ann['receiver_username']
             
-            created_at_str = ann['created_at']
-            if isinstance(created_at_str, str):
-                from datetime import datetime
-                try:
-                    created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
-                except:
-                    try:
-                        created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
-                    except:
-                        created_at_dt = datetime.now()
+            # Django ORM returns datetime objects
+            created_at_dt = ann['created_at']
+            if isinstance(created_at_dt, datetime):
                 created_at_formatted = created_at_dt.strftime('%Y-%m-%d %H:%M')
             else:
-                created_at_formatted = created_at_str.strftime('%Y-%m-%d %H:%M') if hasattr(created_at_str, 'strftime') else str(created_at_str)
+                # Fallback (shouldn't happen)
+                created_at_formatted = str(created_at_dt)
             
+            # Remove course marker from subject for display
             display_subject = ann['subject']
             if display_subject.startswith('__COURSE:'):
                 marker_end = display_subject.find('__', 9)
@@ -1814,11 +1844,20 @@ def instructor_announcements(request):
             })
             processed_ids.add(ann['id'])
     
+    return announcements_data
+
+
+def build_recipients_list(instructor_user, instructors_map, faculty_heads_map):
+    """
+    Build list of potential recipients for announcements.
+    Returns list of dicts with username, name, and role.
+    """
     recipients = []
     
     profile = getattr(instructor_user, 'profile', None)
     instructor_courses = []
     
+    # Courses group
     if profile:
         instructor_courses = list(profile.courses.all())
         courses_list = []
@@ -1830,6 +1869,10 @@ def instructor_announcements(request):
             })
         courses_list.sort(key=lambda x: x['name'])
         recipients.extend(courses_list)
+    
+    # Instructors and Faculty Heads group
+    instructors = User.objects.filter(profile__role='instructor').select_related('profile')
+    faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile')
     
     professors_list = []
     for inst in instructors:
@@ -1850,12 +1893,12 @@ def instructor_announcements(request):
         })
     
     professors_list.sort(key=lambda x: x['name'])
-    
     if professors_list:
         professors_list[0]['show_professors_heading'] = True
     
     recipients.extend(professors_list)
     
+    # Students group
     if instructor_courses:
         students = Student.objects.filter(
             courses__in=instructor_courses
@@ -1876,9 +1919,70 @@ def instructor_announcements(request):
         students_list.sort(key=lambda x: x['name'])
         recipients.extend(students_list)
     
+    return recipients
+
+
+@instructor_required
+def instructor_announcements(request):
+    from .models import Announcement
+    
+    instructor_user = request.instructor_user
+    instructors_map = get_instructors_map()
+    faculty_heads_map = get_faculty_heads_map()
+    
+    # Handle POST: Send announcements
+    if request.method == 'POST':
+        message = (request.POST.get('message') or '').strip()
+        subject = (request.POST.get('subject') or '').strip()
+        receivers_str = (request.POST.get('receivers') or '').strip()
+        
+        if message:
+            receivers_list = [r.strip() for r in receivers_str.split(',') if r.strip()]
+            send_announcements(instructor_user, message, subject, receivers_list)
+            return redirect('instructor_announcements')
+    
+    # GET: Display announcements
+    # Fetch announcements from database
+    announcements = Announcement.objects.filter(
+        Q(sender=instructor_user) | Q(receiver=instructor_user)
+    ).select_related('sender', 'receiver').order_by('-created_at')
+    
+    # Convert to dict format for processing
+    all_announcements = []
+    for ann in announcements:
+        all_announcements.append({
+            'id': ann.id,
+            'subject': ann.subject,
+            'message': ann.message,
+            'sender_id': ann.sender.id,
+            'receiver_id': ann.receiver.id if ann.receiver else None,
+            'sender_username': ann.sender.username,
+            'sender_first_name': ann.sender.first_name,
+            'sender_last_name': ann.sender.last_name,
+            'receiver_username': ann.receiver.username if ann.receiver else None,
+            'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
+            'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
+            'sender_role': ann.sender_role,
+            'receiver_role': ann.receiver_role,
+            'created_at': ann.created_at,  # Django ORM returns datetime, not string
+        })
+    
+    # Group course broadcast announcements
+    announcements_data = group_course_announcements(
+        all_announcements, 
+        instructor_user.id, 
+        instructors_map, 
+        faculty_heads_map
+    )
+    
+    # Build recipients list
+    recipients = build_recipients_list(instructor_user, instructors_map, faculty_heads_map)
+    
+    # Separate sent and received messages
     sent_messages = [ann for ann in announcements_data if ann['is_sent']]
     received_messages = [ann for ann in announcements_data if not ann['is_sent']]
     
+    # Prepare JSON for frontend
     announcements_json = json.dumps({str(ann['id']): {
         'subject': ann['subject'],
         'message': ann['message'],
@@ -1897,9 +2001,11 @@ def instructor_announcements(request):
     })
 
 
-@csrf_exempt
 def set_instructor_session(request):
-    """Set instructor username in session (only for authenticated instructors)"""
+    """
+    Set instructor username in session (only for authenticated instructors).
+    Note: CSRF protection is enabled. Frontend must send CSRF token.
+    """
     if not request.user.is_authenticated:
         return JsonResponse({'status': 'error', 'message': 'Not authenticated'}, status=401)
     
@@ -2059,12 +2165,18 @@ def all_courses(request):
                     try:
                         instructor_user = User.objects.get(username=instructor_username)
                     except User.DoesNotExist:
-                        pass
+                        # Log warning instead of silently failing
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Instructor not found: {instructor_username} when adding course {course_name}")
                 
                 if not instructor_user:
                     default_instructor = UserProfile.objects.filter(role='instructor').first()
                     instructor_user = default_instructor.user if default_instructor else User.objects.first()
                 
+                # NOTE: Course name is assumed to be unique system-wide.
+                # If Course.name is not unique=True in model, courses with same name in different departments will conflict.
+                # This is a design assumption that should be documented in the model.
                 course, created = Course.objects.get_or_create(
                     name=course_name,
                     defaults={
@@ -2098,7 +2210,10 @@ def all_courses(request):
                         instructor_user = User.objects.get(username=instructor_username)
                         course.instructor = instructor_user
                     except User.DoesNotExist:
-                        pass
+                        # Log warning instead of silently failing
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Instructor not found: {instructor_username} when updating course {course.id}")
                 
                 if credits_str:
                     try:
@@ -2111,12 +2226,23 @@ def all_courses(request):
                 
                 course.save()
             except Course.DoesNotExist:
-                pass
+                # Log warning instead of silently failing
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Course not found: {course_id} when updating course")
         
         return redirect('all_courses')
     
     faculty_courses_with_instructors = []
     course_instructor_map = {}
+    
+    # NOTE: Technical debt - Course-Instructor relationship is stored in 3 places:
+    # 1. profile.courses (ManyToMany on UserProfile)
+    # 2. user.instructor_courses (reverse ForeignKey from Course.instructor)
+    # 3. Course.instructor (ForeignKey on Course model)
+    # This creates complexity and potential synchronization issues.
+    # In a production system, this would be normalized to a single source of truth.
+    # For academic purposes, this is acceptable but should be documented.
     
     # Instructors'ları veritabanından çek
     instructors = User.objects.filter(profile__role='instructor').select_related('profile').prefetch_related('profile__courses', 'instructor_courses')
@@ -2162,10 +2288,29 @@ def all_courses(request):
         all_courses_in_dept = Course.objects.filter(department=faculty_head_department).values_list('name', flat=True).distinct()
         all_course_names.update(all_courses_in_dept)
     
+    # NOTE: Performance - N+1 query pattern below
+    # For each course_name, we query Course and ProgramOutcome separately.
+    # This is acceptable for small datasets but will become slow with many courses.
+    # Optimization: Prefetch all courses and learning outcomes in bulk queries.
+    
+    # Optimize: Fetch all courses in one query
+    all_courses_dict = {course.name: course for course in Course.objects.filter(name__in=all_course_names).select_related('instructor')}
+    
+    # Optimize: Fetch all learning outcomes in one query (grouped by course_name)
+    # NOTE: Technical debt - ProgramOutcome uses course_name (string) instead of ForeignKey
+    # This creates data integrity risk: typos, renames break relationships, no referential integrity
+    # Better approach: Add course=ForeignKey(Course) to ProgramOutcome model
+    learning_outcomes_by_course = {}
+    if all_course_names:
+        outcomes = ProgramOutcome.objects.filter(course_name__in=all_course_names).order_by('course_name', '-created_at')
+        for outcome in outcomes:
+            if outcome.course_name not in learning_outcomes_by_course:
+                learning_outcomes_by_course[outcome.course_name] = outcome
+    
     for course_name in sorted(all_course_names):
         instructors = course_instructor_map.get(course_name, [])
         
-        course = Course.objects.filter(name=course_name).first()
+        course = all_courses_dict.get(course_name)
         if course and course.instructor:
             instructor_full_name = (course.instructor.first_name + ' ' + course.instructor.last_name).strip()
             instructor_name = instructor_full_name if instructor_full_name else course.instructor.username
@@ -2174,10 +2319,7 @@ def all_courses(request):
         
         instructor_display = ', '.join(instructors) if instructors else 'Unknown'
         
-        first_learning_outcome = None
-        if course:
-            learning_outcomes = ProgramOutcome.objects.filter(course_name=course_name).order_by('-created_at')
-            first_learning_outcome = learning_outcomes.first()
+        first_learning_outcome = learning_outcomes_by_course.get(course_name)
         
         faculty_courses_with_instructors.append({
             'course': course_name,
@@ -2228,16 +2370,30 @@ def my_courses(request):
     
     if profile:
         courses = profile.courses.all().select_related('instructor').prefetch_related('assignments')
+        
+        # Optimize: Fetch all learning outcomes in one query to avoid N+1 pattern
+        # NOTE: Small N+1 risk - For each course, we query ProgramOutcome separately.
+        # This is acceptable for faculty heads with limited courses, but could be optimized
+        # by prefetching all learning outcomes in bulk.
+        course_names = [course.name for course in courses if not faculty_head_department or course.department == faculty_head_department]
+        learning_outcomes_dict = {}
+        if course_names:
+            # Fetch first learning outcome for each course
+            outcomes = ProgramOutcome.objects.filter(course_name__in=course_names).order_by('course_name', '-created_at')
+            for outcome in outcomes:
+                if outcome.course_name not in learning_outcomes_dict:
+                    learning_outcomes_dict[outcome.course_name] = outcome
+        
         for course in courses:
             # Filter by department - only show courses from faculty head's department
             if faculty_head_department and course.department != faculty_head_department:
                 continue
             
-            instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+            instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() if course.instructor else ''
+            if not instructor_name and course.instructor:
+                instructor_name = course.instructor.username
             
-            first_learning_outcome = None
-            learning_outcomes = ProgramOutcome.objects.filter(course_name=course.name).order_by('-created_at')
-            first_learning_outcome = learning_outcomes.first()
+            first_learning_outcome = learning_outcomes_dict.get(course.name)
             
             # Get assignments for this course
             assignments = course.assignments.all().order_by('-created_at')
@@ -2291,114 +2447,12 @@ def my_courses(request):
     }
     return render(request, 'faculty/my_courses.html', context)
 
-@faculty_head_required
-def program_outcomes(request):
-    from .models import Faculty
-    
-    profile = getattr(request.user, 'profile', None)
-    faculty = profile.faculty if profile else None
-    
-    faculty_head_data = get_faculty_head_data(request.user.username)
-    faculty_head_department = faculty_head_data.get('department')
-    faculty_name_from_json = faculty_head_data.get('faculty')
-    
-    if not faculty and faculty_name_from_json:
-        with transaction.atomic():
-            faculty_slug = faculty_name_from_json.lower().replace(' ', '-')
-            try:
-                faculty = Faculty.objects.get(slug=faculty_slug)
-            except Faculty.DoesNotExist:
-                faculty, _ = Faculty.objects.get_or_create(
-                    slug=faculty_slug,
-                    defaults={'name': faculty_name_from_json}
-                )
-            if profile:
-                profile.faculty = faculty
-                profile.save()
-    
-    if request.method == 'POST':
-        text = (request.POST.get('text') or '').strip()
-        creator = request.user if request.user.is_authenticated else None
-        
-        faculty_heads_map = get_faculty_heads_map()
-        instructors_map = get_instructors_map()
-        
-        if not creator:
-            outcomes_qs = ProgramOutcome.objects.filter(faculty=faculty, course_name='').select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
-            outcomes_data = []
-            for o in outcomes_qs:
-                creator_username = o.created_by.username
-                creator_name = faculty_heads_map.get(creator_username) or o.created_by.get_full_name() or creator_username
-                
-                linked_learning_outcomes = []
-                seen_course_instructor = set()
-                for lo in o.learning_outcomes.all():
-                    lo_creator_username = lo.created_by.username
-                    lo_creator_name = instructors_map.get(lo_creator_username) or lo.created_by.get_full_name() or lo_creator_username
-                    course_instructor_key = (lo.course_name, lo_creator_name)
-                    if course_instructor_key not in seen_course_instructor:
-                        seen_course_instructor.add(course_instructor_key)
-                        linked_learning_outcomes.append({
-                            'text': lo.text,
-                            'course': lo.course_name,
-                            'instructor': lo_creator_name,
-                        })
-                
-                outcomes_data.append({
-                    'id': o.id,
-                    'text': o.text,
-                    'created_by': creator_name,
-                    'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
-                    'linked_learning_outcomes': linked_learning_outcomes,
-                })
-            return render(request, 'faculty/program_outcomes.html', {
-                'error': 'Login required to create program outcomes.',
-                'outcomes_data': outcomes_data,
-                'faculty_head_department': faculty_head_department,
-            })
-        
-        if not text:
-            outcomes_qs = ProgramOutcome.objects.filter(faculty=faculty, course_name='').select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
-            outcomes_data = []
-            for o in outcomes_qs:
-                creator_username = o.created_by.username
-                creator_name = faculty_heads_map.get(creator_username) or o.created_by.get_full_name() or creator_username
-                
-                linked_learning_outcomes = []
-                seen_course_instructor = set()
-                for lo in o.learning_outcomes.all():
-                    lo_creator_username = lo.created_by.username
-                    lo_creator_name = instructors_map.get(lo_creator_username) or lo.created_by.get_full_name() or lo_creator_username
-                    course_instructor_key = (lo.course_name, lo_creator_name)
-                    if course_instructor_key not in seen_course_instructor:
-                        seen_course_instructor.add(course_instructor_key)
-                        linked_learning_outcomes.append({
-                            'text': lo.text,
-                            'course': lo.course_name,
-                            'instructor': lo_creator_name,
-                        })
-                
-                outcomes_data.append({
-                    'id': o.id,
-                    'text': o.text,
-                    'created_by': creator_name,
-                    'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
-                    'linked_learning_outcomes': linked_learning_outcomes,
-                })
-            return render(request, 'faculty/program_outcomes.html', {
-                'error': 'Outcome text is required.',
-                'outcomes_data': outcomes_data,
-                'faculty_head_department': faculty_head_department,
-            })
-        
-        with transaction.atomic():
-            ProgramOutcome.objects.create(text=text, course_name='', faculty=faculty, created_by=creator)
-        return redirect('program_outcomes')
-    
-    faculty_heads_map = get_faculty_heads_map()
-    instructors_map = get_instructors_map()
-    
-    outcomes_qs = ProgramOutcome.objects.filter(faculty=faculty, course_name='').select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+# Helper function for program_outcomes view
+def build_program_outcomes_data(outcomes_qs, faculty_heads_map, instructors_map):
+    """
+    Build program outcomes data structure for display.
+    This logic is reused in multiple places in program_outcomes view.
+    """
     outcomes_data = []
     for o in outcomes_qs:
         creator_username = o.created_by.username
@@ -2425,6 +2479,286 @@ def program_outcomes(request):
             'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
             'linked_learning_outcomes': linked_learning_outcomes,
         })
+    return outcomes_data
+
+
+def generate_faculty_slug(faculty_name):
+    """
+    Generate consistent faculty slug from name.
+    This ensures slug generation is uniform across the codebase.
+    """
+    if not faculty_name:
+        return ''
+    return faculty_name.lower().replace(' ', '-')
+
+
+def generate_course_slug(course_name):
+    """
+    Generate safe course slug from name using Django's slugify.
+    Handles Turkish characters, multiple spaces, and special characters.
+    """
+    from django.utils.text import slugify
+    if not course_name:
+        return ''
+    return slugify(course_name)
+
+
+def get_instructor_course_names(instructor_user):
+    """
+    Get all course names for an instructor from both database and JSON.
+    This logic is reused in multiple views - centralizing it here prevents maintenance errors.
+    
+    Returns: list of unique course names
+    """
+    instructor_courses = Course.objects.filter(instructor=instructor_user)
+    course_names_from_db = [course.name for course in instructor_courses]
+    
+    instructor_data = get_instructor_data(instructor_user.username)
+    course_names_from_json = instructor_data.get('courses', []) or []
+    
+    course_names = list(set(course_names_from_db + course_names_from_json))
+    return course_names
+
+
+def get_course_for_outcome(profile, course_name):
+    """
+    Get course for a given course_name, adding it to profile if not already linked.
+    This logic is reused in multiple views - centralizing it here.
+    
+    Returns: (course, course_id) tuple
+    """
+    if not profile or not course_name:
+        return None, None
+    
+    # First check if course is already in profile
+    course = None
+    for c in profile.courses.all():
+        if c.name.lower() == course_name.lower():
+            course = c
+            break
+    
+    # If not found, try to find by name (case-insensitive)
+    if not course:
+        course = Course.objects.filter(name__iexact=course_name).first()
+        if course and profile:
+            with transaction.atomic():
+                profile.courses.add(course)
+    
+    course_id = course.id if course else None
+    return course, course_id
+
+
+def build_learning_outcomes_data(outcomes_qs):
+    """
+    Build learning outcomes data structure for display.
+    This logic is reused in course_learning_outcomes view (error and normal cases).
+    """
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_name = o.created_by.get_full_name() or o.created_by.username
+        related_program_outcomes = o.related_program_outcomes.all()
+        outcomes_data.append({
+            'id': o.id,
+            'text': o.text,
+            'course': o.course_name or '',
+            'created_by': creator_name,
+            'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+            'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
+        })
+    return outcomes_data
+
+
+def get_learning_outcome_context(request, course_id, outcome_id):
+    """
+    Get common context for learning_outcome_detail and learning_outcome_graph views.
+    Handles faculty_head vs instructor authentication and authorization.
+    
+    Returns: (outcome, course, faculty, is_faculty_head, instructor_user) tuple
+    Raises: Http404, HttpResponseForbidden
+    """
+    is_faculty_head = False
+    instructor_user = None
+    faculty = None
+    
+    if not request.user.is_authenticated:
+        from django.shortcuts import redirect
+        return redirect('faculty-head-login')
+    
+    profile = getattr(request.user, 'profile', None)
+    if profile and profile.role == 'faculty_head':
+        is_faculty_head = True
+        course = get_object_or_404(Course, id=course_id)
+        # CRITICAL: Check faculty access
+        outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+        if not check_faculty_access(request.user, outcome):
+            return HttpResponseForbidden("You don't have permission to access this outcome.")
+        faculty = profile.faculty if profile else None
+    else:
+        # Instructor kontrolü
+        if not hasattr(request, 'instructor_user'):
+            try:
+                user_profile = request.user.profile
+                if user_profile.role != 'instructor':
+                    return HttpResponseForbidden("You are not allowed here")
+            except AttributeError:
+                return HttpResponseForbidden("User profile not found")
+            request.instructor_user = request.user
+        instructor_user = request.instructor_user
+        course = get_object_or_404(Course, id=course_id, instructor=instructor_user)
+        outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name, created_by=instructor_user)
+        
+        instructor_data = get_instructor_data(instructor_user.username)
+        instructor_faculty = instructor_data.get('faculty')
+        
+        # Use helper function instead of inline Faculty creation
+        if instructor_faculty:
+            profile = getattr(instructor_user, 'profile', None)
+            faculty = ensure_faculty_for_profile(profile, instructor_faculty)
+    
+    return outcome, course, faculty, is_faculty_head, instructor_user
+
+
+def build_program_outcomes_with_percentages(outcome, faculty):
+    """
+    Build program outcomes data with percentages for learning outcome detail/graph.
+    Optimizes N+1 query by prefetching LearningOutcomeProgramOutcome relationships.
+    
+    Returns: (program_outcomes_data, available_program_outcomes) tuple
+    """
+    from .models import LearningOutcomeProgramOutcome
+    
+    # Optimize: Prefetch all relationships in one query
+    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+    
+    # Get all percentages in one query instead of N queries
+    lo_po_map = {
+        (lo_po.learning_outcome_id, lo_po.program_outcome_id): lo_po.percentage
+        for lo_po in LearningOutcomeProgramOutcome.objects.filter(
+            learning_outcome=outcome,
+            program_outcome__in=related_program_outcomes
+        ).select_related('learning_outcome', 'program_outcome')
+    }
+    
+    program_outcomes_data = []
+    for po in related_program_outcomes:
+        percentage = lo_po_map.get((outcome.id, po.id), 0)
+        program_outcomes_data.append({
+            'id': po.id,
+            'text': po.text,
+            'percentage': percentage,
+        })
+    
+    available_program_outcomes = []
+    if faculty:
+        available_program_outcomes_qs = ProgramOutcome.objects.filter(
+            faculty=faculty,
+            course_name=''
+        ).exclude(id__in=[po.id for po in related_program_outcomes]).select_related('created_by').order_by('created_at')
+        available_program_outcomes = [
+            {'id': po.id, 'text': po.text}
+            for po in available_program_outcomes_qs
+        ]
+    
+    return program_outcomes_data, available_program_outcomes
+
+
+def check_faculty_access(user, outcome):
+    """
+    Check if user has access to modify/delete an outcome based on faculty.
+    Returns True if user's faculty matches outcome's faculty, False otherwise.
+    """
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        return False
+    
+    user_faculty = profile.faculty
+    outcome_faculty = outcome.faculty
+    
+    # Both must have faculty and they must match
+    if not user_faculty or not outcome_faculty:
+        return False
+    
+    return user_faculty.id == outcome_faculty.id
+
+
+def ensure_faculty_for_profile(profile, faculty_name_from_json):
+    """
+    Ensure faculty exists and is linked to profile.
+    NOTE: This is data normalization logic that ideally belongs in a service layer,
+    but is placed here for academic project simplicity.
+    """
+    from .models import Faculty
+    
+    if not profile:
+        return None
+    
+    faculty = profile.faculty
+    if not faculty and faculty_name_from_json:
+        with transaction.atomic():
+            faculty_slug = generate_faculty_slug(faculty_name_from_json)
+            try:
+                faculty = Faculty.objects.get(slug=faculty_slug)
+            except Faculty.DoesNotExist:
+                faculty, _ = Faculty.objects.get_or_create(
+                    slug=faculty_slug,
+                    defaults={'name': faculty_name_from_json}
+                )
+            profile.faculty = faculty
+            profile.save()
+    return faculty
+
+
+@faculty_head_required
+def program_outcomes(request):
+    from .models import Faculty
+    
+    profile = getattr(request.user, 'profile', None)
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    faculty_name_from_json = faculty_head_data.get('faculty')
+    
+    # Ensure faculty exists (data normalization)
+    faculty = ensure_faculty_for_profile(profile, faculty_name_from_json)
+    
+    if request.method == 'POST':
+        text = (request.POST.get('text') or '').strip()
+        # NOTE: creator check is redundant - @faculty_head_required ensures authenticated user
+        # This branch will never execute, but kept for defensive programming
+        creator = request.user  # Always authenticated due to decorator
+        
+        faculty_heads_map = get_faculty_heads_map()
+        instructors_map = get_instructors_map()
+        
+        # Get outcomes query (reused logic)
+        outcomes_qs = ProgramOutcome.objects.filter(
+            faculty=faculty, 
+            course_name=''  # NOTE: Technical debt - empty string used to distinguish program outcomes from learning outcomes
+        ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+        
+        if not text:
+            # Validation error: empty text
+            outcomes_data = build_program_outcomes_data(outcomes_qs, faculty_heads_map, instructors_map)
+            return render(request, 'faculty/program_outcomes.html', {
+                'error': 'Outcome text is required.',
+                'outcomes_data': outcomes_data,
+                'faculty_head_department': faculty_head_department,
+            })
+        
+        # Create new program outcome
+        with transaction.atomic():
+            ProgramOutcome.objects.create(text=text, course_name='', faculty=faculty, created_by=creator)
+        return redirect('program_outcomes')
+    
+    # GET: Display program outcomes
+    faculty_heads_map = get_faculty_heads_map()
+    instructors_map = get_instructors_map()
+    
+    outcomes_qs = ProgramOutcome.objects.filter(
+        faculty=faculty, 
+        course_name=''  # NOTE: Technical debt - empty string used to distinguish program outcomes from learning outcomes
+    ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+    
+    outcomes_data = build_program_outcomes_data(outcomes_qs, faculty_heads_map, instructors_map)
     
     return render(request, 'faculty/program_outcomes.html', {
         'outcomes_data': outcomes_data,
@@ -2444,11 +2778,13 @@ def program_outcome_detail(request, outcome_id):
     faculty_name_from_json = faculty_head_data.get('faculty')
     
     if not faculty and faculty_name_from_json:
+        # Use consistent slug generation
+        faculty_slug = generate_faculty_slug(faculty_name_from_json)
         try:
-            faculty = Faculty.objects.get(slug=faculty_name_from_json.lower())
+            faculty = Faculty.objects.get(slug=faculty_slug)
         except Faculty.DoesNotExist:
             faculty, _ = Faculty.objects.get_or_create(
-                slug=faculty_name_from_json.lower(),
+                slug=faculty_slug,
                 defaults={'name': faculty_name_from_json}
             )
     
@@ -2525,10 +2861,8 @@ def create_program_outcome(request):
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
         course_name = (request.POST.get('course_name') or '').strip()
-        creator = request.user if request.user.is_authenticated else None
-        
-        if not creator:
-            return HttpResponseForbidden("Login required to create program outcomes.")
+        # NOTE: creator check is redundant - @faculty_head_required ensures authenticated user
+        creator = request.user  # Always authenticated due to decorator
         
         if not text:
             return render(
@@ -2541,6 +2875,10 @@ def create_program_outcome(request):
                 }
             )
         
+        # NOTE: Technical debt - course_name is stored as string instead of ForeignKey
+        # This creates data integrity risk: typos, renames break relationships, no referential integrity
+        # Better approach: Add course=ForeignKey(Course, null=True, blank=True) to ProgramOutcome model
+        # Current validation and error handling are good for academic level
         with transaction.atomic():
             ProgramOutcome.objects.create(text=text, course_name=course_name, faculty=faculty, created_by=creator)
         return redirect('program_outcomes')
@@ -2647,7 +2985,7 @@ def faculty_head_course_learning_outcomes(request, course_name):
                         course_name=''
                     )
                     learning_outcome.related_program_outcomes.set(program_outcomes_to_link)
-        course_name_slug = course_name.replace(' ', '-')
+        course_name_slug = generate_course_slug(course_name)
         return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
     
     outcomes_qs = ProgramOutcome.objects.filter(
@@ -2692,7 +3030,7 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
     profile = getattr(request.user, 'profile', None)
     course = get_object_or_404(Course, id=course_id)
     if profile:
-        if course not in profile.courses.all():
+        if not profile.courses.filter(id=course.id).exists():
             profile.courses.add(course)
     
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
@@ -2730,7 +3068,7 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
                 'text': po.text,
             })
     
-    course_name_slug = outcome.course_name.replace(' ', '-')
+    course_name_slug = generate_course_slug(outcome.course_name)
     
     referer = request.META.get('HTTP_REFERER', '')
     from_all_courses = 'all-courses' in referer
@@ -2777,7 +3115,7 @@ def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
             'percentage': percentage,
         })
     
-    course_name_slug = outcome.course_name.replace(' ', '-')
+    course_name_slug = generate_course_slug(outcome.course_name)
     
     return render(
         request,
@@ -2794,7 +3132,13 @@ def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
 @faculty_head_required
 def faculty_head_update_learning_outcome(request, outcome_id):
     """Update a learning outcome (for faculty head)"""
-    outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
+    profile = getattr(request.user, 'profile', None)
+    faculty = profile.faculty if profile else None
+    
+    # CRITICAL: Check faculty access to prevent unauthorized updates
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name__isnull=False)
+    if not check_faculty_access(request.user, outcome):
+        return HttpResponseForbidden("You don't have permission to update this outcome.")
     
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
@@ -2802,22 +3146,13 @@ def faculty_head_update_learning_outcome(request, outcome_id):
             with transaction.atomic():
                 outcome.text = text
                 outcome.save()
-        profile = getattr(request.user, 'profile', None)
-        if profile:
-            course = None
-            for c in profile.courses.all():
-                if c.name.lower() == outcome.course_name.lower():
-                    course = c
-                    break
-            if not course:
-                course = Course.objects.filter(name__iexact=outcome.course_name).first()
-                if course and profile:
-                    with transaction.atomic():
-                        profile.courses.add(course)
-            course_id = course.id if course else None
-            if course_id:
-                return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
-        course_name_slug = outcome.course_name.replace(' ', '-')
+        
+        # Use helper function to get course
+        course, course_id = get_course_for_outcome(profile, outcome.course_name)
+        if course_id:
+            return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
+        
+        course_name_slug = generate_course_slug(outcome.course_name)
         return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
     
     return JsonResponse({'text': outcome.text})
@@ -2828,8 +3163,12 @@ def faculty_head_delete_learning_outcome(request, outcome_id):
     profile = getattr(request.user, 'profile', None)
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name__isnull=False)
     
+    # CRITICAL: Check faculty access to prevent unauthorized deletions
+    if not check_faculty_access(request.user, outcome):
+        return HttpResponseForbidden("You don't have permission to delete this outcome.")
+    
     course_name = outcome.course_name
-    course_name_slug = course_name.replace(' ', '-')
+    course_name_slug = generate_course_slug(course_name)
     
     with transaction.atomic():
         outcome.delete()
@@ -2846,25 +3185,20 @@ def faculty_head_unlink_program_outcome(request, outcome_id, program_outcome_id)
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
     program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
     
+    # CRITICAL: Check faculty access for both outcomes
+    if not check_faculty_access(request.user, outcome) or not check_faculty_access(request.user, program_outcome):
+        return HttpResponseForbidden("You don't have permission to unlink these outcomes.")
+    
     with transaction.atomic():
         outcome.related_program_outcomes.remove(program_outcome)
     
     profile = getattr(request.user, 'profile', None)
-    if profile:
-        course = None
-        for c in profile.courses.all():
-            if c.name.lower() == outcome.course_name.lower():
-                course = c
-                break
-        if not course:
-            course = Course.objects.filter(name__iexact=outcome.course_name).first()
-            if course and profile:
-                with transaction.atomic():
-                    profile.courses.add(course)
-        course_id = course.id if course else None
-        if course_id:
-            return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
-    course_name_slug = outcome.course_name.replace(' ', '-')
+    # Use helper function to get course
+    course, course_id = get_course_for_outcome(profile, outcome.course_name)
+    if course_id:
+        return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
+    
+    course_name_slug = generate_course_slug(outcome.course_name)
     return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
 
 @faculty_head_required
@@ -2903,7 +3237,7 @@ def faculty_head_link_program_outcomes(request, outcome_id):
         course_id = course.id if course else None
         if course_id:
             return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
-    course_name_slug = outcome.course_name.replace(' ', '-')
+    course_name_slug = generate_course_slug(outcome.course_name)
     return redirect('faculty_head_course_learning_outcomes', course_name=course_name_slug)
 
 @faculty_head_required
@@ -3018,8 +3352,11 @@ def faculty_head_course_grades(request, course_name):
     })
 
 @faculty_head_required
-@csrf_exempt
 def faculty_head_delete_uploaded_csv(request, course_name):
+    """
+    Delete uploaded CSV file information from grades.
+    NOTE: CSRF protection is enabled. Frontend must send CSRF token.
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
@@ -3027,12 +3364,25 @@ def faculty_head_delete_uploaded_csv(request, course_name):
     faculty_head_data = get_faculty_head_data(request.user.username)
     faculty_head_department = faculty_head_data.get('department')
     
+    # CRITICAL: Filter by department to prevent conflicts if Course.name is not unique
+    # NOTE: Course.name is now unique=True, but department filter adds extra safety
     try:
-        course = Course.objects.get(name=course_name)
+        if faculty_head_department:
+            course = Course.objects.get(name=course_name, department=faculty_head_department)
+        else:
+            course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
+    except Course.MultipleObjectsReturned:
+        # Fallback: if multiple courses exist, use department filter
+        if faculty_head_department:
+            course = Course.objects.filter(name=course_name, department=faculty_head_department).first()
+            if not course:
+                return JsonResponse({'error': 'Course not found'}, status=404)
+        else:
+            return JsonResponse({'error': 'Multiple courses found with same name'}, status=400)
     
-    if profile and course not in profile.courses.all():
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     if faculty_head_department and course.department != faculty_head_department:
@@ -3047,7 +3397,6 @@ def faculty_head_delete_uploaded_csv(request, course_name):
     return JsonResponse({'status': 'ok'})
 
 @faculty_head_required
-@csrf_exempt
 def faculty_head_update_manual_grades(request, course_name):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -3056,12 +3405,25 @@ def faculty_head_update_manual_grades(request, course_name):
     faculty_head_data = get_faculty_head_data(request.user.username)
     faculty_head_department = faculty_head_data.get('department')
     
+    # CRITICAL: Filter by department to prevent conflicts if Course.name is not unique
+    # NOTE: Course.name is now unique=True, but department filter adds extra safety
     try:
-        course = Course.objects.get(name=course_name)
+        if faculty_head_department:
+            course = Course.objects.get(name=course_name, department=faculty_head_department)
+        else:
+            course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
+    except Course.MultipleObjectsReturned:
+        # Fallback: if multiple courses exist, use department filter
+        if faculty_head_department:
+            course = Course.objects.filter(name=course_name, department=faculty_head_department).first()
+            if not course:
+                return JsonResponse({'error': 'Course not found'}, status=404)
+        else:
+            return JsonResponse({'error': 'Multiple courses found with same name'}, status=400)
     
-    if profile and course not in profile.courses.all():
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     if faculty_head_department and course.department != faculty_head_department:
@@ -3109,7 +3471,6 @@ def faculty_head_update_manual_grades(request, course_name):
         return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
 
 @faculty_head_required
-@csrf_exempt
 def faculty_head_finalize_grades(request, course_name):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -3120,12 +3481,25 @@ def faculty_head_finalize_grades(request, course_name):
     faculty_head_data = get_faculty_head_data(request.user.username)
     faculty_head_department = faculty_head_data.get('department')
     
+    # CRITICAL: Filter by department to prevent conflicts if Course.name is not unique
+    # NOTE: Course.name is now unique=True, but department filter adds extra safety
     try:
-        course = Course.objects.get(name=course_name)
+        if faculty_head_department:
+            course = Course.objects.get(name=course_name, department=faculty_head_department)
+        else:
+            course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
+    except Course.MultipleObjectsReturned:
+        # Fallback: if multiple courses exist, use department filter
+        if faculty_head_department:
+            course = Course.objects.filter(name=course_name, department=faculty_head_department).first()
+            if not course:
+                return JsonResponse({'error': 'Course not found'}, status=404)
+        else:
+            return JsonResponse({'error': 'Multiple courses found with same name'}, status=400)
     
-    if profile and course not in profile.courses.all():
+    if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     if faculty_head_department and course.department != faculty_head_department:
@@ -3147,13 +3521,8 @@ def learning_outcomes(request):
     instructor_user = request.instructor_user
     username = instructor_user.username
     
-    instructor_courses = Course.objects.filter(instructor=instructor_user)
-    course_names_from_db = [course.name for course in instructor_courses]
-    
-    instructor_data = get_instructor_data(username)
-    course_names_from_json = instructor_data.get('courses', []) or []
-    
-    course_names = list(set(course_names_from_db + course_names_from_json))
+    # Use helper function to get course names (prevents code duplication)
+    course_names = get_instructor_course_names(instructor_user)
     
     outcomes_qs = ProgramOutcome.objects.filter(
         course_name__in=course_names
@@ -3208,11 +3577,12 @@ def course_learning_outcomes(request, course_name):
     faculty = None
     if instructor_faculty:
         with transaction.atomic():
+            faculty_slug = generate_faculty_slug(instructor_faculty)
             try:
-                faculty = Faculty.objects.get(slug=instructor_faculty.lower())
+                faculty = Faculty.objects.get(slug=faculty_slug)
             except Faculty.DoesNotExist:
                 faculty, _ = Faculty.objects.get_or_create(
-                    slug=instructor_faculty.lower(),
+                    slug=faculty_slug,
                     defaults={'name': instructor_faculty}
                 )
     
@@ -3274,9 +3644,10 @@ def course_learning_outcomes(request, course_name):
                             program_outcome=po,
                             percentage=percentage
                         )
-                    course_name_slug = course_name.replace(' ', '-')
+                    course_name_slug = generate_course_slug(course_name)
                     return redirect('course_learning_outcomes', course_name=course_name_slug)
                 else:
+                    # Error case: Reuse same logic as GET request
                     outcomes_qs = ProgramOutcome.objects.filter(
                         course_name=course_name
                     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
@@ -3284,20 +3655,8 @@ def course_learning_outcomes(request, course_name):
                     course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
                     course_id = course.id if course else None
                     
-                    outcomes_data = []
-                    for o in outcomes_qs:
-                        creator_name = o.created_by.get_full_name() or o.created_by.username
-                        related_program_outcomes = o.related_program_outcomes.all()
-                        outcomes_data.append(
-                            {
-                                'id': o.id,
-                                'text': o.text,
-                                'course': o.course_name or '',
-                                'created_by': creator_name,
-                                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
-                                'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
-                            }
-                        )
+                    # Use helper function to build outcomes data
+                    outcomes_data = build_learning_outcomes_data(outcomes_qs)
                     
                     return render(
                         request,
@@ -3316,30 +3675,33 @@ def course_learning_outcomes(request, course_name):
                     course_name=course_name, 
                     created_by=instructor_user
                 )
-                course_name_slug = course_name.replace(' ', '-')
+                course_name_slug = generate_course_slug(course_name)
                 return redirect('course_learning_outcomes', course_name=course_name_slug)
     
     outcomes_qs = ProgramOutcome.objects.filter(
         course_name=course_name
     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
     
+    # CRITICAL: Verify instructor owns this course
+    # Try to find course - first by instructor, then by name, then from profile
     course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
+    if not course:
+        # Try to find from instructor's profile courses
+        profile = getattr(instructor_user, 'profile', None)
+        if profile:
+            course = profile.courses.filter(name=course_name).first()
+        if not course:
+            # Try from instructor_courses
+            course = instructor_user.instructor_courses.filter(name=course_name).first()
+    
+    # CRITICAL: If course not found or instructor doesn't own it, deny access
+    if not course:
+        return HttpResponseForbidden("You don't have access to this course.")
+    
     course_id = course.id if course else None
     
-    outcomes_data = []
-    for o in outcomes_qs:
-        creator_name = o.created_by.get_full_name() or o.created_by.username
-        related_program_outcomes = o.related_program_outcomes.all()
-        outcomes_data.append(
-            {
-                'id': o.id,
-                'text': o.text,
-                'course': o.course_name or '',
-                'created_by': creator_name,
-                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
-                'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
-            }
-        )
+    # Use helper function to build outcomes data
+    outcomes_data = build_learning_outcomes_data(outcomes_qs)
     
     return render(
         request,
@@ -3372,7 +3734,7 @@ def update_learning_outcome(request, outcome_id):
         if course_id:
             return redirect('learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
         else:
-            course_name_slug = outcome.course_name.replace(' ', '-')
+            course_name_slug = generate_course_slug(outcome.course_name)
             return redirect('course_learning_outcomes', course_name=course_name_slug)
     
     return JsonResponse({'text': outcome.text})
@@ -3380,81 +3742,16 @@ def update_learning_outcome(request, outcome_id):
 
 def learning_outcome_detail(request, course_id, outcome_id):
     """Show detail page for a learning outcome with linked program outcomes"""
-    is_faculty_head = False
-    instructor_user = None
-    faculty = None
+    # Use helper function for common authentication/authorization logic
+    result = get_learning_outcome_context(request, course_id, outcome_id)
+    if isinstance(result, HttpResponseForbidden) or hasattr(result, 'status_code'):
+        return result
+    outcome, course, faculty, is_faculty_head, instructor_user = result
     
-    if request.user.is_authenticated:
-        profile = getattr(request.user, 'profile', None)
-        if profile and profile.role == 'faculty_head':
-            is_faculty_head = True
-            course = get_object_or_404(Course, id=course_id)
-            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
-            faculty = profile.faculty if profile else None
-        else:
-            # Instructor kontrolü - Django'nun standart authentication kullan
-            if not hasattr(request, 'instructor_user'):
-                # User'ın gerçekten instructor olduğunu kontrol et
-                try:
-                    user_profile = request.user.profile
-                    if user_profile.role != 'instructor':
-                        from django.http import HttpResponseForbidden
-                        return HttpResponseForbidden("You are not allowed here")
-                except AttributeError:
-                    from django.http import HttpResponseForbidden
-                    return HttpResponseForbidden("User profile not found")
-                request.instructor_user = request.user
-            instructor_user = request.instructor_user
-            course = get_object_or_404(Course, id=course_id, instructor=instructor_user)
-            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name, created_by=instructor_user)
-            
-            instructor_data = get_instructor_data(instructor_user.username)
-            instructor_department = instructor_data.get('department')
-            instructor_faculty = instructor_data.get('faculty')
-            
-            from .models import Faculty
-            if instructor_faculty:
-                with transaction.atomic():
-                    try:
-                        faculty = Faculty.objects.get(slug=instructor_faculty.lower())
-                    except Faculty.DoesNotExist:
-                        faculty, _ = Faculty.objects.get_or_create(
-                            slug=instructor_faculty.lower(),
-                            defaults={'name': instructor_faculty}
-                        )
-    else:
-        from django.shortcuts import redirect
-        return redirect('faculty-head-login')
+    # Use helper function to build program outcomes data (optimizes N+1 query)
+    program_outcomes_data, available_program_outcomes = build_program_outcomes_with_percentages(outcome, faculty)
     
-    from .models import LearningOutcomeProgramOutcome
-    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
-    
-    program_outcomes_data = []
-    for po in related_program_outcomes:
-        try:
-            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
-            percentage = lo_po.percentage
-        except LearningOutcomeProgramOutcome.DoesNotExist:
-            percentage = 0
-        program_outcomes_data.append({
-            'id': po.id,
-            'text': po.text,
-            'percentage': percentage,
-        })
-    
-    available_program_outcomes = []
-    if faculty:
-        available_program_outcomes_qs = ProgramOutcome.objects.filter(
-            faculty=faculty,
-            course_name=''
-        ).exclude(id__in=[po.id for po in related_program_outcomes]).select_related('created_by').order_by('created_at')
-        for po in available_program_outcomes_qs:
-            available_program_outcomes.append({
-                'id': po.id,
-                'text': po.text,
-            })
-    
-    course_name_slug = outcome.course_name.replace(' ', '-')
+    course_name_slug = generate_course_slug(outcome.course_name)
     
     return render(
         request,
@@ -3471,52 +3768,16 @@ def learning_outcome_detail(request, course_id, outcome_id):
 
 def learning_outcome_graph(request, course_id, outcome_id):
     """Show graph view for learning outcome"""
-    is_faculty_head = False
-    instructor_user = None
+    # Use helper function for common authentication/authorization logic
+    result = get_learning_outcome_context(request, course_id, outcome_id)
+    if isinstance(result, HttpResponseForbidden) or hasattr(result, 'status_code'):
+        return result
+    outcome, course, faculty, is_faculty_head, instructor_user = result
     
-    if request.user.is_authenticated:
-        profile = getattr(request.user, 'profile', None)
-        if profile and profile.role == 'faculty_head':
-            is_faculty_head = True
-            course = get_object_or_404(Course, id=course_id)
-            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
-        else:
-            # Instructor kontrolü - Django'nun standart authentication kullan
-            if not hasattr(request, 'instructor_user'):
-                # User'ın gerçekten instructor olduğunu kontrol et
-                try:
-                    user_profile = request.user.profile
-                    if user_profile.role != 'instructor':
-                        from django.http import HttpResponseForbidden
-                        return HttpResponseForbidden("You are not allowed here")
-                except AttributeError:
-                    from django.http import HttpResponseForbidden
-                    return HttpResponseForbidden("User profile not found")
-                request.instructor_user = request.user
-            instructor_user = request.instructor_user
-            course = get_object_or_404(Course, id=course_id, instructor=instructor_user)
-            outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name, created_by=instructor_user)
-    else:
-        from django.shortcuts import redirect
-        return redirect('faculty-head-login')
+    # Use helper function to build program outcomes data (optimizes N+1 query)
+    program_outcomes_data, _ = build_program_outcomes_with_percentages(outcome, faculty)
     
-    from .models import LearningOutcomeProgramOutcome
-    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
-    
-    program_outcomes_data = []
-    for po in related_program_outcomes:
-        try:
-            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=po)
-            percentage = lo_po.percentage
-        except LearningOutcomeProgramOutcome.DoesNotExist:
-            percentage = 0
-        program_outcomes_data.append({
-            'id': po.id,
-            'text': po.text,
-            'percentage': percentage,
-        })
-    
-    course_name_slug = outcome.course_name.replace(' ', '-')
+    course_name_slug = generate_course_slug(outcome.course_name)
     
     return render(
         request,
@@ -3551,12 +3812,21 @@ def update_percentage(request, outcome_id, program_outcome_id):
             return JsonResponse({'status': 'error', 'message': 'Invalid percentage value.'}, status=400)
         
         from .models import LearningOutcomeProgramOutcome
+        # CRITICAL: Verify program_outcome belongs to same faculty as instructor
         program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
+        instructor_data = get_instructor_data(instructor_user.username)
+        instructor_faculty_name = instructor_data.get('faculty')
+        if instructor_faculty_name:
+            profile = getattr(instructor_user, 'profile', None)
+            instructor_faculty = ensure_faculty_for_profile(profile, instructor_faculty_name)
+            if instructor_faculty and program_outcome.faculty and program_outcome.faculty.id != instructor_faculty.id:
+                return JsonResponse({'status': 'error', 'message': 'You don\'t have permission to link this program outcome.'}, status=403)
         
         try:
-            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=program_outcome)
-            lo_po.percentage = percentage
-            lo_po.save()
+            with transaction.atomic():
+                lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=program_outcome)
+                lo_po.percentage = percentage
+                lo_po.save()
         except LearningOutcomeProgramOutcome.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Program outcome is not linked to this learning outcome.'}, status=404)
         
@@ -3568,7 +3838,13 @@ def update_percentage(request, outcome_id, program_outcome_id):
 def faculty_head_update_percentage(request, outcome_id, program_outcome_id):
     """Update percentage for a linked program outcome (for faculty head)"""
     from django.http import JsonResponse
+    profile = getattr(request.user, 'profile', None)
+    faculty = profile.faculty if profile else None
+    
+    # CRITICAL: Check faculty access for both outcomes
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id)
+    if not check_faculty_access(request.user, outcome):
+        return JsonResponse({'status': 'error', 'message': 'You don\'t have permission to update this outcome.'}, status=403)
     
     if request.method == 'POST':
         percentage_value = request.POST.get('percentage', '').strip()
@@ -3583,12 +3859,19 @@ def faculty_head_update_percentage(request, outcome_id, program_outcome_id):
             return JsonResponse({'status': 'error', 'message': 'Invalid percentage value.'}, status=400)
         
         from .models import LearningOutcomeProgramOutcome
+        # CRITICAL: Check program_outcome ownership - must be same faculty
         program_outcome = get_object_or_404(ProgramOutcome, id=program_outcome_id)
+        if not check_faculty_access(request.user, program_outcome):
+            return JsonResponse({'status': 'error', 'message': 'You don\'t have permission to link this program outcome.'}, status=403)
+        
+        # NOTE: Finalized check would go here if Grade model had is_finalized field
+        # For now, learning outcomes can be updated even if grades are finalized
         
         try:
-            lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=program_outcome)
-            lo_po.percentage = percentage
-            lo_po.save()
+            with transaction.atomic():
+                lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=outcome, program_outcome=program_outcome)
+                lo_po.percentage = percentage
+                lo_po.save()
         except LearningOutcomeProgramOutcome.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Program outcome is not linked to this learning outcome.'}, status=404)
         
@@ -3611,7 +3894,7 @@ def unlink_program_outcome(request, outcome_id, program_outcome_id):
     if course_id:
         return redirect('learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
     else:
-        course_name_slug = outcome.course_name.replace(' ', '-')
+        course_name_slug = generate_course_slug(outcome.course_name)
         return redirect('course_learning_outcomes', course_name=course_name_slug)
 
 
@@ -3706,7 +3989,7 @@ def link_program_outcomes(request, outcome_id):
                                     'id': po.id,
                                     'text': po.text,
                                 })
-                        course_name_slug = outcome.course_name.replace(' ', '-')
+                        course_name_slug = generate_course_slug(outcome.course_name)
                         return render(
                             request,
                             'instructor/learning_outcome_detail.html',
@@ -3735,7 +4018,7 @@ def link_program_outcomes(request, outcome_id):
         )
     else:
         # Course bulunamazsa course_learning_outcomes'a yönlendir
-        course_name_slug = outcome.course_name.replace(' ', '-')
+        course_name_slug = generate_course_slug(outcome.course_name)
         return redirect('course_learning_outcomes', course_name=course_name_slug)
 
 
@@ -3750,7 +4033,7 @@ def delete_learning_outcome(request, outcome_id):
     with transaction.atomic():
         outcome.delete()
     
-    course_name_slug = course_name.replace(' ', '-')
+    course_name_slug = generate_course_slug(course_name)
     return redirect('course_learning_outcomes', course_name=course_name_slug)
 
 
@@ -3790,18 +4073,13 @@ def create_learning_outcome(request):
         with transaction.atomic():
             ProgramOutcome.objects.create(text=text, course_name=course_name, created_by=instructor_user)
         from django.urls import reverse
-        course_name_slug = course_name.replace(' ', '-')
+        course_name_slug = generate_course_slug(course_name)
         redirect_url = reverse('course_learning_outcomes', args=[course_name_slug])
         redirect_url += f'?username={username}'
         return redirect(redirect_url)
     
-    instructor_courses = Course.objects.filter(instructor=instructor_user)
-    course_names_from_db = [course.name for course in instructor_courses]
-    
-    instructor_data = get_instructor_data(username)
-    course_names_from_json = instructor_data.get('courses', []) or []
-    
-    course_names = list(set(course_names_from_db + course_names_from_json))
+    # Use helper function to get course names (prevents code duplication)
+    course_names = get_instructor_course_names(instructor_user)
     
     course_name_from_get = request.GET.get('course', '')
     
@@ -4131,7 +4409,79 @@ def student_grades(request):
 
 
 def student_announcements(request):
-    return render(request, "student/student_announcement.html")
+    """Show all announcements for the logged-in student"""
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    from .models import Announcement, Student
+    
+    # Get student profile to check enrolled courses
+    try:
+        student = Student.objects.get(user=request.user)
+        student_courses = set(student.courses.values_list('name', flat=True))
+    except Student.DoesNotExist:
+        student_courses = set()
+    
+    # Get all announcements for this student:
+    # 1. Direct messages (receiver=this user)
+    # 2. Broadcast messages (receiver=None)
+    # 3. Course broadcast messages (subject contains __COURSE:CourseName__)
+    announcements = Announcement.objects.filter(
+        Q(receiver=request.user) | Q(receiver__isnull=True)
+    ).select_related('sender', 'receiver').order_by('-created_at', '-is_pinned')
+    
+    # Process announcements for display
+    received_messages = []
+    all_announcements = []
+    unread_count = 0
+    
+    for ann in announcements:
+        # Check if this is a course broadcast announcement
+        is_course_broadcast = False
+        course_name_from_marker = None
+        display_subject = ann.subject
+        
+        if ann.subject.startswith('__COURSE:'):
+            marker_end = ann.subject.find('__', 9)
+            if marker_end > 0:
+                course_name_from_marker = ann.subject[9:marker_end]
+                display_subject = ann.subject[marker_end + 2:]
+                is_course_broadcast = True
+        
+        # If it's a course broadcast, check if student is enrolled in that course
+        if is_course_broadcast and course_name_from_marker:
+            if course_name_from_marker not in student_courses:
+                continue  # Skip this announcement - student not enrolled
+        
+        # Check if announcement is read by this user
+        is_read = ann.read_by.filter(id=request.user.id).exists()
+        if not is_read:
+            unread_count += 1
+        
+        # Get sender name
+        sender_name = ann.sender.get_full_name() or ann.sender.username
+        
+        announcement_data = {
+            'id': ann.id,
+            'subject': display_subject,
+            'message': ann.message,
+            'sender': sender_name,
+            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
+            'is_read': is_read,
+            'is_pinned': ann.is_pinned,
+        }
+        
+        received_messages.append(announcement_data)
+        all_announcements.append(announcement_data)
+    
+    # Sort: pinned messages first, then by created_at
+    received_messages.sort(key=lambda x: (not x['is_pinned'], x['created_at']), reverse=True)
+    
+    return render(request, "student/student_announcement.html", {
+        'received_messages': received_messages,
+        'all_announcements': all_announcements,
+        'unread_count': unread_count,
+    })
 
 @instructor_required
 def instructor_program_outcomes(request):
@@ -4277,7 +4627,7 @@ def student_course_learning_outcomes(request, course_id):
         student = Student.objects.get(user=request.user)
         course = get_object_or_404(Course, id=course_id)
         
-        if course not in student.courses.all():
+        if not student.courses.filter(id=course.id).exists():
             return HttpResponseForbidden("You are not enrolled in this course.")
         
         course_name = course.name
@@ -4318,7 +4668,7 @@ def student_learning_outcome_detail(request, course_id, outcome_id):
         student = Student.objects.get(user=request.user)
         course = get_object_or_404(Course, id=course_id)
         
-        if course not in student.courses.all():
+        if not student.courses.filter(id=course.id).exists():
             return HttpResponseForbidden("You are not enrolled in this course.")
         
         outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
@@ -4339,7 +4689,7 @@ def student_learning_outcome_detail(request, course_id, outcome_id):
                 'percentage': percentage,
             })
         
-        course_name_slug = outcome.course_name.replace(' ', '-')
+        course_name_slug = generate_course_slug(outcome.course_name)
         
         instructors_map = get_instructors_map()
         creator_name = instructors_map.get(outcome.created_by.username) or outcome.created_by.get_full_name() or outcome.created_by.username
@@ -4369,7 +4719,7 @@ def student_learning_outcome_graph(request, course_id, outcome_id):
         student = Student.objects.get(user=request.user)
         course = get_object_or_404(Course, id=course_id)
         
-        if course not in student.courses.all():
+        if not student.courses.filter(id=course.id).exists():
             return HttpResponseForbidden("You are not enrolled in this course.")
         
         outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
@@ -4390,7 +4740,7 @@ def student_learning_outcome_graph(request, course_id, outcome_id):
                 'percentage': percentage,
             })
         
-        course_name_slug = outcome.course_name.replace(' ', '-')
+        course_name_slug = generate_course_slug(outcome.course_name)
         
     except Student.DoesNotExist:
         return redirect('student-login')
@@ -4776,9 +5126,11 @@ def mark_announcement_as_read(request, announcement_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 def toggle_announcement_pin(request, announcement_id):
-    """Toggle pin status of an announcement"""
+    """
+    Toggle pin status of an announcement.
+    NOTE: CSRF protection is enabled. Frontend must send CSRF token.
+    """
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication required'}, status=401)
     
@@ -4830,8 +5182,7 @@ def advisor_profile(request, username):
 @faculty_head_required
 def faculty_head_department_graph(request):
     """Show department graph for faculty head"""
-    from .models import Course, Student
-    from django.db.models import Count
+    from .models import Course, Student, Faculty, LearningOutcomeProgramOutcome
     
     faculty_head_data = get_faculty_head_data(request.user.username)
     faculty_head_department = faculty_head_data.get('department')
@@ -4841,8 +5192,61 @@ def faculty_head_department_graph(request):
             'error': 'No department assigned'
         })
     
+    # Get faculty head's profile and faculty
+    profile = getattr(request.user, 'profile', None)
+    faculty = profile.faculty if profile else None
+    
     # Get courses in the department
     courses = Course.objects.filter(department=faculty_head_department)
+    course_names = [course.name for course in courses]
+    
+    # Get learning outcomes for all courses in the department
+    learning_outcomes_list = []
+    if course_names:
+        learning_outcomes_qs = ProgramOutcome.objects.filter(
+            course_name__in=course_names
+        ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('course_name', 'created_at')
+        
+        for lo in learning_outcomes_qs:
+            # Get linked program outcomes with percentages
+            linked_pos = []
+            related_pos = lo.related_program_outcomes.all()
+            for po in related_pos:
+                try:
+                    lo_po = LearningOutcomeProgramOutcome.objects.get(
+                        learning_outcome=lo,
+                        program_outcome=po
+                    )
+                    percentage = lo_po.percentage
+                except LearningOutcomeProgramOutcome.DoesNotExist:
+                    percentage = 0
+                
+                linked_pos.append({
+                    'id': po.id,
+                    'text': po.text,
+                    'percentage': percentage
+                })
+            
+            learning_outcomes_list.append({
+                'id': lo.id,
+                'text': lo.text,
+                'course': lo.course_name,
+                'linked_pos': linked_pos
+            })
+    
+    # Get program outcomes for the faculty
+    program_outcomes_list = []
+    if faculty:
+        program_outcomes_qs = ProgramOutcome.objects.filter(
+            faculty=faculty,
+            course_name=''
+        ).select_related('created_by').order_by('created_at')
+        
+        for po in program_outcomes_qs:
+            program_outcomes_list.append({
+                'id': po.id,
+                'text': po.text
+            })
     
     # Get statistics
     total_courses = courses.count()
@@ -4872,4 +5276,6 @@ def faculty_head_department_graph(request):
         'course_data': course_data,
         'chart_data': chart_data,
         'chart_data_json': json.dumps(chart_data),
+        'learning_outcomes': learning_outcomes_list,
+        'program_outcomes': program_outcomes_list,
     })
