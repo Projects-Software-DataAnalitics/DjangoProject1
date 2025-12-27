@@ -1,9 +1,34 @@
-{% extends "instructor_base.html" %}
-{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Learning Outcome</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script>
+        (function() {
+            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
+            if (!instructorData) {
+                window.location.href = "/";
+                return;
+            }
+            
+        })();
+    </script>
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li><a href="{% url 'instructor' %}">Main Page</a></li>
+        <li id="my-courses-btn">My Courses</li>
+        <li id="grades-btn">Grades</li>
+        <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
+        <li id="announcements-btn">Announcements</li>
+    </ul>
+</div>
 
-{% block title %}Create Learning Outcome{% endblock %}
-
-{% block content %}
+<div class="content" id="content">
+    <button class="menu-btn" id="menu-btn">☰</button>
     <div style="max-width: 640px; margin: 0 auto;">
         <h1 style="margin-bottom: 8px;">Create Learning Outcome</h1>
         <p style="margin-top: 0; margin-bottom: 24px; color: #475569;">
@@ -44,7 +69,7 @@
                 <button type="submit" class="primary-btn" style="max-width: 180px;">
                     Save Outcome
                 </button>
-                <a href="{% url 'instructor' %}" id="cancel-link" class="back-btn" style="align-self: center;">
+                <a href="{% url 'learning_outcomes' %}" id="cancel-link" class="back-btn" style="align-self: center;">
                     Cancel
                 </a>
             </div>
@@ -93,5 +118,7 @@
         });
     })();
 </script>
-{% endblock %}
+</div>
+</body>
+</html>
 
