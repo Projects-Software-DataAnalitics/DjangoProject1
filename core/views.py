@@ -538,12 +538,17 @@ def instructor_profile(request):
 @instructor_required
 @instructor_required
 def instructor_my_courses(request):
+    from .models import Assignment
+    from django.utils import timezone
+    
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
     
     courses_data = []
+    all_assignments = []
+    
     if profile:
-        courses = profile.courses.all().select_related('instructor').prefetch_related('students')
+        courses = profile.courses.all().select_related('instructor').prefetch_related('students', 'assignments')
         for course in courses:
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
             
@@ -561,6 +566,42 @@ def instructor_my_courses(request):
                     'year': student.year or '-',
                 })
             
+            # Get assignments for this course
+            from .models import AssignmentSubmission
+            assignments = course.assignments.all().order_by('-created_at')
+            assignments_list = []
+            for assignment in assignments:
+                # Get submissions for this assignment
+                submissions = AssignmentSubmission.objects.filter(assignment=assignment).select_related('student')
+                submissions_list = []
+                for submission in submissions:
+                    student_name = f"{submission.student.first_name} {submission.student.last_name}".strip() or submission.student.username
+                    submissions_list.append({
+                        'id': submission.id,
+                        'student_name': student_name,
+                        'student_id': submission.student.student_id,
+                        'file_url': submission.file.url if submission.file else None,
+                        'file_name': submission.file.name.split('/')[-1] if submission.file else None,
+                        'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M'),
+                    })
+                
+                assignment_data = {
+                    'id': assignment.id,
+                    'course_name': course.name,
+                    'title': assignment.title,
+                    'details': assignment.details,
+                    'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                    'deadline_datetime': assignment.deadline.isoformat(),
+                    'deadline_date': assignment.deadline.strftime('%Y-%m-%d'),
+                    'deadline_time': assignment.deadline.strftime('%H:%M'),
+                    'file_url': assignment.file.url if assignment.file else None,
+                    'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+                    'created_by_id': assignment.created_by.id,
+                    'submissions': json.dumps(submissions_list),
+                }
+                assignments_list.append(assignment_data)
+                all_assignments.append(assignment_data)
+            
             courses_data.append({
                 'id': course.id,
                 'name': course.name,
@@ -570,6 +611,7 @@ def instructor_my_courses(request):
                 'credits': course.credits,
                 'students': students_list,
                 'students_json': json.dumps(students_list),
+                'assignments': assignments_list,
             })
     
     # Prepare JSON data for template
@@ -583,7 +625,211 @@ def instructor_my_courses(request):
         'show_welcome': False,
         'page': 'my_courses',
         'courses': courses_data,
-        'courses_json': courses_json
+        'courses_json': courses_json,
+        'all_assignments': all_assignments
+    })
+
+@instructor_required
+def add_assignment(request):
+    from .models import Assignment
+    from django.utils import timezone
+    from datetime import datetime
+    
+    if request.method == 'POST':
+        course_id = request.POST.get('course_id')
+        title = request.POST.get('title', '').strip()
+        details = request.POST.get('details', '').strip()
+        deadline_date = request.POST.get('deadline_date', '').strip()
+        deadline_time = request.POST.get('deadline_time', '').strip()
+        file = request.FILES.get('file')
+        
+        if not course_id or not title or not details or not deadline_date or not deadline_time:
+            return JsonResponse({'error': 'All fields are required'}, status=400)
+        
+        try:
+            course = Course.objects.get(id=course_id)
+            
+            # Check if instructor has access to this course
+            instructor_user = request.instructor_user
+            profile = getattr(instructor_user, 'profile', None)
+            if profile and course not in profile.courses.all():
+                return JsonResponse({'error': 'You do not have access to this course'}, status=403)
+            
+            # Parse deadline
+            try:
+                deadline_str = f"{deadline_date} {deadline_time}"
+                deadline = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M')
+                deadline = timezone.make_aware(deadline)
+            except ValueError:
+                return JsonResponse({'error': 'Invalid deadline format'}, status=400)
+            
+            # Validate file type if provided
+            if file:
+                if not file.name.lower().endswith('.pdf'):
+                    return JsonResponse({'error': 'Only PDF files are allowed'}, status=400)
+            
+            # Create assignment
+            assignment = Assignment.objects.create(
+                course=course,
+                title=title,
+                details=details,
+                deadline=deadline,
+                file=file,
+                created_by=instructor_user
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'assignment': {
+                    'id': assignment.id,
+                    'title': assignment.title,
+                    'details': assignment.details,
+                    'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                    'file_url': assignment.file.url if assignment.file else None,
+                    'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+                }
+            })
+        except Course.DoesNotExist:
+            return JsonResponse({'error': 'Course not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+@faculty_head_required
+@csrf_exempt
+def faculty_head_add_assignment(request):
+    from .models import Assignment
+    from django.utils import timezone
+    from datetime import datetime
+    
+    if request.method == 'POST':
+        course_id = request.POST.get('course_id')
+        title = request.POST.get('title', '').strip()
+        details = request.POST.get('details', '').strip()
+        deadline_date = request.POST.get('deadline_date', '').strip()
+        deadline_time = request.POST.get('deadline_time', '').strip()
+        file = request.FILES.get('file')
+        
+        if not course_id or not title or not details or not deadline_date or not deadline_time:
+            return JsonResponse({'error': 'All fields are required'}, status=400)
+        
+        try:
+            course = Course.objects.get(id=course_id)
+            
+            # Check if faculty head has access to this course
+            profile = getattr(request.user, 'profile', None)
+            if profile and course not in profile.courses.all():
+                return JsonResponse({'error': 'You do not have access to this course'}, status=403)
+            
+            # Parse deadline
+            try:
+                deadline_str = f"{deadline_date} {deadline_time}"
+                deadline = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M')
+                deadline = timezone.make_aware(deadline)
+            except ValueError:
+                return JsonResponse({'error': 'Invalid deadline format'}, status=400)
+            
+            # Validate file type if provided
+            if file:
+                if not file.name.lower().endswith('.pdf'):
+                    return JsonResponse({'error': 'Only PDF files are allowed'}, status=400)
+            
+            # Create assignment
+            assignment = Assignment.objects.create(
+                course=course,
+                title=title,
+                details=details,
+                deadline=deadline,
+                file=file,
+                created_by=request.user
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'assignment': {
+                    'id': assignment.id,
+                    'title': assignment.title,
+                    'details': assignment.details,
+                    'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                    'file_url': assignment.file.url if assignment.file else None,
+                    'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+                }
+            })
+        except Course.DoesNotExist:
+            return JsonResponse({'error': 'Course not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+@faculty_head_required
+@csrf_exempt
+def faculty_head_update_assignment(request, assignment_id):
+    from .models import Assignment
+    from django.utils import timezone
+    from datetime import datetime
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    try:
+        assignment = Assignment.objects.get(id=assignment_id)
+    except Assignment.DoesNotExist:
+        return JsonResponse({'error': 'Assignment not found'}, status=404)
+    
+    # Check if faculty head has access to this course
+    profile = getattr(request.user, 'profile', None)
+    if profile and assignment.course not in profile.courses.all():
+        return JsonResponse({'error': 'You do not have access to this course'}, status=403)
+    
+    # Check if faculty head created this assignment
+    if assignment.created_by != request.user:
+        return JsonResponse({'error': 'You can only edit your own assignments'}, status=403)
+    
+    title = request.POST.get('title', '').strip()
+    details = request.POST.get('details', '').strip()
+    deadline_date = request.POST.get('deadline_date', '').strip()
+    deadline_time = request.POST.get('deadline_time', '').strip()
+    file = request.FILES.get('file')
+    
+    if not title or not details or not deadline_date or not deadline_time:
+        return JsonResponse({'error': 'Title, details, and deadline are required'}, status=400)
+    
+    # Parse deadline
+    try:
+        deadline_str = f"{deadline_date} {deadline_time}"
+        deadline = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M')
+        deadline = timezone.make_aware(deadline)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid deadline format'}, status=400)
+    
+    # Validate file type if provided
+    if file:
+        if not file.name.lower().endswith('.pdf'):
+            return JsonResponse({'error': 'Only PDF files are allowed'}, status=400)
+        # Delete old file if exists
+        if assignment.file:
+            assignment.file.delete()
+        assignment.file = file
+    
+    # Update assignment
+    assignment.title = title
+    assignment.details = details
+    assignment.deadline = deadline
+    assignment.save()
+    
+    return JsonResponse({
+        'success': True,
+        'message': 'Assignment updated successfully',
+        'assignment': {
+            'id': assignment.id,
+            'title': assignment.title,
+            'details': assignment.details,
+            'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+            'file_url': assignment.file.url if assignment.file else None,
+            'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+        }
     })
 
 @instructor_required
@@ -1969,6 +2215,8 @@ def all_courses(request):
 
 @faculty_head_required
 def my_courses(request):
+    from .models import Assignment, AssignmentSubmission
+    
     profile = getattr(request.user, 'profile', None)
     
     # Get faculty head's department
@@ -1976,8 +2224,10 @@ def my_courses(request):
     faculty_head_department = faculty_head_data.get('department')
     
     courses_data = []
+    all_assignments = []
+    
     if profile:
-        courses = profile.courses.all().select_related('instructor')
+        courses = profile.courses.all().select_related('instructor').prefetch_related('assignments')
         for course in courses:
             # Filter by department - only show courses from faculty head's department
             if faculty_head_department and course.department != faculty_head_department:
@@ -1989,6 +2239,41 @@ def my_courses(request):
             learning_outcomes = ProgramOutcome.objects.filter(course_name=course.name).order_by('-created_at')
             first_learning_outcome = learning_outcomes.first()
             
+            # Get assignments for this course
+            assignments = course.assignments.all().order_by('-created_at')
+            assignments_list = []
+            for assignment in assignments:
+                # Get submissions for this assignment
+                submissions = AssignmentSubmission.objects.filter(assignment=assignment).select_related('student')
+                submissions_list = []
+                for submission in submissions:
+                    student_name = f"{submission.student.first_name} {submission.student.last_name}".strip() or submission.student.username
+                    submissions_list.append({
+                        'id': submission.id,
+                        'student_name': student_name,
+                        'student_id': submission.student.student_id,
+                        'file_url': submission.file.url if submission.file else None,
+                        'file_name': submission.file.name.split('/')[-1] if submission.file else None,
+                        'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M'),
+                    })
+                
+                assignment_data = {
+                    'id': assignment.id,
+                    'course_name': course.name,
+                    'title': assignment.title,
+                    'details': assignment.details,
+                    'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                    'deadline_datetime': assignment.deadline.isoformat(),
+                    'deadline_date': assignment.deadline.strftime('%Y-%m-%d'),
+                    'deadline_time': assignment.deadline.strftime('%H:%M'),
+                    'file_url': assignment.file.url if assignment.file else None,
+                    'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+                    'created_by_id': assignment.created_by.id,
+                    'submissions': json.dumps(submissions_list),
+                }
+                assignments_list.append(assignment_data)
+                all_assignments.append(assignment_data)
+            
             courses_data.append({
                 'id': course.id,
                 'name': course.name,
@@ -1997,10 +2282,12 @@ def my_courses(request):
                 'department': course.department,
                 'credits': course.credits,
                 'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
+                'assignments': assignments_list,
             })
     
     context = {
         'courses': courses_data,
+        'all_assignments': all_assignments,
     }
     return render(request, 'faculty/my_courses.html', context)
 
@@ -3558,16 +3845,45 @@ def student_profile(request):
 
 
 def student_courses(request):
+    from .models import Assignment, AssignmentSubmission
+    
     if not request.user.is_authenticated:
         return redirect('student-login')
     
     try:
         student = Student.objects.get(user=request.user)
-        courses = student.courses.all().select_related('instructor')
+        courses = student.courses.all().select_related('instructor').prefetch_related('assignments')
         
         courses_data = []
+        all_assignments = []
+        
         for course in courses:
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+            
+            # Get assignments for this course
+            assignments = course.assignments.all().order_by('-created_at')
+            assignments_list = []
+            for assignment in assignments:
+                # Check if student has submitted this assignment
+                submission = AssignmentSubmission.objects.filter(assignment=assignment, student=student).first()
+                
+                assignment_data = {
+                    'id': assignment.id,
+                    'course_name': course.name,
+                    'title': assignment.title,
+                    'details': assignment.details,
+                    'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                    'deadline_datetime': assignment.deadline.isoformat(),
+                    'file_url': assignment.file.url if assignment.file else None,
+                    'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+                    'has_submission': submission is not None,
+                    'submission_file_url': submission.file.url if submission and submission.file else None,
+                    'submission_file_name': submission.file.name.split('/')[-1] if submission and submission.file else None,
+                    'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M') if submission else None,
+                }
+                assignments_list.append(assignment_data)
+                all_assignments.append(assignment_data)
+            
             courses_data.append({
                 'id': course.id,
                 'name': course.name,
@@ -3575,14 +3891,198 @@ def student_courses(request):
                 'instructor': instructor_name,
                 'department': course.department,
                 'credits': course.credits,
+                'assignments': assignments_list,
             })
     except Student.DoesNotExist:
         courses_data = []
+        all_assignments = []
     
     return render(request, "student/courses.html", {
-        'courses': courses_data
+        'courses': courses_data,
+        'all_assignments': all_assignments
     })
 
+@csrf_exempt
+def submit_assignment(request, assignment_id):
+    from .models import Assignment, AssignmentSubmission
+    
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        return JsonResponse({'error': 'Student profile not found'}, status=404)
+    
+    try:
+        assignment = Assignment.objects.get(id=assignment_id)
+    except Assignment.DoesNotExist:
+        return JsonResponse({'error': 'Assignment not found'}, status=404)
+    
+    # Check if student is enrolled in the course
+    if assignment.course not in student.courses.all():
+        return JsonResponse({'error': 'You are not enrolled in this course'}, status=403)
+    
+    # Check if deadline has passed
+    from django.utils import timezone
+    if assignment.deadline < timezone.now():
+        return JsonResponse({'error': 'Deadline has passed'}, status=400)
+    
+    file = request.FILES.get('file')
+    if not file:
+        return JsonResponse({'error': 'File is required'}, status=400)
+    
+    # Validate file type
+    if not file.name.lower().endswith('.pdf'):
+        return JsonResponse({'error': 'Only PDF files are allowed'}, status=400)
+    
+    # Create or update submission
+    submission, created = AssignmentSubmission.objects.update_or_create(
+        assignment=assignment,
+        student=student,
+        defaults={'file': file}
+    )
+    
+    return JsonResponse({
+        'success': True,
+        'message': 'Assignment submitted successfully',
+        'submission': {
+            'file_url': submission.file.url if submission.file else None,
+            'file_name': submission.file.name.split('/')[-1] if submission.file else None,
+            'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M'),
+        }
+    })
+
+@csrf_exempt
+def delete_submission(request, assignment_id):
+    from .models import Assignment, AssignmentSubmission
+    
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        return JsonResponse({'error': 'Student profile not found'}, status=404)
+    
+    try:
+        assignment = Assignment.objects.get(id=assignment_id)
+    except Assignment.DoesNotExist:
+        return JsonResponse({'error': 'Assignment not found'}, status=404)
+    
+    # Check if student is enrolled in the course
+    if assignment.course not in student.courses.all():
+        return JsonResponse({'error': 'You are not enrolled in this course'}, status=403)
+    
+    try:
+        submission = AssignmentSubmission.objects.get(assignment=assignment, student=student)
+        if submission.file:
+            submission.file.delete()
+        submission.delete()
+        return JsonResponse({'success': True, 'message': 'Submission deleted successfully'})
+    except AssignmentSubmission.DoesNotExist:
+        return JsonResponse({'error': 'Submission not found'}, status=404)
+
+@instructor_required
+@csrf_exempt
+def delete_student_submission(request, submission_id):
+    from .models import AssignmentSubmission
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    try:
+        submission = AssignmentSubmission.objects.get(id=submission_id)
+        assignment = submission.assignment
+        
+        # Check if instructor has access to this course
+        instructor_user = request.instructor_user
+        profile = getattr(instructor_user, 'profile', None)
+        if profile and assignment.course not in profile.courses.all():
+            return JsonResponse({'error': 'You do not have access to this course'}, status=403)
+        
+        if submission.file:
+            submission.file.delete()
+        submission.delete()
+        return JsonResponse({'success': True, 'message': 'Student submission deleted successfully'})
+    except AssignmentSubmission.DoesNotExist:
+        return JsonResponse({'error': 'Submission not found'}, status=404)
+
+@instructor_required
+@csrf_exempt
+def update_assignment(request, assignment_id):
+    from .models import Assignment
+    from django.utils import timezone
+    from datetime import datetime
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    try:
+        assignment = Assignment.objects.get(id=assignment_id)
+    except Assignment.DoesNotExist:
+        return JsonResponse({'error': 'Assignment not found'}, status=404)
+    
+    # Check if instructor has access to this course
+    instructor_user = request.instructor_user
+    profile = getattr(instructor_user, 'profile', None)
+    if profile and assignment.course not in profile.courses.all():
+        return JsonResponse({'error': 'You do not have access to this course'}, status=403)
+    
+    # Check if instructor created this assignment
+    if assignment.created_by != instructor_user:
+        return JsonResponse({'error': 'You can only edit your own assignments'}, status=403)
+    
+    title = request.POST.get('title', '').strip()
+    details = request.POST.get('details', '').strip()
+    deadline_date = request.POST.get('deadline_date', '').strip()
+    deadline_time = request.POST.get('deadline_time', '').strip()
+    file = request.FILES.get('file')
+    
+    if not title or not details or not deadline_date or not deadline_time:
+        return JsonResponse({'error': 'Title, details, and deadline are required'}, status=400)
+    
+    # Parse deadline
+    try:
+        deadline_str = f"{deadline_date} {deadline_time}"
+        deadline = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M')
+        deadline = timezone.make_aware(deadline)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid deadline format'}, status=400)
+    
+    # Validate file type if provided
+    if file:
+        if not file.name.lower().endswith('.pdf'):
+            return JsonResponse({'error': 'Only PDF files are allowed'}, status=400)
+        # Delete old file if exists
+        if assignment.file:
+            assignment.file.delete()
+        assignment.file = file
+    
+    # Update assignment
+    assignment.title = title
+    assignment.details = details
+    assignment.deadline = deadline
+    assignment.save()
+    
+    return JsonResponse({
+        'success': True,
+        'message': 'Assignment updated successfully',
+        'assignment': {
+            'id': assignment.id,
+            'title': assignment.title,
+            'details': assignment.details,
+            'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+            'file_url': assignment.file.url if assignment.file else None,
+            'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+        }
+    })
 
 def student_grades(request):
     if not request.user.is_authenticated:

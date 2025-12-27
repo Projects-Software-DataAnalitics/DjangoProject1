@@ -228,3 +228,32 @@ class Announcement(models.Model):
     def __str__(self):
         receiver_name = self.receiver.username if self.receiver else "Everyone"
         return f"{self.sender.username} -> {receiver_name}: {self.subject}"
+
+class Assignment(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='assignments')
+    title = models.CharField(max_length=200)
+    details = models.TextField()
+    deadline = models.DateTimeField()
+    file = models.FileField(upload_to='assignments/', blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_assignments')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.course.name} - {self.title}"
+
+class AssignmentSubmission(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='assignment_submissions')
+    file = models.FileField(upload_to='assignment_submissions/', blank=True, null=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['assignment', 'student']
+        ordering = ['-submitted_at']
+    
+    def __str__(self):
+        return f"{self.student.username} - {self.assignment.title}"
