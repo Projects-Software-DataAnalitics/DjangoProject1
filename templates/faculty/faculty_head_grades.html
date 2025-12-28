@@ -3,75 +3,268 @@
 
 {% block extra_head %}
 <style>
-    .course-row-even {
+    #personal-info {
+        margin-left: 60px;
+    }
+    .grades-content-box {
+        background-color: white;
+        border-radius: 16px;
+        padding: 30px;
+        margin: 30px auto;
+        max-width: 900px;
+        width: calc(100% - 40px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        transition: width 0.3s ease, max-width 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    @media (max-width: 1200px) {
+        .grades-content-box {
+            max-width: 800px;
+            padding: 25px;
+        }
+    }
+    @media (max-width: 992px) {
+        .grades-content-box {
+            max-width: 700px;
+            padding: 20px;
+        }
+    }
+    @media (max-width: 768px) {
+        .grades-content-box {
+            max-width: 100%;
+            padding: 15px;
+            margin: 20px 10px;
+        }
+    }
+    #grades-title {
+        margin-top: 0;
+        margin-left: 0;
+        position: relative;
+        z-index: 1;
+        font-size: 36px;
+        font-weight: bold;
+        text-align: center;
+    }
+    .courses-container {
+        margin-top: 24px;
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+    #courses-table {
+        width: 100%;
+        max-width: 700px;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-top: 20px;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: max-width 0.3s ease;
+    }
+    @media (max-width: 1200px) {
+        #courses-table {
+            max-width: 600px;
+        }
+    }
+    @media (max-width: 992px) {
+        #courses-table {
+            max-width: 500px;
+        }
+    }
+    @media (max-width: 768px) {
+        #courses-table {
+            max-width: 100%;
+            font-size: 14px;
+        }
+        #courses-table thead th,
+        #courses-table tbody td {
+            padding: 8px;
+        }
+    }
+    #courses-table thead tr {
+        background-color: #0b5fff;
+        color: white;
+    }
+    #courses-table thead th {
+        padding: 12px;
+        text-align: left;
+        border: none;
+    }
+    #courses-table thead th:first-child {
+        border-top-left-radius: 20px;
+    }
+    #courses-table thead th:last-child {
+        border-top-right-radius: 20px;
+    }
+    #courses-table tbody td {
+        text-align: left;
+    }
+    #courses-table tbody td:nth-child(2),
+    #courses-table tbody td:nth-child(3) {
+        text-align: center;
+    }
+    .course-row {
+        cursor: pointer;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .course-row.even-row {
         background-color: #f8fafc;
     }
-    .course-row-odd {
+    .course-row.odd-row {
         background-color: white;
+    }
+    .course-row.last-row {
+        border-bottom: none;
+    }
+    .course-row td {
+        padding: 12px;
+        border: none;
+    }
+    .course-row.last-row td:first-child {
+        border-bottom-left-radius: 20px;
+    }
+    .course-row.last-row td:last-child {
+        border-bottom-right-radius: 20px;
+    }
+    .no-courses-row {
+        background-color: white;
+    }
+    .no-courses-row td {
+        padding: 12px;
+        text-align: center;
+        color: #666;
+        border: none;
+    }
+    .no-courses-row td:first-child {
+        border-bottom-left-radius: 20px;
+    }
+    .no-courses-row td:last-child {
+        border-bottom-right-radius: 20px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 {% if show_course_selection %}
-    <h1 style="font-size: 32px; margin: 0 0 24px 0;">Grades</h1>
-
-    <div style="margin-top: 16px; display: flex; justify-content: center;">
-        {% if faculty_head_courses %}
-        <table id="courses-table" style="width: 100%; max-width: 500px; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-            <thead>
-                <tr style="background-color: #0b5fff; color: white;">
-                    <th style="padding: 12px; text-align: left; border: 1px solid #334155;">Course Name</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for course in faculty_head_courses %}
-                <tr class="course-row {% if forloop.counter0|divisibleby:2 %}course-row-even{% else %}course-row-odd{% endif %}" data-course="{{ course }}" style="cursor: pointer; border-bottom: 1px solid #ddd;">
-                    <td style="padding: 12px; border: 1px solid #e2e8f0;">{{ course }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <table id="courses-table" style="width: 100%; max-width: 500px; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-            <thead>
-                <tr style="background-color: #0b5fff; color: white;">
-                    <th style="padding: 12px; text-align: left; border: 1px solid #334155;">Course Name</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td style="padding: 12px; text-align: center; color: #666; border: 1px solid #e2e8f0;">No courses available</td>
-                </tr>
-            </tbody>
-        </table>
-        {% endif %}
+<div id="personal-info">
+    <div class="grades-content-box">
+        <h2 id="grades-title">Grades</h2>
+        <p id="grades-subtitle" style="margin-top: 12px; margin-left: 0; color: #64748b; font-size: 14px; font-weight: 500; text-align: center;">Select a course to manage grades and assessments</p>
+        <div class="courses-container">
+            <table id="courses-table">
+                <thead>
+                    <tr>
+                        <th>Course Name</th>
+                        <th>Course Credit</th>
+                        <th>Total Student</th>
+                    </tr>
+                </thead>
+                <tbody id="courses-table-body">
+                    {% if faculty_head_courses %}
+                        {% for course in faculty_head_courses %}
+                        <tr class="course-row {% if forloop.counter0|divisibleby:2 %}even-row{% else %}odd-row{% endif %} {% if forloop.last %}last-row{% endif %}" data-course="{{ course.name }}">
+                            <td>{{ course.name }}</td>
+                            <td>{{ course.credits }}</td>
+                            <td>{{ course.student_count }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr class="no-courses-row">
+                            <td colspan="3">No courses available</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
     </div>
+</div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const courseRows = document.querySelectorAll('.course-row');
-            courseRows.forEach(function(row, index) {
-                const originalBg = index % 2 === 0 ? '#f8fafc' : 'white';
-                row.addEventListener('mouseenter', function() {
-                    this.style.backgroundColor = '#e0f2fe';
-                });
-                row.addEventListener('mouseleave', function() {
-                    this.style.backgroundColor = originalBg;
-                });
-                row.addEventListener('click', function() {
-                    const courseName = this.dataset.course;
-                    if (courseName) {
-                        window.location.href = '/faculty-head/grades/' + encodeURIComponent(courseName) + '/';
+<script>
+    // Function to update margins based on sidebar state
+    function updateGradesPageMargins() {
+        const sidebar = document.getElementById("sidebar");
+        const infoDiv = document.getElementById("personal-info");
+        if (!sidebar || !infoDiv) return;
+        
+        const sidebarWidth = sidebar.style.width || getComputedStyle(sidebar).width;
+        const isOpen = sidebarWidth === "200px" || parseInt(sidebarWidth) >= 200;
+        
+        const contentBox = document.querySelector('.grades-content-box');
+        const coursesTable = document.getElementById('courses-table');
+        
+        if (isOpen) {
+            infoDiv.style.marginLeft = "200px";
+            if (contentBox) {
+                contentBox.style.maxWidth = "900px";
+                contentBox.style.marginLeft = "auto";
+                contentBox.style.marginRight = "auto";
+                if (coursesTable) {
+                    coursesTable.style.maxWidth = "700px";
+                }
+            }
+        } else {
+            infoDiv.style.marginLeft = "60px";
+            if (contentBox) {
+                contentBox.style.maxWidth = "900px";
+                contentBox.style.marginLeft = "auto";
+                contentBox.style.marginRight = "auto";
+                if (coursesTable) {
+                    coursesTable.style.maxWidth = "700px";
+                }
+            }
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add click event listeners to course rows
+        const courseRows = document.querySelectorAll('.course-row');
+        courseRows.forEach(function(row, index) {
+            const originalBg = index % 2 === 0 ? '#f8fafc' : 'white';
+            row.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#e0f2fe';
+            });
+            row.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = originalBg;
+            });
+            row.addEventListener('click', function() {
+                const courseName = this.dataset.course;
+                if (courseName) {
+                    window.location.href = '/faculty-head/grades/' + encodeURIComponent(courseName) + '/';
+                }
+            });
+        });
+        
+        // Use MutationObserver to watch sidebar width changes
+        const sidebar = document.getElementById("sidebar");
+        if (sidebar) {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        updateGradesPageMargins();
                     }
                 });
             });
-        });
-    </script>
+            
+            observer.observe(sidebar, {
+                attributes: true,
+                attributeFilter: ['style']
+            });
+        }
+        
+        // Check sidebar state periodically as fallback
+        setInterval(updateGradesPageMargins, 200);
+        
+        // Initial check
+        setTimeout(updateGradesPageMargins, 100);
+    });
+</script>
 {% else %}
 <div style="margin-left: 50px; margin-bottom: 20px;">
-    <a href="{% url 'faculty-head-grades' %}" style="display: inline-flex; align-items: center; gap: 6px; color: #0b5fff; text-decoration: none; font-size: 14px; font-weight: 600; margin-bottom: 10px;">
-        <span style="font-size: 16px; color: #0b5fff;">←</span>
+    <a href="{% url 'faculty-head-grades' %}" style="display: inline-flex; align-items: center; gap: 8px; color: #0b5fff; text-decoration: none; font-size: 20px; font-weight: 600; margin-bottom: 10px;">
+        <span style="font-size: 24px; color: #0b5fff;">←</span>
         <span style="color: #0b5fff;">Go Back</span>
     </a>
     <h1 style="margin: 0;">Grades Management - {{ course.name }}</h1>
@@ -182,13 +375,41 @@
 <div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2 style="margin: 0; color: #0f172a;">Upload Grades - With CSV</h2>
-        <button type="button" id="download-template-btn" 
-                style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-            Download Student List CSV
-        </button>
-                                </div>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" id="download-all-template-btn"
+                    style="padding: 8px 16px; background: #0b5fff; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                Download All Assessments CSV
+            </button>
+            <button type="button" id="download-template-btn" 
+                    style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                Download Student List CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Upload All Assessments Together Section -->
+    <div style="margin-bottom: 30px; padding: 20px; background: #ffffff; border-radius: 12px; border: 2px solid #0b5fff; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+        <h3 style="margin: 0 0 10px 0; color: #0f172a; font-size: 18px;">Upload All Assessments Together</h3>
+        <p style="margin-bottom: 15px; color: #475569; font-size: 14px;">
+            Upload a single CSV file containing all assessment scores.
+        </p>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="file"
+                   id="upload-all-assessments-file"
+                   accept=".csv"
+                   style="display: none;">
+            <button type="button"
+                    id="upload-all-assessments-btn"
+                    style="padding: 10px 20px; background: #0b5fff; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                Upload All
+            </button>
+            <span id="upload-all-file-name" style="font-size: 14px; color: #64748b;"></span>
+        </div>
+        <div id="upload-all-status" style="margin-top: 15px; padding: 12px; border-radius: 10px; display: none; font-size: 13px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"></div>
+    </div>
+
     <p style="margin-bottom: 20px; color: #475569; font-size: 14px;">
-        Upload separate CSV files for each assessment. CSV format: <code>student_id, score</code>
+        Upload separate CSV files for each assessment.
     </p>
     
     <div id="grade-upload-boxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
@@ -625,6 +846,78 @@ function getCsrfToken() {
         }
     });
     
+    // Download All Assessments Template CSV
+    const downloadAllTemplateBtn = document.getElementById('download-all-template-btn');
+    if (downloadAllTemplateBtn) {
+        downloadAllTemplateBtn.addEventListener('click', function() {
+            try {
+                // Get student data from grades_data (which comes from PostgreSQL)
+                const gradesDataArray = JSON.parse('{{ grades_data|escapejs }}' || '[]');
+                
+                if (!gradesDataArray || gradesDataArray.length === 0) {
+                    alert('No students enrolled in this course.');
+                    return;
+                }
+                
+                // Get assessment counts
+                const assessmentTypes = [
+                    { key: 'midterm', label: 'Midterm', count: parseInt(document.getElementById('midterm')?.value || '{{ assessment.midterm }}') || 0 },
+                    { key: 'final', label: 'Final', count: parseInt(document.getElementById('final')?.value || '{{ assessment.final }}') || 0 },
+                    { key: 'project', label: 'Project', count: parseInt(document.getElementById('project')?.value || '{{ assessment.project }}') || 0 },
+                    { key: 'assignment', label: 'Assignment', count: parseInt(document.getElementById('assignment')?.value || '{{ assessment.assignment }}') || 0 },
+                    { key: 'absence', label: 'Absence', count: parseInt(document.getElementById('absence')?.value || '{{ assessment.absence }}') || 0 },
+                    { key: 'quiz', label: 'Quiz', count: parseInt(document.getElementById('quiz')?.value || '{{ assessment.quiz }}') || 0 }
+                ];
+                
+                // Build header row
+                let headerRow = 'student_id';
+                assessmentTypes.forEach(type => {
+                    if (type.count > 0) {
+                        for (let i = 1; i <= type.count; i++) {
+                            headerRow += `,${type.key}_${i}`;
+                        }
+                    }
+                });
+                
+                // Create CSV content
+                let csvContent = headerRow + '\n';
+                gradesDataArray.forEach(student => {
+                    if (student && student.student_id) {
+                        let row = student.student_id;
+                        assessmentTypes.forEach(type => {
+                            if (type.count > 0) {
+                                for (let i = 1; i <= type.count; i++) {
+                                    row += ',';
+                                }
+                            }
+                        });
+                        csvContent += row + '\n';
+                    }
+                });
+                
+                // Create blob and download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                const courseNameForFile = courseName.replace(/[^a-z0-9]/gi, '_');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `all_assessments_template_${courseNameForFile}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Clean up the URL object
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 100);
+            } catch (error) {
+                console.error('Error downloading template:', error);
+                alert('Error downloading template. Please try again.');
+            }
+        });
+    }
+    
     // Download Student List CSV
     const downloadTemplateBtn = document.getElementById('download-template-btn');
     if (downloadTemplateBtn) {
@@ -665,6 +958,162 @@ function getCsrfToken() {
             } catch (error) {
                 console.error('Error downloading template:', error);
                 alert('Error downloading template. Please try again.');
+            }
+        });
+    }
+    
+    // Upload All Assessments Together
+    const uploadAllAssessmentsBtn = document.getElementById('upload-all-assessments-btn');
+    const uploadAllAssessmentsFile = document.getElementById('upload-all-assessments-file');
+    const uploadAllFileName = document.getElementById('upload-all-file-name');
+    const uploadAllStatus = document.getElementById('upload-all-status');
+    
+    if (uploadAllAssessmentsBtn && uploadAllAssessmentsFile) {
+        // When button is clicked, trigger file input
+        uploadAllAssessmentsBtn.addEventListener('click', function() {
+            uploadAllAssessmentsFile.click();
+        });
+        
+        // When file is selected, update button text and enable upload
+        uploadAllAssessmentsFile.addEventListener('change', function(e) {
+            if (e.target.files && e.target.files.length > 0) {
+                const fileName = e.target.files[0].name;
+                uploadAllFileName.textContent = fileName;
+                uploadAllFileName.style.color = '#059669';
+                uploadAllFileName.style.fontWeight = '500';
+            } else {
+                uploadAllFileName.textContent = '';
+            }
+        });
+        
+        // Upload button click handler
+        uploadAllAssessmentsBtn.addEventListener('click', function(e) {
+            // If file is already selected, upload it
+            if (uploadAllAssessmentsFile.files && uploadAllAssessmentsFile.files.length > 0) {
+                e.preventDefault();
+                uploadAllAssessments();
+            }
+        });
+    }
+    
+    function uploadAllAssessments() {
+        const file = uploadAllAssessmentsFile.files[0];
+        if (!file) {
+            uploadAllStatus.style.display = 'block';
+            uploadAllStatus.style.background = '#fee2e2';
+            uploadAllStatus.style.color = '#dc2626';
+            uploadAllStatus.style.border = '1px solid #fca5a5';
+            uploadAllStatus.textContent = 'Please select a CSV file';
+            return;
+        }
+        
+        // Check file type
+        const fileName = file.name.toLowerCase();
+        if (!fileName.endsWith('.csv')) {
+            uploadAllStatus.style.display = 'block';
+            uploadAllStatus.style.background = '#fee2e2';
+            uploadAllStatus.style.color = '#dc2626';
+            uploadAllStatus.style.border = '1px solid #fca5a5';
+            uploadAllStatus.textContent = 'Please select a CSV file (.csv extension required)';
+            return;
+        }
+        
+        // Show uploading status
+        uploadAllStatus.style.display = 'block';
+        uploadAllStatus.style.background = '#dbeafe';
+        uploadAllStatus.style.color = '#1e40af';
+        uploadAllStatus.style.border = '1px solid #93c5fd';
+        uploadAllStatus.textContent = `Uploading ${file.name}...`;
+        
+        const formData = new FormData();
+        formData.append('csv_file', file);
+        
+        fetch(`/faculty-head/grades/${courseName}/upload-all-assessments/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: formData
+        })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json().then(data => {
+                    if (!response.ok) {
+                        const error = new Error(data.error || `Server error: ${response.status}`);
+                        error.responseData = data;
+                        throw error;
+                    }
+                    return data;
+                });
+            }
+            if (!response.ok) {
+                return response.text().then(text => {
+                    try {
+                        const jsonData = JSON.parse(text);
+                        const error = new Error(jsonData.error || `Server error: ${response.status}`);
+                        error.responseData = jsonData;
+                        throw error;
+                    } catch (e) {
+                        if (e instanceof Error && e.responseData) {
+                            throw e;
+                        }
+                        throw new Error(`Server error: ${response.status} - ${text.substring(0, 100)}`);
+                    }
+                });
+            }
+            return response.text().then(text => {
+                throw new Error('Server returned non-JSON response: ' + text.substring(0, 100));
+            });
+        })
+        .then(data => {
+            if (data.status === 'ok') {
+                uploadAllStatus.style.background = '#d1fae5';
+                uploadAllStatus.style.color = '#065f46';
+                uploadAllStatus.style.border = '1px solid #6ee7b7';
+                uploadAllStatus.textContent = `Successfully uploaded all assessments. Updated ${data.updated_count} students.`;
+                
+                // Clear file input
+                uploadAllAssessmentsFile.value = '';
+                uploadAllFileName.textContent = '';
+                
+                // Reload page to update grades list table
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                uploadAllStatus.style.background = '#fee2e2';
+                uploadAllStatus.style.color = '#dc2626';
+                uploadAllStatus.style.border = '1px solid #fca5a5';
+                let errorMessage = data.error || 'Upload failed';
+                if (data.details && data.details.length > 0) {
+                    errorMessage += '\n\nDetails:\n' + data.details.slice(0, 5).join('\n');
+                    if (data.details.length > 5) {
+                        errorMessage += `\n... and ${data.details.length - 5} more errors`;
+                    }
+                }
+                uploadAllStatus.textContent = errorMessage;
+                uploadAllStatus.style.whiteSpace = 'pre-line';
+            }
+        })
+        .catch(error => {
+            console.error('Upload error:', error);
+            uploadAllStatus.style.background = '#fee2e2';
+            uploadAllStatus.style.color = '#dc2626';
+            uploadAllStatus.style.border = '1px solid #fca5a5';
+            
+            if (error.responseData) {
+                let errorMessage = error.responseData.error || error.message || 'Upload failed';
+                if (error.responseData.details && error.responseData.details.length > 0) {
+                    errorMessage += '\n\nDetails:\n' + error.responseData.details.slice(0, 5).join('\n');
+                    if (error.responseData.details.length > 5) {
+                        errorMessage += `\n... and ${error.responseData.details.length - 5} more errors`;
+                    }
+                }
+                uploadAllStatus.textContent = errorMessage;
+                uploadAllStatus.style.whiteSpace = 'pre-line';
+            } else {
+                uploadAllStatus.textContent = 'Upload error: ' + (error.message || error.toString());
             }
         });
     }

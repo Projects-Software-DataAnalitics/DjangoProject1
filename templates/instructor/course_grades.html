@@ -1404,6 +1404,11 @@ function getCsrfToken() {
                 td.dataset.studentId = student.student_id;
                 td.dataset.assessmentKey = col.key;
                 
+                // Store original value for change detection
+                const cellId = `${student.student_id}_${col.key}`;
+                const originalValue = (score !== undefined && score !== null) ? score : null;
+                originalCellValues.set(cellId, originalValue);
+                
                 if (score !== undefined && score !== null) {
                     td.textContent = score.toFixed(1);
                 } else {
@@ -1433,9 +1438,10 @@ function getCsrfToken() {
             }
             row.appendChild(tdOverall);
             
-            // Letter Grade cell
+            // Letter Grade cell - only show if overall_score exists
             const tdLetterGrade = document.createElement('td');
-            if (student.letter_grade !== undefined && student.letter_grade !== null) {
+            if (student.overall_score !== undefined && student.overall_score !== null && 
+                student.letter_grade !== undefined && student.letter_grade !== null) {
                 tdLetterGrade.textContent = student.letter_grade;
                 tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
             } else {
@@ -1479,16 +1485,16 @@ function getCsrfToken() {
     let currentEditingInput = null;
     let currentEditingOriginalValue = null;
     
+    // Track original values for all cells to detect changes
+    const originalCellValues = new Map();
+    
     // Make table cell editable
     function makeCellEditable(cell) {
-        // If another cell is being edited, save it first (if value changed)
+        // If another cell is being edited, update display first
         if (currentEditingCell && currentEditingCell !== cell) {
-            // If there's an input, update display first
             if (currentEditingInput) {
                 updateCellDisplay();
             }
-            // Note: We don't auto-save here, user must click Save button
-            // Just clear the editing state
             currentEditingCell = null;
             currentEditingInput = null;
             currentEditingOriginalValue = null;
@@ -1497,12 +1503,9 @@ function getCsrfToken() {
         const currentValue = cell.textContent.trim();
         currentEditingOriginalValue = currentValue === '-' ? '' : currentValue;
         
-        // Create input
+        // Create input (use text type to allow "-" input)
         const input = document.createElement('input');
-        input.type = 'number';
-        input.step = '0.1';
-        input.min = '0';
-        input.max = '100';
+        input.type = 'text';
         input.value = currentEditingOriginalValue;
         input.style.cssText = 'width: 80px; padding: 4px 8px; border: 2px solid #0b5fff; border-radius: 8px; font-size: 14px; text-align: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);';
         
@@ -1535,23 +1538,21 @@ function getCsrfToken() {
         // Validate on input and enable save button when value changes
         input.addEventListener('input', function() {
             validateGradeInput(input);
-            // Enable save button and change to blue if value changed
-            if (saveBtn && input.value.trim() !== currentEditingOriginalValue) {
-                saveBtn.disabled = false;
-                saveBtn.style.background = '#0b5fff';
-                saveBtn.style.cursor = 'pointer';
-                saveBtn.style.opacity = '1';
-            } else if (saveBtn && input.value.trim() === currentEditingOriginalValue) {
-                saveBtn.disabled = true;
-                saveBtn.style.background = '#94a3b8';
-                saveBtn.style.cursor = 'not-allowed';
-                saveBtn.style.opacity = '0.6';
+            const saveBtn = document.getElementById('save-grade-changes-btn');
+            if (saveBtn) {
+                if (input.value.trim() !== currentEditingOriginalValue) {
+                    saveBtn.disabled = false;
+                    saveBtn.style.background = '#0b5fff';
+                    saveBtn.style.cursor = 'pointer';
+                    saveBtn.style.opacity = '1';
+                } else {
+                    updateSaveButtonState();
+                }
             }
         });
         
-        // Update cell display on blur (when input loses focus) - show value but don't save yet
+        // Update cell display on blur
         input.addEventListener('blur', function() {
-            // Small delay to allow click events to fire first
             setTimeout(() => {
                 if (currentEditingCell === cell && currentEditingInput === input) {
                     updateCellDisplay();
@@ -1567,7 +1568,6 @@ function getCsrfToken() {
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 updateCellDisplay();
-                // Focus save button
                 const saveBtn = document.getElementById('save-grade-changes-btn');
                 if (saveBtn) {
                     saveBtn.focus();
@@ -1579,10 +1579,10 @@ function getCsrfToken() {
     // Validate grade input
     function validateGradeInput(input) {
         const errorDiv = document.getElementById('grade-edit-error');
-        const value = parseFloat(input.value);
+        const inputValue = input.value.trim();
         
-        if (input.value.trim() === '') {
-            // Empty is allowed (will delete grade)
+        if (inputValue === '' || inputValue === '-') {
+            // Empty or "-" is allowed (will delete grade)
             if (errorDiv) {
                 errorDiv.style.display = 'none';
                 errorDiv.textContent = '';
@@ -1591,10 +1591,12 @@ function getCsrfToken() {
             return true;
         }
         
+        const value = parseFloat(inputValue);
+        
         if (isNaN(value)) {
             if (errorDiv) {
                 errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Please enter a valid number';
+                errorDiv.textContent = 'Please enter a valid number or "-" to clear';
             }
             input.style.borderColor = '#dc2626';
             return false;
@@ -1632,6 +1634,10 @@ function getCsrfToken() {
         if (value === '' || value === null || value === undefined) {
             return null;
         }
+        // If value is "-", treat as empty
+        if (value === '-' || value.trim() === '-') {
+            return null;
+        }
         const numValue = parseFloat(value);
         if (isNaN(numValue)) {
             return null;
@@ -1641,7 +1647,7 @@ function getCsrfToken() {
         return numValue;
     }
     
-    // Update cell display without saving (show value in cell)
+    // Update cell display without saving
     function updateCellDisplay() {
         if (!currentEditingCell || !currentEditingInput) {
             return;
@@ -1651,135 +1657,199 @@ function getCsrfToken() {
         const cell = currentEditingCell;
         const newValue = input.value.trim();
         
-        // Validate
-        if (newValue !== '' && !validateGradeInput(input)) {
-            return; // Don't update if validation fails
+        // If value is "-", treat as empty
+        if (newValue === '-') {
+            if (cell.contains(input)) {
+                cell.removeChild(input);
+            }
+            cell.textContent = '-';
+            cell.style.color = '#94a3b8';
+            updateSaveButtonState();
+            currentEditingInput = null;
+            return;
         }
         
-        // Format score
+        if (newValue !== '' && !validateGradeInput(input)) {
+            return;
+        }
+        
         const formattedScore = formatScore(newValue);
         const scoreToDisplay = formattedScore !== null ? formattedScore : null;
         
-        // Remove input from cell first
         if (cell.contains(input)) {
             cell.removeChild(input);
         }
         
-        // Update cell display immediately (show value)
         if (scoreToDisplay === null || scoreToDisplay === '') {
             cell.textContent = '-';
             cell.style.color = '#94a3b8';
         } else {
-            // Display with 1 decimal place (e.g., 85 -> 85.0)
             cell.textContent = scoreToDisplay.toFixed(1);
             cell.style.color = '';
         }
         
-        // Clear input reference but keep cell reference for saving
+        updateSaveButtonState();
         currentEditingInput = null;
     }
     
-    // Save current edit to server
+    // Save all changes from table to server
     function saveCellEdit() {
-        // If there's still an input, update display first
         if (currentEditingCell && currentEditingInput) {
-            updateCellDisplay();
-        }
-        
-        if (!currentEditingCell) {
-            return;
-        }
-        
-        const cell = currentEditingCell;
-        const studentId = cell.dataset.studentId;
-        const assessmentKey = cell.dataset.assessmentKey;
-        
-        if (!studentId || !assessmentKey) {
-            console.error('Missing student_id or assessment_key');
-            return;
-        }
-        
-        // Get value from cell display (already formatted)
-        const cellText = cell.textContent.trim();
-        let scoreToSave = null;
-        
-        if (cellText !== '-' && cellText !== '') {
-            scoreToSave = parseFloat(cellText);
-            if (isNaN(scoreToSave)) {
-                scoreToSave = null;
-            }
-        }
-        
-        console.log('Saving grade:', { studentId, assessmentKey, scoreToSave });
-        
-        // Save to server
-        fetch(`/instructor/grades/${courseName}/update-individual-grade/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
-        },
-            body: JSON.stringify({
-                student_id: studentId,
-                assessment_key: assessmentKey,
-                score: scoreToSave
-            })
-    })
-    .then(response => response.json())
-    .then(data => {
-            console.log('Save response:', data);
-        if (data.status === 'ok') {
-                // Update cell display with saved value (keep it visible)
-                if (data.score !== null && data.score !== undefined) {
-                    cell.textContent = parseFloat(data.score).toFixed(1);
-                    cell.style.color = '';
-        } else {
-                    cell.textContent = '-';
-                    cell.style.color = '#94a3b8';
+            const input = currentEditingInput;
+            const cell = currentEditingCell;
+            const newValue = input.value.trim();
+            
+            if (newValue === '' || newValue === '-' || validateGradeInput(input)) {
+                const formattedScore = formatScore(newValue);
+                const scoreToDisplay = formattedScore !== null ? formattedScore : null;
+                
+                if (cell.contains(input)) {
+                    cell.removeChild(input);
                 }
                 
-                // Update local data
-                const studentIndex = gradesData.findIndex(s => s.student_id === studentId);
-                if (studentIndex !== -1) {
-                    if (data.score !== null && data.score !== undefined) {
-                        gradesData[studentIndex].grades[assessmentKey] = parseFloat(data.score);
-                    } else {
-                        delete gradesData[studentIndex].grades[assessmentKey];
+                if (scoreToDisplay === null || scoreToDisplay === '') {
+                    cell.textContent = '-';
+                    cell.style.color = '#94a3b8';
+                } else {
+                    cell.textContent = scoreToDisplay.toFixed(1);
+                    cell.style.color = '';
+                }
+            }
+            
+            // Clear editing state - the value is now in cell.textContent
+            currentEditingCell = null;
+            currentEditingInput = null;
+            currentEditingOriginalValue = null;
+        }
+        
+        // Collect all changes from table
+        const changesArray = [];
+        const editableCells = document.querySelectorAll('.editable-grade-cell');
+        
+        editableCells.forEach(cell => {
+            const studentId = cell.dataset.studentId;
+            const assessmentKey = cell.dataset.assessmentKey;
+            if (!studentId || !assessmentKey) return;
+            
+            const cellId = `${studentId}_${assessmentKey}`;
+            const originalValue = originalCellValues.get(cellId);
+            
+            // Check if cell is currently being edited (has input)
+            const input = cell.querySelector('input');
+            let currentValue = null;
+            
+            if (input) {
+                // Cell is being edited, get value from input
+                const inputValue = input.value.trim();
+                if (inputValue === '-' || inputValue === '') {
+                    currentValue = null;
+                } else {
+                    const parsed = parseFloat(inputValue);
+                    if (!isNaN(parsed)) {
+                        currentValue = parsed;
                     }
-                    
-                    // Update overall_score in local data
-                    if (data.overall_score !== undefined) {
-                        gradesData[studentIndex].overall_score = data.overall_score;
+                }
+            } else {
+                // Cell is not being edited, get value from textContent
+                const cellText = cell.textContent.trim();
+                if (cellText === '-' || cellText === '') {
+                    currentValue = null;
+                } else {
+                    const parsed = parseFloat(cellText);
+                    if (!isNaN(parsed)) {
+                        currentValue = parsed;
+                    }
+                }
+            }
+            
+            if (originalValue !== currentValue) {
+                changesArray.push({
+                    cell: cell,
+                    studentId: studentId,
+                    assessmentKey: assessmentKey,
+                    originalValue: originalValue,
+                    newValue: currentValue
+                });
+            }
+        });
+        
+        if (changesArray.length === 0) {
+            return;
+        }
+        
+        const saveBtn = document.getElementById('save-grade-changes-btn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.style.background = '#94a3b8';
+            saveBtn.style.cursor = 'not-allowed';
+            saveBtn.style.opacity = '0.6';
+            saveBtn.textContent = 'Saving...';
+        }
+        
+        console.log('Saving', changesArray.length, 'changes:', changesArray.map(c => `${c.studentId}_${c.assessmentKey}: ${c.originalValue} -> ${c.newValue}`));
+        console.log('Changes array:', JSON.stringify(changesArray, null, 2));
+        
+        // Prepare changes for batch update
+        const changes = changesArray.map(change => ({
+            student_id: change.studentId,
+            assessment_key: change.assessmentKey,
+            score: change.newValue
+        }));
+        
+        console.log('Sending to backend:', JSON.stringify(changes, null, 2));
+        
+        // Use batch update endpoint
+        fetch(`/instructor/grades/${courseName}/update-multiple-grades/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ changes: changes })
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            if (data.status === 'ok') {
+                // Update cells with saved values
+                data.results.forEach(result => {
+                    const change = changesArray.find(c => c.studentId === result.student_id && c.assessmentKey === result.assessment_key);
+                    if (change) {
+                        const cell = change.cell;
+                        if (result.score !== null && result.score !== undefined) {
+                            cell.textContent = parseFloat(result.score).toFixed(1);
+                            cell.style.color = '';
+                        } else {
+                            cell.textContent = '-';
+                            cell.style.color = '#94a3b8';
+                        }
                         
-                        // Update overall_score cell in table
+                        // Update overall_score and letter_grade
                         const row = cell.closest('tr');
                         if (row) {
-                            const overallCell = row.querySelector('td:nth-last-child(2)'); // Second to last (before Letter Grade)
-                            if (overallCell) {
-                                if (data.overall_score !== null && data.overall_score !== undefined) {
-                                    overallCell.textContent = parseFloat(data.overall_score).toFixed(1);
+                            const overallCell = row.querySelector('td:nth-last-child(2)');
+                            const letterGradeCell = row.querySelector('td:last-child');
+                            
+                            if (overallCell && result.overall_score !== undefined) {
+                                if (result.overall_score !== null && result.overall_score !== undefined) {
+                                    overallCell.textContent = parseFloat(result.overall_score).toFixed(1);
                                     overallCell.style.color = '';
                                     overallCell.style.fontWeight = '600';
-            } else {
+                                } else {
                                     overallCell.textContent = '-';
                                     overallCell.style.color = '#94a3b8';
                                     overallCell.style.fontWeight = '';
                                 }
                             }
-                        }
-                    }
-                    
-                    // Update letter_grade in local data
-                    if (data.letter_grade !== undefined) {
-                        gradesData[studentIndex].letter_grade = data.letter_grade;
-                        
-                        // Update letter_grade cell in table
-                        const row = cell.closest('tr');
-                        if (row) {
-                            const letterGradeCell = row.querySelector('td:last-child'); // Last cell
-                            if (letterGradeCell) {
-                                if (data.letter_grade !== null && data.letter_grade !== undefined) {
-                                    letterGradeCell.textContent = data.letter_grade;
+                            
+                            if (letterGradeCell && result.letter_grade !== undefined) {
+                                // Only show letter grade if overall_score exists
+                                if (result.overall_score !== null && result.overall_score !== undefined &&
+                                    result.letter_grade !== null && result.letter_grade !== undefined) {
+                                    letterGradeCell.textContent = result.letter_grade;
                                     letterGradeCell.style.color = '';
                                     letterGradeCell.style.fontWeight = '600';
                                 } else {
@@ -1790,9 +1860,13 @@ function getCsrfToken() {
                             }
                         }
                     }
-            } else {
-                    console.warn('Student not found in gradesData:', studentId);
-                }
+                });
+                
+                // Update original values
+                changesArray.forEach(change => {
+                    const cellId = `${change.studentId}_${change.assessmentKey}`;
+                    originalCellValues.set(cellId, change.newValue);
+                });
                 
                 // Update last changes timestamp
                 if (data.last_changes_at) {
@@ -1805,52 +1879,46 @@ function getCsrfToken() {
                     }
                 }
                 
-                // Reset save button
-                const saveBtn = document.getElementById('save-grade-changes-btn');
                 if (saveBtn) {
                     saveBtn.disabled = true;
                     saveBtn.style.background = '#94a3b8';
                     saveBtn.style.cursor = 'not-allowed';
                     saveBtn.style.opacity = '0.6';
+                    saveBtn.textContent = 'Save Changes';
                 }
                 
-                // Clear editing state (but keep the displayed value)
                 currentEditingCell = null;
                 currentEditingInput = null;
                 currentEditingOriginalValue = null;
                 
-                // Clear error message
                 const errorDiv = document.getElementById('grade-edit-error');
                 if (errorDiv) {
                     errorDiv.style.display = 'none';
                     errorDiv.textContent = '';
                 }
+                
+                console.log(`Successfully saved ${data.updated_count} grade(s)`);
             } else {
-                alert('Error updating grade: ' + (data.error || 'Unknown error'));
-                // Keep the current value visible (don't revert)
-                const saveBtn = document.getElementById('save-grade-changes-btn');
+                alert('Error updating grades: ' + (data.error || 'Unknown error'));
                 if (saveBtn) {
                     saveBtn.disabled = false;
                     saveBtn.style.background = '#0b5fff';
                     saveBtn.style.cursor = 'pointer';
                     saveBtn.style.opacity = '1';
+                    saveBtn.textContent = 'Save Changes';
                 }
-                // Don't clear editing state, let user try again
             }
         })
         .catch(error => {
-            console.error('Error saving grade:', error);
-            alert('Error updating grade. Please try again.');
-            // Revert to original value
-            const saveBtn = document.getElementById('save-grade-changes-btn');
+            console.error('Error saving grades:', error);
+            alert('Error updating grades. Please try again.');
             if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.style.background = '#94a3b8';
-                saveBtn.style.cursor = 'not-allowed';
-                saveBtn.style.opacity = '0.6';
+                saveBtn.disabled = false;
+                saveBtn.style.background = '#0b5fff';
+                saveBtn.style.cursor = 'pointer';
+                saveBtn.style.opacity = '1';
+                saveBtn.textContent = 'Save Changes';
             }
-            // Don't cancel edit, keep the value visible so user can try again
-            // cancelCellEdit();
         });
     }
     
@@ -1896,6 +1964,62 @@ function getCsrfToken() {
         }
     }
     
+    // Update save button state
+    function updateSaveButtonState() {
+        const saveBtn = document.getElementById('save-grade-changes-btn');
+        if (!saveBtn) return;
+        
+        let hasChanges = false;
+        const editableCells = document.querySelectorAll('.editable-grade-cell');
+        
+        for (let cell of editableCells) {
+            const studentId = cell.dataset.studentId;
+            const assessmentKey = cell.dataset.assessmentKey;
+            if (!studentId || !assessmentKey) continue;
+            
+            const cellId = `${studentId}_${assessmentKey}`;
+            const originalValue = originalCellValues.get(cellId);
+            
+            if (cell.querySelector('input')) continue;
+            
+            const cellText = cell.textContent.trim();
+            let currentValue = null;
+            if (cellText !== '-' && cellText !== '') {
+                const parsed = parseFloat(cellText);
+                if (!isNaN(parsed)) {
+                    currentValue = parsed;
+                }
+            }
+            
+            if (originalValue !== currentValue) {
+                hasChanges = true;
+                break;
+            }
+        }
+        
+        if (!hasChanges && currentEditingCell && currentEditingInput) {
+            const newValue = currentEditingInput.value.trim();
+            const originalValue = currentEditingOriginalValue === '' ? null : parseFloat(currentEditingOriginalValue);
+            const formattedScore = formatScore(newValue);
+            const newValueParsed = formattedScore !== null ? formattedScore : null;
+            if (originalValue !== newValueParsed) {
+                hasChanges = true;
+            }
+        }
+        
+        if (hasChanges) {
+            saveBtn.disabled = false;
+            saveBtn.style.background = '#0b5fff';
+            saveBtn.style.cursor = 'pointer';
+            saveBtn.style.opacity = '1';
+        } else {
+            saveBtn.disabled = true;
+            saveBtn.style.background = '#94a3b8';
+            saveBtn.style.cursor = 'not-allowed';
+            saveBtn.style.opacity = '0.6';
+        }
+    }
+    
     // Save button event listener
     const saveGradeChangesBtn = document.getElementById('save-grade-changes-btn');
     if (saveGradeChangesBtn) {
@@ -1907,20 +2031,42 @@ function getCsrfToken() {
     }
     
     // Initialize grades list table on page load
-    createGradesListTable();
-    
-    // Show last changes timestamp on page load if available
-    const lastChangesAt = '{{ last_changes_at|escapejs }}';
-    if (lastChangesAt && lastChangesAt !== 'None' && lastChangesAt !== '') {
-        const lastChangesInfo = document.getElementById('last-changes-info');
-        const lastChangesTime = document.getElementById('last-changes-time');
-        if (lastChangesInfo && lastChangesTime) {
-            try {
-                const changeDate = new Date(lastChangesAt);
-                lastChangesTime.textContent = changeDate.toLocaleString();
-                lastChangesInfo.style.display = 'block';
-            } catch (e) {
-                console.error('Error parsing last_changes_at:', e);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            createGradesListTable();
+            
+            // Show last changes timestamp if available
+            const lastChangesAt = typeof window.lastChangesAt !== 'undefined' ? window.lastChangesAt : '{{ last_changes_at|escapejs }}';
+            if (lastChangesAt && lastChangesAt !== 'None' && lastChangesAt !== '') {
+                const lastChangesInfo = document.getElementById('last-changes-info');
+                const lastChangesTime = document.getElementById('last-changes-time');
+                if (lastChangesInfo && lastChangesTime) {
+                    try {
+                        const changeDate = new Date(lastChangesAt);
+                        lastChangesTime.textContent = changeDate.toLocaleString();
+                        lastChangesInfo.style.display = 'block';
+                    } catch (e) {
+                        console.error('Error parsing last_changes_at:', e);
+                    }
+                }
+            }
+        });
+    } else {
+        createGradesListTable();
+        
+        // Show last changes timestamp if available
+        const lastChangesAt = typeof window.lastChangesAt !== 'undefined' ? window.lastChangesAt : '{{ last_changes_at|escapejs }}';
+        if (lastChangesAt && lastChangesAt !== 'None' && lastChangesAt !== '') {
+            const lastChangesInfo = document.getElementById('last-changes-info');
+            const lastChangesTime = document.getElementById('last-changes-time');
+            if (lastChangesInfo && lastChangesTime) {
+                try {
+                    const changeDate = new Date(lastChangesAt);
+                    lastChangesTime.textContent = changeDate.toLocaleString();
+                    lastChangesInfo.style.display = 'block';
+                } catch (e) {
+                    console.error('Error parsing last_changes_at:', e);
+                }
             }
         }
     }

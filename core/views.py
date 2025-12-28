@@ -1334,6 +1334,9 @@ def instructor_course_grades(request, course_name):
     # Get grades for all students
     for student in students:
         grade_obj = Grade.objects.filter(student=student, course=course).first()
+        # Refresh from database to ensure we have the latest saved data
+        if grade_obj:
+            grade_obj.refresh_from_db()
         student_data = {
             'student_id': student.student_id,
             'full_name': f"{student.first_name} {student.last_name}".strip() or student.username,
@@ -1341,20 +1344,25 @@ def instructor_course_grades(request, course_name):
         }
         
         if grade_obj:
+            # Ensure assessment_scores is loaded from database
+            # For JSONField, we need to explicitly access it to trigger database read
+            _ = grade_obj.assessment_scores
+            
             # Get individual scores for each assessment column
             for col in assessment_columns:
                 score = grade_obj.get_individual_score(col['key'])
                 if score is not None:
-                    student_data['grades'][col['key']] = score
+                    student_data['grades'][col['key']] = float(score)
                 else:
                     # If individual score doesn't exist, check if average is available
                     # But for table display, we show individual scores only
                     student_data['grades'][col['key']] = None
             
             # Add overall_score and letter_grade to student data
-            # Recalculate to ensure it's up to date
+            # Recalculate to ensure it's up to date based on current assessment_scores
             grade_obj.calculate_overall_score()
-            grade_obj.save(update_fields=['overall_score', 'letter_grade'])
+            # Save only if overall_score or letter_grade changed (don't overwrite assessment_scores)
+            grade_obj.save(update_fields=['overall_score', 'letter_grade', 'last_changes_at'])
             student_data['overall_score'] = grade_obj.overall_score
             student_data['letter_grade'] = grade_obj.letter_grade
         else:
@@ -2253,16 +2261,19 @@ def update_individual_grade(request, course_name):
             return JsonResponse({'error': 'Student is not enrolled in this course'}, status=400)
         
         # Parse and validate score before transaction
-            score_value = None
-        if score is not None and score != '':
+        score_value = None
+        # If score is None, null, empty string, or "-", treat as delete (score_value stays None)
+        if score is not None and score != '' and score != '-':
             try:
+                # Try to convert to float
                 score_value = float(score)
                 if score_value < 0:
                     return JsonResponse({'error': 'Score cannot be less than 0'}, status=400)
                 if score_value > 100:
                     return JsonResponse({'error': 'Score cannot be greater than 100'}, status=400)
-            except ValueError:
-                return JsonResponse({'error': 'Score must be a valid number'}, status=400)
+            except (ValueError, TypeError):
+                # If conversion fails, treat as delete
+                score_value = None
         
         # All validation passed, now perform DB operations in atomic transaction
         with transaction.atomic():
@@ -2411,13 +2422,15 @@ def update_multiple_grades(request, course_name):
             
             # Parse and validate score
             score_value = None
-            if score is not None and score != '':
+            # If score is None, null, empty string, or "-", treat as delete (score_value stays None)
+            if score is not None and score != '' and score != '-':
                 try:
                     score_value = float(score)
                     if score_value < 0 or score_value > 100:
                         continue
-                except ValueError:
-                    continue
+                except (ValueError, TypeError):
+                    # If conversion fails, treat as delete
+                    score_value = None
             
             validated_changes.append({
                 'student': student,
@@ -2480,10 +2493,10 @@ def update_multiple_grades(request, course_name):
                             'file_name': existing_file_name or ''
                         }
                 
+                # Update assessment_scores
                 grade.assessment_scores = new_assessment_scores
                 
-                grade.save(update_fields=['assessment_scores'])
-                
+                # Calculate assessment averages BEFORE saving
                 try:
                     assessment = Assessment.objects.get(course=course)
                     assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
@@ -2495,9 +2508,13 @@ def update_multiple_grades(request, course_name):
                             all_scores = []
                             for i in range(1, assessment_count + 1):
                                 key = f'{assessment_type}_{i}'
-                                individual_score = grade.get_individual_score(key)
-                                if individual_score is not None:
-                                    all_scores.append(individual_score)
+                                # Get score from new_assessment_scores directly
+                                if key in new_assessment_scores:
+                                    score_data = new_assessment_scores[key]
+                                    if score_data and 'score' in score_data:
+                                        score = score_data['score']
+                                        if score is not None:
+                                            all_scores.append(float(score))
                             
                             # Only set average if ALL assessments are entered
                             if len(all_scores) == assessment_count and assessment_count > 0:
@@ -2514,25 +2531,58 @@ def update_multiple_grades(request, course_name):
                 # Update last_changes_at
                 grade.last_changes_at = timezone.now()
                 
-                # Save all changes
+                # Save ALL fields at once (including assessment_scores, averages, overall_score, letter_grade)
+                # Don't use update_fields for JSONField - save everything to ensure JSONField is persisted
                 grade.save()
+                
+                # Force database commit by refreshing - this ensures data is read from database
+                # For JSONField, refresh_from_db() is critical to ensure we get the saved data
+                grade.refresh_from_db()
+                
+                # Verify assessment_scores was saved correctly
+                # Access the field to trigger database read
+                _ = grade.assessment_scores
                 
                 for change in student_changes:
                     assessment_key = change['assessment_key']
                     updated_count += 1
+                    # Get score from database after refresh
+                    # This should now return the saved value
+                    saved_score = grade.get_individual_score(assessment_key)
                     results.append({
                         'student_id': student.student_id,
                         'assessment_key': assessment_key,
-                        'score': grade.get_individual_score(assessment_key),
+                        'score': saved_score,
                         'overall_score': grade.overall_score,
                         'letter_grade': grade.letter_grade
                     })
+        
+        # Get the most recent last_changes_at from the results
+        # All grades in the transaction should have the same last_changes_at
+        last_changes_at_value = None
+        if results:
+            # Get the last_changes_at from the first grade (all should be the same)
+            # We need to query the database to get the actual saved value
+            try:
+                first_result = results[0]
+                first_grade = Grade.objects.filter(
+                    student__student_id=first_result['student_id'],
+                    course=course
+                ).first()
+                if first_grade:
+                    last_changes_at_value = first_grade.last_changes_at
+            except Exception:
+                pass
+        
+        # Fallback to current time if we couldn't get it from database
+        if not last_changes_at_value:
+            last_changes_at_value = timezone.now()
         
         return JsonResponse({
             'status': 'ok',
             'updated_count': updated_count,
             'results': results,
-            'last_changes_at': timezone.now().isoformat()
+            'last_changes_at': last_changes_at_value.isoformat() if last_changes_at_value else timezone.now().isoformat()
         })
         
     except Exception as e:
@@ -2617,6 +2667,16 @@ def update_assessment(request, course_name):
         with transaction.atomic():
             try:
                 assessment = Assessment.objects.select_for_update().get(course=course)
+                # Eski değerleri sakla (assessment_scores temizleme için)
+                old_values = {
+                    'midterm': assessment.midterm or 0,
+                    'final': assessment.final or 0,
+                    'project': assessment.project or 0,
+                    'assignment': assessment.assignment or 0,
+                    'absence': assessment.absence or 0,
+                    'quiz': assessment.quiz or 0
+                }
+                
                 # Mevcut assessment'ı güncelle
                 assessment.midterm = values['midterm']
                 assessment.final = values['final']
@@ -2628,6 +2688,14 @@ def update_assessment(request, course_name):
                 assessment.save()
             except Assessment.DoesNotExist:
                 # Assessment yoksa oluştur
+                old_values = {
+                    'midterm': 0,
+                    'final': 0,
+                    'project': 0,
+                    'assignment': 0,
+                    'absence': 0,
+                    'quiz': 0
+                }
                 assessment = Assessment.objects.create(
                     course=course,
                     midterm=values['midterm'],
@@ -2641,12 +2709,42 @@ def update_assessment(request, course_name):
         # Database'den yeniden oku (güncel değerleri garantilemek için)
         assessment.refresh_from_db()
         
-        # Recalculate overall_score for all grades in this course
-        # (Assessment counts changed, so overall scores might need recalculation)
+        # Update assessment_scores for all grades in this course
+        # Remove assessment scores that are no longer valid (e.g., if midterm count changed from 3 to 2, remove midterm_3)
         grades = Grade.objects.filter(course=course)
+        assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
+        
         for grade in grades:
+            if not grade.assessment_scores:
+                grade.assessment_scores = {}
+            
+            # Create a copy to modify
+            from copy import deepcopy
+            updated_assessment_scores = deepcopy(grade.assessment_scores) if grade.assessment_scores else {}
+            scores_changed = False
+            
+            # For each assessment type, remove scores that exceed the new count
+            for assessment_type in assessment_types:
+                old_count = old_values[assessment_type]
+                new_count = values[assessment_type]
+                
+                # If count decreased, remove scores beyond the new count
+                if new_count < old_count:
+                    for i in range(new_count + 1, old_count + 1):
+                        key = f'{assessment_type}_{i}'
+                        if key in updated_assessment_scores:
+                            del updated_assessment_scores[key]
+                            scores_changed = True
+            
+            # Update grade if scores were changed
+            if scores_changed:
+                grade.assessment_scores = updated_assessment_scores
+                grade.save(update_fields=['assessment_scores'])
+            
+            # Recalculate overall_score for all grades
+            # (Assessment counts changed, so overall scores might need recalculation)
             grade.calculate_overall_score()
-            grade.save(update_fields=['overall_score'])
+            grade.save(update_fields=['overall_score', 'letter_grade'])
         
         return JsonResponse({
             'status': 'ok',
@@ -4514,7 +4612,7 @@ def faculty_head_grades(request, course_name=None):
     
     # If no course_name provided, show course selection page
     if not course_name:
-        courses = []
+        courses_list = []
         if profile:
             faculty_head_courses_from_data = faculty_head_data.get('courses', [])
             
@@ -4524,15 +4622,30 @@ def faculty_head_grades(request, course_name=None):
                         course = Course.objects.get(name=course_name_from_data)
                         if course.department and course.department.strip():
                             if course.department.lower().strip() == faculty_head_department.lower().strip():
-                                courses.append(course_name_from_data)
+                                student_count = course.students.count()
+                                courses_list.append({
+                                    'name': course.name,
+                                    'credits': course.credits if course.credits is not None else '-',
+                                    'student_count': student_count
+                                })
                     except Course.DoesNotExist:
                         continue
             else:
-                courses = faculty_head_courses_from_data
+                for course_name_from_data in faculty_head_courses_from_data:
+                    try:
+                        course = Course.objects.get(name=course_name_from_data)
+                        student_count = course.students.count()
+                        courses_list.append({
+                            'name': course.name,
+                            'credits': course.credits if course.credits is not None else '-',
+                            'student_count': student_count
+                        })
+                    except Course.DoesNotExist:
+                        continue
         
         return render(request, 'faculty/faculty_head_grades.html', {
             'show_course_selection': True,
-            'faculty_head_courses': courses
+            'faculty_head_courses': courses_list
         })
     
     # Get course
