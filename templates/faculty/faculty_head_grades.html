@@ -1,29 +1,1107 @@
 {% extends "faculty/base.html" %}
+{% load static %}
 
-{% block title %}Faculty Head Grades{% endblock %}
+{% block extra_head %}
+<style>
+    .course-row-even {
+        background-color: #f8fafc;
+    }
+    .course-row-odd {
+        background-color: white;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
+{% if show_course_selection %}
     <h1 style="font-size: 32px; margin: 0 0 24px 0;">Grades</h1>
 
-    <div style="margin-top: 16px;">
-        <label for="fh-course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">
-            Select Course
-        </label>
-        <select id="fh-course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
-            <option value="">-- Select a course --</option>
+    <div style="margin-top: 16px; display: flex; justify-content: center;">
+        {% if faculty_head_courses %}
+        <table id="courses-table" style="width: 100%; max-width: 500px; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+            <thead>
+                <tr style="background-color: #0b5fff; color: white;">
+                    <th style="padding: 12px; text-align: left; border: 1px solid #334155;">Course Name</th>
+                </tr>
+            </thead>
+            <tbody>
             {% for course in faculty_head_courses %}
-            <option value="{{ course }}">{{ course }}</option>
+                <tr class="course-row {% if forloop.counter0|divisibleby:2 %}course-row-even{% else %}course-row-odd{% endif %}" data-course="{{ course }}" style="cursor: pointer; border-bottom: 1px solid #ddd;">
+                    <td style="padding: 12px; border: 1px solid #e2e8f0;">{{ course }}</td>
+                </tr>
             {% endfor %}
-        </select>
+            </tbody>
+        </table>
+        {% else %}
+        <table id="courses-table" style="width: 100%; max-width: 500px; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+            <thead>
+                <tr style="background-color: #0b5fff; color: white;">
+                    <th style="padding: 12px; text-align: left; border: 1px solid #334155;">Course Name</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="padding: 12px; text-align: center; color: #666; border: 1px solid #e2e8f0;">No courses available</td>
+                </tr>
+            </tbody>
+        </table>
+        {% endif %}
     </div>
 
     <script>
-        document.getElementById("fh-course-select").addEventListener("change", function() {
-            const selectedCourse = this.value;
-            if (selectedCourse) {
-                window.location.href = `/faculty-head/grades/${encodeURIComponent(selectedCourse)}/`;
-            }
+        document.addEventListener('DOMContentLoaded', function() {
+            const courseRows = document.querySelectorAll('.course-row');
+            courseRows.forEach(function(row, index) {
+                const originalBg = index % 2 === 0 ? '#f8fafc' : 'white';
+                row.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#e0f2fe';
+                });
+                row.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = originalBg;
+                });
+                row.addEventListener('click', function() {
+                    const courseName = this.dataset.course;
+                    if (courseName) {
+                        window.location.href = '/faculty-head/grades/' + encodeURIComponent(courseName) + '/';
+                    }
+                });
+            });
         });
     </script>
-{% endblock %}
+{% else %}
+<div style="margin-left: 50px; margin-bottom: 20px;">
+    <a href="{% url 'faculty-head-grades' %}" style="display: inline-flex; align-items: center; gap: 6px; color: #0b5fff; text-decoration: none; font-size: 14px; font-weight: 600; margin-bottom: 10px;">
+        <span style="font-size: 16px; color: #0b5fff;">←</span>
+        <span style="color: #0b5fff;">Go Back</span>
+    </a>
+    <h1 style="margin: 0;">Grades Management - {{ course.name }}</h1>
+</div>
 
+<!-- Assessment Management Section -->
+<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #0f172a;">Assessment Management</h2>
+        <button type="button" id="toggle-assessment-btn" 
+                style="padding: 8px 16px; background: #0b5fff; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+            <span id="toggle-assessment-text">Show</span>
+    </button>
+</div>
+
+    <div id="assessment-content" style="display: none;">
+    <!-- Assessment Counts Section -->
+    <div style="margin-bottom: 30px;">
+        <h3 style="margin-top: 0; margin-bottom: 15px; color: #0f172a; font-size: 18px;">Assessment Counts</h3>
+        <form id="assessment-form" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
+            <div style="flex: 0 0 auto;">
+                <label for="midterm" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Midterm</label>
+                <input type="number" id="midterm" name="midterm" value="{{ assessment.midterm }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+</div>
+
+            <div style="flex: 0 0 auto;">
+                <label for="final" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Final</label>
+                <input type="number" id="final" name="final" value="{{ assessment.final }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+                                </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="project" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Project</label>
+                <input type="number" id="project" name="project" value="{{ assessment.project }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+                            </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="assignment" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Assignment</label>
+                <input type="number" id="assignment" name="assignment" value="{{ assessment.assignment }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+    </div>
+            
+            <div style="flex: 0 0 auto;">
+                <label for="absence" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Absence</label>
+                <input type="number" id="absence" name="absence" value="{{ assessment.absence }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+</div>
+
+            <div style="flex: 0 0 auto;">
+                <label for="quiz" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Quiz</label>
+                <input type="number" id="quiz" name="quiz" value="{{ assessment.quiz }}" 
+                       min="0" max="9" step="1" required
+                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+            </div>
+            
+            <div style="flex: 0 0 auto; margin-left: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Total Count</label>
+                <div id="assessment-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                    {{ assessment.assessment_count }}
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Assessment Percentages Section -->
+    <div>
+        <h3 style="margin-top: 0; margin-bottom: 15px; color: #0f172a; font-size: 18px;">Assessment Percentages</h3>
+        <form id="assessment-percentages-form" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
+            <div style="flex: 0 0 auto; margin-left: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Total %</label>
+                <div id="percentage-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                    {{ assessment.percentage_count }}
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <script type="application/json" id="assessment-data">
+    {
+        "midterm_percentage": {{ assessment.midterm_percentage|default:0 }},
+        "final_percentage": {{ assessment.final_percentage|default:0 }},
+        "project_percentage": {{ assessment.project_percentage|default:0 }},
+        "assignment_percentage": {{ assessment.assignment_percentage|default:0 }},
+        "absence_percentage": {{ assessment.absence_percentage|default:0 }},
+        "quiz_percentage": {{ assessment.quiz_percentage|default:0 }}
+    }
+    </script>
+    
+    <!-- Combined Save Button -->
+    <button type="button" id="save-all-btn" 
+            style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        Save
+                        </button>
+    
+    <!-- Combined Message Display -->
+    <div id="combined-message" style="margin-top: 15px; padding: 12px; border-radius: 12px; display: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"></div>
+    </div>
+    </div>
+    
+<!-- Grade Upload Section - Separate Box -->
+<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #0f172a;">Upload Grades - With CSV</h2>
+        <button type="button" id="download-template-btn" 
+                style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+            Download Student List CSV
+        </button>
+                                </div>
+    <p style="margin-bottom: 20px; color: #475569; font-size: 14px;">
+        Upload separate CSV files for each assessment. CSV format: <code>student_id, score</code>
+    </p>
+    
+    <div id="grade-upload-boxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+        <!-- Upload boxes will be dynamically generated here -->
+    </div>
+    
+    <!-- Upload Status Messages -->
+    <div id="upload-status-messages" style="margin-top: 20px;"></div>
+</div>
+
+{% include 'faculty/grades_list.html' %}
+
+    <script>
+function getCsrfToken() {
+    const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/);
+    return cookieMatch ? cookieMatch[1] : null;
+}
+
+(function() {
+    'use strict';
+    
+    const courseName = "{{ course.name|escapejs }}";
+    const assessmentForm = document.getElementById('assessment-form');
+    const saveAllBtn = document.getElementById('save-all-btn');
+    const combinedMessageDiv = document.getElementById('combined-message');
+    const countDisplay = document.getElementById('assessment-count-display');
+    const uploadedFilesInfo = JSON.parse('{{ uploaded_files_info|escapejs }}' || '{}');
+    const gradesData = JSON.parse('{{ grades_data|escapejs }}' || '[]');
+    const assessmentColumns = JSON.parse('{{ assessment_columns|escapejs }}' || '[]');
+    
+    // Input değişikliklerinde toplamı güncelle
+    const inputs = assessmentForm.querySelectorAll('input[type="number"]');
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            updateTotal();
+        });
+    });
+    
+    function updateTotal() {
+        let total = 0;
+        inputs.forEach(input => {
+            const value = parseInt(input.value) || 0;
+            total += value;
+        });
+        countDisplay.textContent = total;
+    }
+    
+    // Sayfa yüklendiğinde toplamı güncelle
+    updateTotal();
+    
+    // Combined Save butonu
+    saveAllBtn.addEventListener('click', function() {
+        // Mesaj div'ini temizle
+        combinedMessageDiv.style.display = 'none';
+        combinedMessageDiv.innerHTML = '';
+        
+        // Assessment Count verilerini al
+        const countData = {
+            midterm: parseInt(document.getElementById('midterm').value),
+            final: parseInt(document.getElementById('final').value),
+            project: parseInt(document.getElementById('project').value),
+            assignment: parseInt(document.getElementById('assignment').value),
+            absence: parseInt(document.getElementById('absence').value),
+            quiz: parseInt(document.getElementById('quiz').value)
+        };
+        
+        const percentageData = {};
+        const percentageInputs = document.querySelectorAll('#assessment-percentages-form input[type="number"]');
+        percentageInputs.forEach(input => {
+            const name = input.name;
+            const value = parseInt(input.value) || 0;
+            
+            const match = name.match(/^(\w+)_percentage_(\d+)$/);
+            if (match) {
+                const assessmentType = match[1];
+                const index = parseInt(match[2]);
+                
+                if (!percentageData[assessmentType]) {
+                    percentageData[assessmentType] = [];
+                }
+                percentageData[assessmentType][index] = value;
+            } else {
+                percentageData[name] = value;
+            }
+        });
+        
+        const percentageDataForBackend = {};
+        const allAssessmentTypes = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz'];
+        
+        allAssessmentTypes.forEach(type => {
+            const count = countData[type] || 0;
+            const key = `${type}_percentage`;
+            
+            if (count > 0) {
+                if (percentageData[type]) {
+                    if (Array.isArray(percentageData[type])) {
+                        percentageDataForBackend[key] = percentageData[type].reduce((sum, val) => sum + (val || 0), 0);
+                    } else {
+                        percentageDataForBackend[key] = percentageData[type] || 0;
+                    }
+                } else {
+                    percentageDataForBackend[key] = 0;
+                }
+            } else {
+                percentageDataForBackend[key] = 0;
+            }
+        });
+        
+        // Validation: Assessment Count - Integer kontrolü ve 10'dan küçük olması
+        let countErrors = [];
+        for (const [key, value] of Object.entries(countData)) {
+            if (isNaN(value) || !Number.isInteger(value)) {
+                countErrors.push(`${key.charAt(0).toUpperCase() + key.slice(1)} must be an integer. If there is no value, enter 0.`);
+            } else if (value < 0) {
+                countErrors.push(`You have to write a positive number.`);
+                break; // İlk negatif değerde dur
+            } else if (value >= 10) {
+                countErrors.push(`${key.charAt(0).toUpperCase() + key.slice(1)} must be less than 10.`);
+            }
+        }
+        
+        // Validation: Assessment Percentage - Integer kontrolü
+        let percentageErrors = [];
+        for (const [key, value] of Object.entries(percentageDataForBackend)) {
+            if (isNaN(value) || !Number.isInteger(value)) {
+                percentageErrors.push(`${key.replace('_', ' ')} must be an integer.`);
+            } else if (value < 0) {
+                percentageErrors.push(`You have to write a positive number.`);
+                break; // İlk negatif değerde dur
+            } else if (value > 100) {
+                percentageErrors.push(`${key.replace('_', ' ')} cannot be greater than 100.`);
+            }
+        }
+        
+        // Validate individual percentages (each should be 0-100)
+        for (const [key, values] of Object.entries(percentageData)) {
+            if (Array.isArray(values)) {
+                values.forEach((val, index) => {
+                    if (isNaN(val) || !Number.isInteger(val)) {
+                        const assessmentType = key.charAt(0).toUpperCase() + key.slice(1);
+                        percentageErrors.push(`${assessmentType} ${index + 1} must be an integer.`);
+                    } else if (val < 0) {
+                        percentageErrors.push(`You have to write a positive number.`);
+                    } else if (val > 100) {
+                        const assessmentType = key.charAt(0).toUpperCase() + key.slice(1);
+                        percentageErrors.push(`${assessmentType} ${index + 1} cannot be greater than 100.`);
+                    }
+                });
+            }
+        }
+        
+        // Assessment Count kontrolü: Percentage > 0 ise, count > 0 olmalı
+        const missingAssessments = [];
+        const assessmentMapping = {
+            'midterm_percentage': { count: 'midterm', name: 'Midterm' },
+            'final_percentage': { count: 'final', name: 'Final' },
+            'project_percentage': { count: 'project', name: 'Project' },
+            'assignment_percentage': { count: 'assignment', name: 'Assignment' },
+            'absence_percentage': { count: 'absence', name: 'Absence' },
+            'quiz_percentage': { count: 'quiz', name: 'Quiz' }
+        };
+        
+        for (const [percentageKey, percentageValue] of Object.entries(percentageDataForBackend)) {
+            if (percentageValue > 0) {
+                const mapping = assessmentMapping[percentageKey];
+                if (mapping && countData[mapping.count] === 0) {
+                    missingAssessments.push(`You haven't assigned a ${mapping.name} yet.`);
+                }
+            }
+        }
+        
+        // Important mesajları: Count > 0 ama percentage == 0
+        const importantWarnings = [];
+        const countToPercentageMapping = {
+            'midterm': 'midterm_percentage',
+            'final': 'final_percentage',
+            'project': 'project_percentage',
+            'assignment': 'assignment_percentage',
+            'absence': 'absence_percentage',
+            'quiz': 'quiz_percentage'
+        };
+        const countToNameMapping = {
+            'midterm': 'Midterm',
+            'final': 'Final',
+            'project': 'Project',
+            'assignment': 'Assignment',
+            'absence': 'Absence',
+            'quiz': 'Quiz'
+        };
+        
+        for (const [countKey, countValue] of Object.entries(countData)) {
+            if (countValue > 0) {
+                const percentageKey = countToPercentageMapping[countKey];
+                // Check percentageDataForBackend instead of percentageData (which has arrays)
+                const percentageValue = percentageDataForBackend[percentageKey] || 0;
+                if (percentageValue === 0) {
+                    const name = countToNameMapping[countKey];
+                    importantWarnings.push(`You haven't assigned a percentage for ${name}.`);
+                }
+            }
+        }
+        
+        // Toplam 100 kontrolü
+        const totalPercentage = Object.values(percentageDataForBackend).reduce((sum, val) => sum + val, 0);
+        if (totalPercentage !== 100) {
+            percentageErrors.push(`Total percentage must be exactly 100. Current total: ${totalPercentage}`);
+        }
+        
+        // Tüm hataları birleştir
+        const allErrors = [...countErrors, ...percentageErrors, ...missingAssessments, ...importantWarnings];
+        
+        if (allErrors.length > 0) {
+            combinedMessageDiv.style.display = 'block';
+            combinedMessageDiv.style.background = '#fee2e2';
+            combinedMessageDiv.style.color = '#dc2626';
+            combinedMessageDiv.style.border = '1px solid #fca5a5';
+            combinedMessageDiv.innerHTML = allErrors.join('<br>');
+            return;
+        }
+        
+        // Her iki API'ye de gönder
+        const countPromise = fetch(`/faculty-head/grades/${courseName}/update-assessment/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(countData)
+        }).then(response => response.json());
+        
+        const percentagePromise = fetch(`/faculty-head/grades/${courseName}/update-assessment-percentages/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(percentageDataForBackend)
+        }).then(response => response.json());
+        
+        Promise.all([countPromise, percentagePromise])
+        .then(([countResult, percentageResult]) => {
+            if (countResult.status === 'ok' && percentageResult.status === 'ok') {
+                combinedMessageDiv.style.display = 'block';
+                combinedMessageDiv.style.background = '#d1fae5';
+                combinedMessageDiv.style.color = '#065f46';
+                combinedMessageDiv.style.border = '1px solid #6ee7b7';
+                combinedMessageDiv.textContent = 'Assessment data saved successfully!';
+                
+                // Reload page after successful save
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                const errors = [];
+                if (countResult.error) errors.push(`Counts: ${countResult.error}`);
+                if (percentageResult.error) errors.push(`Percentages: ${percentageResult.error}`);
+                
+                combinedMessageDiv.style.display = 'block';
+                combinedMessageDiv.style.background = '#fee2e2';
+                combinedMessageDiv.style.color = '#dc2626';
+                combinedMessageDiv.style.border = '1px solid #fca5a5';
+                combinedMessageDiv.innerHTML = errors.length > 0 ? errors.join('<br>') : 'Save failed';
+            }
+        })
+        .catch(error => {
+            combinedMessageDiv.style.display = 'block';
+            combinedMessageDiv.style.background = '#fee2e2';
+            combinedMessageDiv.style.color = '#dc2626';
+            combinedMessageDiv.style.border = '1px solid #fca5a5';
+            combinedMessageDiv.textContent = error;
+        });
+    });
+    
+    // Assessment Percentages Section
+    const percentagesForm = document.getElementById('assessment-percentages-form');
+    const percentageCountDisplay = document.getElementById('percentage-count-display');
+    
+    const assessmentTypes = [
+        { key: 'midterm', label: 'Midterm' },
+        { key: 'final', label: 'Final' },
+        { key: 'project', label: 'Project' },
+        { key: 'assignment', label: 'Assignment' },
+        { key: 'absence', label: 'Absence' },
+        { key: 'quiz', label: 'Quiz' }
+    ];
+    
+    const assessmentDataElement = document.getElementById('assessment-data');
+    const assessmentData = assessmentDataElement ? JSON.parse(assessmentDataElement.textContent) : {};
+    const currentPercentages = {
+        midterm: assessmentData.midterm_percentage || 0,
+        final: assessmentData.final_percentage || 0,
+        project: assessmentData.project_percentage || 0,
+        assignment: assessmentData.assignment_percentage || 0,
+        absence: assessmentData.absence_percentage || 0,
+        quiz: assessmentData.quiz_percentage || 0
+    };
+    
+    function createPercentageInput(assessmentType, index, count, defaultValue) {
+        const div = document.createElement('div');
+        div.style.cssText = 'flex: 0 0 auto;';
+        
+        const label = document.createElement('label');
+        const labelText = count > 1 ? `${assessmentType.label} ${index + 1} %` : `${assessmentType.label} %`;
+        label.textContent = labelText;
+        label.style.cssText = 'display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;';
+        label.setAttribute('for', `${assessmentType.key}_percentage_${index}`);
+        
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.id = `${assessmentType.key}_percentage_${index}`;
+        input.name = `${assessmentType.key}_percentage_${index}`;
+        input.value = defaultValue || 0;
+        input.min = 0;
+        input.max = 100;
+        input.step = 1;
+        input.required = true;
+        input.style.cssText = 'width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);';
+        input.addEventListener('input', updatePercentageTotal);
+        
+        div.appendChild(label);
+        div.appendChild(input);
+        
+        return div;
+    }
+    
+    // Function to rebuild percentage inputs based on counts
+    function rebuildPercentageInputs() {
+        if (!percentagesForm) return;
+        
+        // Get Total % div reference before clearing
+        const totalDiv = percentagesForm.querySelector('[id*="percentage-count"]')?.parentElement;
+        
+        // Remove all input divs (but keep Total % div)
+        const allChildren = Array.from(percentagesForm.children);
+        allChildren.forEach(child => {
+            if (!child.querySelector('#percentage-count-display')) {
+                child.remove();
+            }
+        });
+        
+        // Get current count values
+        const counts = {
+            midterm: parseInt(document.getElementById('midterm').value) || 0,
+            final: parseInt(document.getElementById('final').value) || 0,
+            project: parseInt(document.getElementById('project').value) || 0,
+            assignment: parseInt(document.getElementById('assignment').value) || 0,
+            absence: parseInt(document.getElementById('absence').value) || 0,
+            quiz: parseInt(document.getElementById('quiz').value) || 0
+        };
+        
+        // Create inputs for each assessment type
+        assessmentTypes.forEach(assessmentType => {
+            const count = counts[assessmentType.key];
+            
+            if (count > 1) {
+                // Create separate input for each item
+                for (let i = 0; i < count; i++) {
+                    // Try to get existing value, otherwise distribute evenly
+                    let defaultValue = 0;
+                    if (currentPercentages[assessmentType.key] > 0) {
+                        // Distribute existing percentage evenly
+                        defaultValue = Math.floor(currentPercentages[assessmentType.key] / count);
+                    }
+                    const inputDiv = createPercentageInput(assessmentType, i, count, defaultValue);
+                    // Insert before Total % div
+                    if (totalDiv) {
+                        percentagesForm.insertBefore(inputDiv, totalDiv);
+                    } else {
+                        percentagesForm.appendChild(inputDiv);
+                    }
+                }
+            } else if (count === 1) {
+                // Single input
+                const defaultValue = currentPercentages[assessmentType.key] || 0;
+                const inputDiv = createPercentageInput(assessmentType, 0, count, defaultValue);
+                // Insert before Total % div
+                if (totalDiv) {
+                    percentagesForm.insertBefore(inputDiv, totalDiv);
+                } else {
+                    percentagesForm.appendChild(inputDiv);
+                }
+            }
+        });
+        
+        // Update total
+        updatePercentageTotal();
+    }
+    
+    // Function to update percentage total
+    function updatePercentageTotal() {
+        if (!percentageCountDisplay || !percentagesForm) return;
+        
+        const currentInputs = percentagesForm.querySelectorAll('input[type="number"]');
+        let total = 0;
+        currentInputs.forEach(input => {
+            const value = parseInt(input.value) || 0;
+            total += value;
+        });
+        percentageCountDisplay.textContent = total;
+    }
+    
+    // Listen to count input changes
+    const countInputs = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz'];
+    countInputs.forEach(key => {
+        const input = document.getElementById(key);
+        if (input) {
+            input.addEventListener('input', function() {
+                rebuildPercentageInputs();
+            });
+        }
+    });
+    
+    // Initial build on page load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(rebuildPercentageInputs, 100);
+        });
+    } else {
+        setTimeout(rebuildPercentageInputs, 100);
+    }
+    
+    // Toggle Assessment Management content
+    const toggleAssessmentBtn = document.getElementById('toggle-assessment-btn');
+    const assessmentContent = document.getElementById('assessment-content');
+    const toggleAssessmentText = document.getElementById('toggle-assessment-text');
+    
+    toggleAssessmentBtn.addEventListener('click', function() {
+        if (assessmentContent.style.display === 'none') {
+            assessmentContent.style.display = 'block';
+            toggleAssessmentText.textContent = 'Hide';
+        } else {
+            assessmentContent.style.display = 'none';
+            toggleAssessmentText.textContent = 'Show';
+        }
+    });
+    
+    // Download Student List CSV
+    const downloadTemplateBtn = document.getElementById('download-template-btn');
+    if (downloadTemplateBtn) {
+        downloadTemplateBtn.addEventListener('click', function() {
+            try {
+                // Get student data from grades_data (which comes from PostgreSQL)
+                const gradesDataArray = JSON.parse('{{ grades_data|escapejs }}' || '[]');
+                
+                if (!gradesDataArray || gradesDataArray.length === 0) {
+                    alert('No students enrolled in this course.');
+                    return;
+                }
+                
+                // Create CSV content
+                let csvContent = 'student_id,score\n';
+                gradesDataArray.forEach(student => {
+                    if (student && student.student_id) {
+                        csvContent += student.student_id + ',\n';
+                    }
+                });
+                
+                // Create blob and download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                const courseNameForFile = courseName.replace(/[^a-z0-9]/gi, '_');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `students_${courseNameForFile}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Clean up the URL object
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 100);
+            } catch (error) {
+                console.error('Error downloading template:', error);
+                alert('Error downloading template. Please try again.');
+            }
+        });
+    }
+    
+    // Grade Upload Section - Dynamically create upload boxes based on assessment
+    function createUploadBoxes() {
+        // Get current values from input fields (or use template values as fallback)
+        const assessmentTypes = [
+            { key: 'midterm', label: 'Midterm', count: parseInt(document.getElementById('midterm')?.value || '{{ assessment.midterm }}') || 0 },
+            { key: 'final', label: 'Final', count: parseInt(document.getElementById('final')?.value || '{{ assessment.final }}') || 0 },
+            { key: 'project', label: 'Project', count: parseInt(document.getElementById('project')?.value || '{{ assessment.project }}') || 0 },
+            { key: 'assignment', label: 'Assignment', count: parseInt(document.getElementById('assignment')?.value || '{{ assessment.assignment }}') || 0 },
+            { key: 'absence', label: 'Absence', count: parseInt(document.getElementById('absence')?.value || '{{ assessment.absence }}') || 0 },
+            { key: 'quiz', label: 'Quiz', count: parseInt(document.getElementById('quiz')?.value || '{{ assessment.quiz }}') || 0 }
+        ];
+        
+        const uploadBoxesDiv = document.getElementById('grade-upload-boxes');
+        uploadBoxesDiv.innerHTML = '';
+        
+        assessmentTypes.forEach(type => {
+            if (type.count > 0) {
+                // Create a separate box for each assessment file
+                for (let i = 1; i <= type.count; i++) {
+                    const assessmentKey = `${type.key}_${i}`;
+                    const box = document.createElement('div');
+                    box.style.cssText = 'padding: 20px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);';
+                    
+                    box.innerHTML = `
+                        <h4 style="margin-top: 0; margin-bottom: 10px; color: #0f172a; font-size: 16px;">${type.label} ${i}</h4>
+                        <p style="margin-bottom: 15px; color: #475569; font-size: 12px;">
+                            Required columns: <code style="font-size: 11px;">student_id, score</code>
+                        </p>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <input type="file" 
+                                   id="file-${assessmentKey}" 
+                                   accept=".csv" 
+                                   style="display: none;">
+                            <button type="button" 
+                                    class="file-select-btn" 
+                                    data-target="file-${assessmentKey}"
+                                    style="width: 100%; padding: 8px 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; color: #475569; cursor: pointer; text-align: left; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 16px;">📁</span>
+                                <span>Choose File</span>
+                            </button>
+                            <div id="file-selected-${assessmentKey}" style="font-size: 12px; color: #64748b; margin-top: 4px; display: none;"></div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <button type="button" 
+                                        class="upload-btn" 
+                                        data-type="${type.key}"
+                                        data-index="${i}"
+                                        style="flex: 1; padding: 8px 12px; background: #0b5fff; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                                    Upload
+                                </button>
+                                <button type="button" 
+                                        class="delete-btn" 
+                                        data-type="${type.key}"
+                                        data-index="${i}"
+                                        title="Delete uploaded file"
+                                        style="width: 40px; height: 40px; padding: 0; background: #dc3545; color: white; border: none; border-radius: 10px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                        <div id="status-${assessmentKey}" style="margin-top: 10px; padding: 8px; border-radius: 10px; display: none; font-size: 13px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"></div>
+                        <div id="file-info-${assessmentKey}" style="margin-top: 8px; padding: 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 11px; color: #64748b; display: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+                            <div style="font-weight: 600; margin-bottom: 4px; color: #475569;">Last uploaded file:</div>
+                            <div id="file-name-${assessmentKey}" style="margin-bottom: 2px;"></div>
+                            <div id="file-time-${assessmentKey}" style="font-size: 10px;"></div>
+                        </div>
+                    `;
+                    
+                    uploadBoxesDiv.appendChild(box);
+                    
+                    // Get file input from DOM after box is added
+                    const fileInputElement = document.getElementById(`file-${assessmentKey}`);
+                    
+                    // Show file info if exists
+                    if (uploadedFilesInfo[assessmentKey]) {
+                        const fileInfo = uploadedFilesInfo[assessmentKey];
+                        const fileInfoDiv = document.getElementById(`file-info-${assessmentKey}`);
+                        const fileNameDiv = document.getElementById(`file-name-${assessmentKey}`);
+                        const fileTimeDiv = document.getElementById(`file-time-${assessmentKey}`);
+                        if (fileInfoDiv && fileNameDiv && fileTimeDiv) {
+                            fileNameDiv.textContent = fileInfo.file_name;
+                            const uploadedDate = new Date(fileInfo.uploaded_at);
+                            fileTimeDiv.textContent = `Uploaded: ${uploadedDate.toLocaleString()}`;
+                            fileInfoDiv.style.display = 'block';
+                        }
+                    }
+                    
+                    // Add click event listener to file select button
+                    const fileSelectBtn = box.querySelector('.file-select-btn');
+                    const fileSelectedDiv = document.getElementById(`file-selected-${assessmentKey}`);
+                    
+                    // File input is already created and stored in fileInput variable, but get it from DOM to be sure
+                    if (fileSelectBtn && fileInputElement) {
+                        // When button is clicked, trigger file input
+                        fileSelectBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            fileInputElement.click();
+                        });
+                        
+                        // Update button text when file is selected
+                        fileInputElement.addEventListener('change', function(e) {
+                            console.log('File selected for', assessmentKey, ':', e.target.files);
+                            if (e.target.files && e.target.files.length > 0) {
+                                const file = e.target.files[0];
+                                const fileName = file.name;
+                                // Store file reference in data attribute for later use
+                                fileInputElement.dataset.selectedFile = fileName;
+                                fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>${fileName}</span>`;
+                                fileSelectBtn.style.color = '#059669';
+                                fileSelectBtn.style.fontWeight = '500';
+                                console.log('File input updated for', assessmentKey, ':', fileName, 'file object:', file, 'files array:', e.target.files);
+                            } else {
+                                delete fileInputElement.dataset.selectedFile;
+                                fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
+                                fileSelectBtn.style.color = '#475569';
+                                fileSelectBtn.style.fontWeight = '400';
+                            }
+                        });
+                    } else {
+                        console.error('File select button or input not found for', assessmentKey, 'fileSelectBtn:', fileSelectBtn, 'fileInputElement:', fileInputElement);
+                    }
+                }
+            }
+        });
+    }
+    
+    // Use event delegation for upload and delete buttons (works with dynamically created buttons)
+    // Set up event listeners once, outside of createUploadBoxes function
+    const uploadBoxesDiv = document.getElementById('grade-upload-boxes');
+    
+    if (!uploadBoxesDiv) {
+        console.error('grade-upload-boxes element not found');
+        return;
+    }
+    
+    // Upload button event delegation
+    uploadBoxesDiv.addEventListener('click', function(e) {
+        if (e.target.classList.contains('upload-btn') || e.target.closest('.upload-btn')) {
+            const btn = e.target.classList.contains('upload-btn') ? e.target : e.target.closest('.upload-btn');
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const assessmentType = btn.getAttribute('data-type');
+            const assessmentIndex = btn.getAttribute('data-index');
+            const assessmentKey = `${assessmentType}_${assessmentIndex}`;
+            const fileInput = document.getElementById(`file-${assessmentKey}`);
+            const statusDiv = document.getElementById(`status-${assessmentKey}`);
+            
+            console.log('Upload button clicked for', assessmentKey, 'fileInput:', fileInput);
+            
+            // Check if file input exists
+            if (!fileInput) {
+                console.error('File input not found for:', assessmentKey);
+                if (statusDiv) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#fee2e2';
+                    statusDiv.style.color = '#dc2626';
+                    statusDiv.style.border = '1px solid #fca5a5';
+                    statusDiv.textContent = 'Error: File input not found';
+                }
+                return;
+            }
+            
+            console.log('File input found, files:', fileInput.files, 'length:', fileInput.files ? fileInput.files.length : 0);
+            console.log('File input value:', fileInput.value);
+            console.log('File input dataset:', fileInput.dataset);
+            
+            // Check if file is selected
+            if (!fileInput.files || fileInput.files.length === 0) {
+                // Also check if file was selected but files array is empty (can happen in some browsers)
+                if (!fileInput.value && !fileInput.dataset.selectedFile) {
+                    console.log('No file selected');
+                    if (statusDiv) {
+                        statusDiv.style.display = 'block';
+                        statusDiv.style.background = '#fee2e2';
+                        statusDiv.style.color = '#dc2626';
+                        statusDiv.style.border = '1px solid #fca5a5';
+                        statusDiv.textContent = 'Please select a CSV file';
+                    }
+                    return;
+                }
+            }
+            
+            const file = fileInput.files && fileInput.files.length > 0 ? fileInput.files[0] : null;
+            console.log('File selected:', file ? file.name : 'null');
+            
+            if (!file) {
+                if (statusDiv) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#fee2e2';
+                    statusDiv.style.color = '#dc2626';
+                    statusDiv.style.border = '1px solid #fca5a5';
+                    statusDiv.textContent = 'Please select a CSV file. Make sure you click "Choose File" and select a file before uploading.';
+                }
+                return;
+            }
+            
+            // Check file type
+            const fileName = file.name.toLowerCase();
+            if (!fileName.endsWith('.csv')) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#fee2e2';
+                statusDiv.style.color = '#dc2626';
+                statusDiv.style.border = '1px solid #fca5a5';
+                statusDiv.textContent = 'Please select a CSV file (.csv extension required)';
+                return;
+            }
+            
+            // Show uploading status
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#dbeafe';
+            statusDiv.style.color = '#1e40af';
+            statusDiv.style.border = '1px solid #93c5fd';
+            statusDiv.textContent = `Uploading ${file.name}...`;
+    
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    
+            console.log('Uploading file:', file.name, 'for', assessmentType, assessmentIndex);
+            
+            fetch(`/faculty-head/grades/${courseName}/upload-${assessmentType}-${assessmentIndex}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: formData
+    })
+            .then(response => {
+                // Try to parse as JSON first (even for error responses)
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        if (!response.ok) {
+                            // Create error object with JSON data
+                            const error = new Error(data.error || `Server error: ${response.status}`);
+                            error.responseData = data;
+                            throw error;
+                        }
+                        return data;
+                    });
+                }
+                // If not JSON, handle as text
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        try {
+                            const jsonData = JSON.parse(text);
+                            const error = new Error(jsonData.error || `Server error: ${response.status}`);
+                            error.responseData = jsonData;
+                            throw error;
+                        } catch (e) {
+                            if (e instanceof Error && e.responseData) {
+                                throw e;
+                            }
+                            throw new Error(`Server error: ${response.status} - ${text.substring(0, 100)}`);
+                        }
+                    });
+                }
+                return response.text().then(text => {
+                    throw new Error('Server returned non-JSON response: ' + text.substring(0, 100));
+                });
+            })
+    .then(data => {
+        if (data.status === 'ok') {
+                    statusDiv.style.background = '#d1fae5';
+                    statusDiv.style.color = '#065f46';
+                    statusDiv.style.border = '1px solid #6ee7b7';
+                    statusDiv.textContent = 'Successfully uploaded grades.';
+                    
+                    // Update file info display
+                    if (data.file_info) {
+                        const fileInfoDiv = document.getElementById(`file-info-${assessmentKey}`);
+                        const fileNameDiv = document.getElementById(`file-name-${assessmentKey}`);
+                        const fileTimeDiv = document.getElementById(`file-time-${assessmentKey}`);
+                        if (fileInfoDiv && fileNameDiv && fileTimeDiv) {
+                            fileNameDiv.textContent = data.file_info.file_name;
+                            const uploadedDate = new Date(data.file_info.uploaded_at);
+                            fileTimeDiv.textContent = `Uploaded: ${uploadedDate.toLocaleString()}`;
+                            fileInfoDiv.style.display = 'block';
+                        }
+                    }
+                    
+                    // Clear file input and update button
+                    fileInput.value = '';
+                    const fileSelectBtn = document.querySelector(`.file-select-btn[data-target="file-${assessmentKey}"]`);
+                    if (fileSelectBtn) {
+                        fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
+                        fileSelectBtn.style.color = '#475569';
+                        fileSelectBtn.style.fontWeight = '400';
+                    }
+                    
+                    // Show warnings if any
+                    if (data.warnings && data.warnings.length > 0) {
+                        const warningsDiv = document.createElement('div');
+                        warningsDiv.style.cssText = 'margin-top: 8px; padding: 8px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 10px; font-size: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);';
+                        warningsDiv.innerHTML = '<strong>Warnings:</strong><br>' + data.warnings.join('<br>');
+                        statusDiv.appendChild(warningsDiv);
+                    }
+                    
+                    // Reload page to update grades list table
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000); // Wait 1 second to show success message
+                    
+                    // Reload page to update grades list table
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000); // Wait 1 second to show success message
+        } else {
+                    statusDiv.style.background = '#fee2e2';
+                    statusDiv.style.color = '#dc2626';
+                    statusDiv.style.border = '1px solid #fca5a5';
+                    let errorMessage = data.error || 'Upload failed';
+                    if (data.details && data.details.length > 0) {
+                        errorMessage += '\n\nDetails:\n' + data.details.slice(0, 5).join('\n');
+                        if (data.details.length > 5) {
+                            errorMessage += `\n... and ${data.details.length - 5} more errors`;
+                        }
+                    }
+                    statusDiv.textContent = errorMessage;
+                    statusDiv.style.whiteSpace = 'pre-line'; // Allow line breaks
+        }
+    })
+    .catch(error => {
+                console.error('Upload error:', error);
+                statusDiv.style.background = '#fee2e2';
+                statusDiv.style.color = '#dc2626';
+                statusDiv.style.border = '1px solid #fca5a5';
+                
+                // Check if error has responseData (from JSON error response)
+                if (error.responseData) {
+                    let errorMessage = error.responseData.error || error.message || 'Upload failed';
+                    if (error.responseData.details && error.responseData.details.length > 0) {
+                        errorMessage += '\n\nDetails:\n' + error.responseData.details.slice(0, 5).join('\n');
+                        if (error.responseData.details.length > 5) {
+                            errorMessage += `\n... and ${error.responseData.details.length - 5} more errors`;
+                        }
+                    }
+                    statusDiv.textContent = errorMessage;
+                    statusDiv.style.whiteSpace = 'pre-line'; // Allow line breaks
+                } else {
+                    statusDiv.textContent = 'Upload error: ' + (error.message || error.toString());
+                }
+            });
+        }
+    });
+    
+    // Delete button event delegation
+    uploadBoxesDiv.addEventListener('click', function(e) {
+        if (e.target.classList.contains('delete-btn') || e.target.closest('.delete-btn')) {
+            const btn = e.target.classList.contains('delete-btn') ? e.target : e.target.closest('.delete-btn');
+            const assessmentType = btn.getAttribute('data-type');
+            const assessmentIndex = btn.getAttribute('data-index');
+            const assessmentKey = `${assessmentType}_${assessmentIndex}`;
+            const statusDiv = document.getElementById(`status-${assessmentKey}`);
+            const fileInput = document.getElementById(`file-${assessmentKey}`);
+            
+            if (!confirm(`Are you sure you want to delete ${assessmentType} ${assessmentIndex} file? This will remove all grades for this assessment file.`)) {
+                return;
+            }
+            
+            // Show deleting status
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#dbeafe';
+            statusDiv.style.color = '#1e40af';
+            statusDiv.style.border = '1px solid #93c5fd';
+            statusDiv.textContent = 'Deleting...';
+            
+            fetch(`/faculty-head/grades/${courseName}/delete-${assessmentType}-${assessmentIndex}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                    statusDiv.style.background = '#d1fae5';
+                    statusDiv.style.color = '#065f46';
+                    statusDiv.style.border = '1px solid #6ee7b7';
+                    statusDiv.textContent = `Successfully deleted ${assessmentType} ${assessmentIndex} file`;
+                    
+                    // Hide file info
+                    const fileInfoDiv = document.getElementById(`file-info-${assessmentKey}`);
+                    if (fileInfoDiv) {
+                        fileInfoDiv.style.display = 'none';
+                    }
+                    // Remove from global uploadedFilesInfo
+                    delete uploadedFilesInfo[assessmentKey];
+                    
+                    // Clear file input and update button
+                    fileInput.value = '';
+                    const fileSelectBtnDelete = document.querySelector(`.file-select-btn[data-target="file-${assessmentKey}"]`);
+                    if (fileSelectBtnDelete) {
+                        fileSelectBtnDelete.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
+                        fileSelectBtnDelete.style.color = '#475569';
+                        fileSelectBtnDelete.style.fontWeight = '400';
+                    }
+                    
+                    // Reload page to update grades list table
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000); // Wait 1 second to show success message
+            } else {
+                    statusDiv.style.background = '#fee2e2';
+                    statusDiv.style.color = '#dc2626';
+                    statusDiv.style.border = '1px solid #fca5a5';
+                    statusDiv.textContent = data.error || 'Delete failed';
+                }
+            })
+            .catch(error => {
+                statusDiv.style.background = '#fee2e2';
+                statusDiv.style.color = '#dc2626';
+                statusDiv.style.border = '1px solid #fca5a5';
+                statusDiv.textContent = 'Delete error: ' + error.message;
+        });
+    }
+    });
+
+    // Initialize upload boxes on page load
+    createUploadBoxes();
+    
+    // Recreate upload boxes when assessment counts change
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            // Debounce to avoid too many recreations
+            clearTimeout(window.uploadBoxTimeout);
+            window.uploadBoxTimeout = setTimeout(() => {
+                createUploadBoxes();
+            }, 500);
+        });
+    });
+    
+})();
+    </script>
+{% endif %}
+{% endblock %}

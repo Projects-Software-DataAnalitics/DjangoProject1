@@ -1,0 +1,420 @@
+{% extends "instructor_base.html" %}
+{% load static %}
+
+{% block title %}My Courses{% endblock %}
+
+{% block content %}
+    <div style="margin-left: 0; margin-top: 10px;">
+        <h1 style="font-size: 32px; margin: 0;">My Courses</h1>
+    </div>
+    
+    {% if courses %}
+    <script id="course-students-data" type="application/json">{{ courses_json|safe }}</script>
+    <script>
+        // Parse course students data from JSON script tag
+        const courseStudentsDataScript = document.getElementById('course-students-data');
+        const courseStudentsDataArray = courseStudentsDataScript ? JSON.parse(courseStudentsDataScript.textContent) : [];
+        const courseStudentsData = {};
+        courseStudentsDataArray.forEach(function(course) {
+            courseStudentsData[course.id] = {
+                name: course.name,
+                students: course.students
+            };
+        });
+    </script>
+    <table class="courses-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+            <tr style="background-color: #0b5fff; color: white;">
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Instructor</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Learning Outcomes</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Credit</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Students Taking the Class</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for course in courses %}
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ course.name }}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ course.instructor }}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">
+                    <a href="{% url 'course_learning_outcomes' course.name|slugify %}" style="display: inline-block; padding: 8px 16px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
+                        View
+                    </a>
+                </td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ course.credits|default:"-" }}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">
+                    <button class="view-students-btn" data-course-id="{{ course.id }}"
+                        style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                        View
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top: 40px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 24px; color: #0f172a;">Assignments</h2>
+            <button id="add-assignment-btn" style="padding: 10px 20px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#2563eb';" onmouseout="this.style.backgroundColor='#3b82f6';">
+                Add Assignment
+            </button>
+        </div>
+        
+        <table class="assignments-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+                <tr style="background-color: #0b5fff; color: white;">
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Details</th>
+                </tr>
+            </thead>
+            <tbody id="assignments-tbody">
+                {% if all_assignments %}
+                    {% for assignment in all_assignments %}
+                    <tr style="border-bottom: 1px solid #ddd; cursor: pointer;" class="assignment-row" data-assignment-id="{{ assignment.id }}" data-assignment-title="{{ assignment.title }}" data-assignment-details="{{ assignment.details }}" data-assignment-deadline="{{ assignment.deadline }}" data-assignment-deadline-datetime="{{ assignment.deadline_datetime }}" data-assignment-deadline-date="{{ assignment.deadline_date|default:'' }}" data-assignment-deadline-time="{{ assignment.deadline_time|default:'' }}" data-assignment-course="{{ assignment.course_name }}" data-assignment-file-url="{{ assignment.file_url|default:'' }}" data-assignment-file-name="{{ assignment.file_name|default:'' }}" data-created-by-id="{{ assignment.created_by_id }}" data-current-user-id="{{ request.user.id }}" data-submissions='{{ assignment.submissions|safe }}'>
+                        <td style="padding: 12px; border: 1px solid #ddd;">{{ assignment.course_name }}</td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">
+                            <div>
+                                <strong>{{ assignment.title }}</strong>
+                                <p style="margin: 8px 0; color: #64748b;">{{ assignment.details|truncatewords:20 }}</p>
+                                <p style="margin: 4px 0; font-size: 12px; color: #94a3b8;">Deadline: <strong>{{ assignment.deadline }}</strong></p>
+                                {% if assignment.file_url %}
+                                <a href="{{ assignment.file_url }}" target="_blank" style="color: #3b82f6; text-decoration: none; font-size: 13px;" onclick="event.stopPropagation();">📄 {{ assignment.file_name }}</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="2" style="padding: 20px; text-align: center; color: #64748b;">No assignments yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Add Assignment Modal -->
+    <div id="add-assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+            <button id="close-assignment-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            <h3 style="font-size: 22px; color: #0f172a; margin-bottom: 20px; margin-top: 0;">Add Assignment</h3>
+            <form id="assignment-form">
+                {% csrf_token %}
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Course</label>
+                    <select id="assignment-course" name="course_id" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                        <option value="">-- Select Course --</option>
+                        {% for course in courses %}
+                        <option value="{{ course.id }}">{{ course.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Title</label>
+                    <input type="text" id="assignment-title" name="title" required placeholder="Enter assignment title..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Details</label>
+                    <textarea id="assignment-details" name="details" required rows="4" placeholder="Enter assignment details..." style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Date</label>
+                    <input type="date" id="deadline-date" name="deadline_date" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Time</label>
+                    <input type="time" id="deadline-time" name="deadline_time" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">File (PDF only)</label>
+                    <input type="file" id="assignment-file" name="file" accept=".pdf" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" id="cancel-assignment-btn" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Add Assignment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assignment Detail Modal -->
+    <div id="assignment-detail-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+            <button id="close-assignment-detail-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            <h3 id="assignment-detail-title" style="font-size: 22px; color: #0f172a; margin-bottom: 20px; margin-top: 0;"></h3>
+            <div id="assignment-detail-content" style="color: #0f172a;">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            <div id="assignment-edit-section" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0; display: none;">
+                <button id="edit-assignment-btn" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px;">Edit Assignment</button>
+            </div>
+            <div id="assignment-submissions-section" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+                <h4 style="font-size: 18px; color: #0f172a; margin-bottom: 16px;">Student Submissions</h4>
+                <div id="submissions-list">
+                    <!-- Submissions will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Assignment Modal -->
+    <div id="edit-assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+            <button id="close-edit-assignment-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            <h3 style="font-size: 22px; color: #0f172a; margin-bottom: 20px; margin-top: 0;">Edit Assignment</h3>
+            <form id="edit-assignment-form">
+                {% csrf_token %}
+                <input type="hidden" id="edit-assignment-id" name="assignment_id">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Title</label>
+                    <input type="text" id="edit-assignment-title" name="title" required placeholder="Enter assignment title..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Details</label>
+                    <textarea id="edit-assignment-details" name="details" required rows="4" placeholder="Enter assignment details..." style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Date</label>
+                    <input type="date" id="edit-deadline-date" name="deadline_date" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Time</label>
+                    <input type="time" id="edit-deadline-time" name="deadline_time" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">File (PDF only) - Leave empty to keep current file</label>
+                    <input type="file" id="edit-assignment-file" name="file" accept=".pdf" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div id="edit-assignment-status" style="margin-bottom: 16px;"></div>
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" id="cancel-edit-assignment-btn" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Update Assignment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Student List Popup Modal -->
+    <div id="student-list-popup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative;">
+            <button class="close-popup-btn" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            <h3 id="popup-course-name" style="font-size: 22px; color: #0f172a; margin-bottom: 20px; text-align: center; margin-top: 0;"></h3>
+            <div id="popup-student-list" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                <!-- Student list will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <p style="margin-top: 20px; color: #666;">No courses assigned yet.</p>
+    {% endif %}
+
+    <script src="{% static 'js/instructor.js' %}"></script>
+    <script>
+        // Assignment modal functionality
+        (function() {
+            const addAssignmentBtn = document.getElementById('add-assignment-btn');
+            const addAssignmentModal = document.getElementById('add-assignment-modal');
+            const closeAssignmentModal = document.getElementById('close-assignment-modal');
+            const cancelAssignmentBtn = document.getElementById('cancel-assignment-btn');
+            const assignmentForm = document.getElementById('assignment-form');
+            
+            if (addAssignmentBtn) {
+                addAssignmentBtn.addEventListener('click', function() {
+                    if (addAssignmentModal) addAssignmentModal.style.display = 'flex';
+                });
+            }
+            
+            if (closeAssignmentModal) {
+                closeAssignmentModal.addEventListener('click', function() {
+                    if (addAssignmentModal) addAssignmentModal.style.display = 'none';
+                });
+            }
+            
+            if (cancelAssignmentBtn) {
+                cancelAssignmentBtn.addEventListener('click', function() {
+                    if (addAssignmentModal) addAssignmentModal.style.display = 'none';
+                });
+            }
+            
+            if (assignmentForm) {
+                assignmentForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(assignmentForm);
+                    fetch('/instructor/add-assignment/', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert(data.error || 'Failed to add assignment');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while adding the assignment');
+                    });
+                });
+            }
+            
+            // Assignment detail modal
+            const assignmentRows = document.querySelectorAll('.assignment-row');
+            const assignmentDetailModal = document.getElementById('assignment-detail-modal');
+            const closeAssignmentDetailModal = document.getElementById('close-assignment-detail-modal');
+            
+            assignmentRows.forEach(row => {
+                row.addEventListener('click', function() {
+                    const assignmentId = this.getAttribute('data-assignment-id');
+                    const title = this.getAttribute('data-assignment-title');
+                    const details = this.getAttribute('data-assignment-details');
+                    const deadline = this.getAttribute('data-assignment-deadline');
+                    const course = this.getAttribute('data-assignment-course');
+                    const fileUrl = this.getAttribute('data-assignment-file-url');
+                    const fileName = this.getAttribute('data-assignment-file-name');
+                    const createdById = this.getAttribute('data-created-by-id');
+                    const currentUserId = this.getAttribute('data-current-user-id');
+                    const submissions = JSON.parse(this.getAttribute('data-submissions') || '[]');
+                    
+                    document.getElementById('assignment-detail-title').textContent = title;
+                    let content = `<p><strong>Course:</strong> ${course}</p>`;
+                    content += `<p><strong>Details:</strong> ${details}</p>`;
+                    content += `<p><strong>Deadline:</strong> ${deadline}</p>`;
+                    if (fileUrl) {
+                        content += `<p><strong>File:</strong> <a href="${fileUrl}" target="_blank">${fileName}</a></p>`;
+                    }
+                    document.getElementById('assignment-detail-content').innerHTML = content;
+                    
+                    // Show edit button if user is the creator
+                    const editSection = document.getElementById('assignment-edit-section');
+                    if (createdById === currentUserId) {
+                        editSection.style.display = 'block';
+                        document.getElementById('edit-assignment-btn').onclick = function() {
+                            assignmentDetailModal.style.display = 'none';
+                            const editModal = document.getElementById('edit-assignment-modal');
+                            editModal.style.display = 'flex';
+                            document.getElementById('edit-assignment-id').value = assignmentId;
+                            document.getElementById('edit-assignment-title').value = title;
+                            document.getElementById('edit-assignment-details').value = details;
+                            const deadlineDate = deadline.split(' ')[0];
+                            const deadlineTime = deadline.split(' ')[1] || '23:59';
+                            document.getElementById('edit-deadline-date').value = deadlineDate;
+                            document.getElementById('edit-deadline-time').value = deadlineTime;
+                        };
+                    } else {
+                        editSection.style.display = 'none';
+                    }
+                    
+                    // Populate submissions
+                    const submissionsList = document.getElementById('submissions-list');
+                    if (submissions.length > 0) {
+                        let submissionsHtml = '<table style="width: 100%; border-collapse: collapse;"><thead><tr><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Student</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Submitted At</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">File</th></tr></thead><tbody>';
+                        submissions.forEach(sub => {
+                            submissionsHtml += `<tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${sub.student_name}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${sub.submitted_at}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><a href="${sub.file_url}" target="_blank">Download</a></td></tr>`;
+                        });
+                        submissionsHtml += '</tbody></table>';
+                        submissionsList.innerHTML = submissionsHtml;
+                    } else {
+                        submissionsList.innerHTML = '<p style="color: #64748b;">No submissions yet.</p>';
+                    }
+                    
+                    if (assignmentDetailModal) assignmentDetailModal.style.display = 'flex';
+                });
+            }
+            
+            if (closeAssignmentDetailModal) {
+                closeAssignmentDetailModal.addEventListener('click', function() {
+                    if (assignmentDetailModal) assignmentDetailModal.style.display = 'none';
+                });
+            }
+            
+            // Edit assignment modal
+            const editAssignmentForm = document.getElementById('edit-assignment-form');
+            const closeEditAssignmentModal = document.getElementById('close-edit-assignment-modal');
+            const cancelEditAssignmentBtn = document.getElementById('cancel-edit-assignment-btn');
+            
+            if (editAssignmentForm) {
+                editAssignmentForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(editAssignmentForm);
+                    const assignmentId = document.getElementById('edit-assignment-id').value;
+                    fetch(`/instructor/edit-assignment/${assignmentId}/`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            const statusDiv = document.getElementById('edit-assignment-status');
+                            statusDiv.innerHTML = `<p style="color: red;">${data.error || 'Failed to update assignment'}</p>`;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        const statusDiv = document.getElementById('edit-assignment-status');
+                        statusDiv.innerHTML = '<p style="color: red;">An error occurred while updating the assignment</p>';
+                    });
+                });
+            }
+            
+            if (closeEditAssignmentModal) {
+                closeEditAssignmentModal.addEventListener('click', function() {
+                    document.getElementById('edit-assignment-modal').style.display = 'none';
+                });
+            }
+            
+            if (cancelEditAssignmentBtn) {
+                cancelEditAssignmentBtn.addEventListener('click', function() {
+                    document.getElementById('edit-assignment-modal').style.display = 'none';
+                });
+            }
+            
+            // Student list popup
+            const viewStudentsBtns = document.querySelectorAll('.view-students-btn');
+            const studentListPopup = document.getElementById('student-list-popup');
+            const closePopupBtns = document.querySelectorAll('.close-popup-btn');
+            
+            viewStudentsBtns.forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const courseId = this.getAttribute('data-course-id');
+                    const courseData = courseStudentsData[courseId];
+                    if (courseData) {
+                        document.getElementById('popup-course-name').textContent = courseData.name;
+                        const studentList = document.getElementById('popup-student-list');
+                        if (courseData.students && courseData.students.length > 0) {
+                            let html = '<table style="width: 100%; border-collapse: collapse;"><thead><tr><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Name</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Student ID</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Year</th></tr></thead><tbody>';
+                            courseData.students.forEach(student => {
+                                html += `<tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${student.name}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${student.student_id}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${student.year}</td></tr>`;
+                            });
+                            html += '</tbody></table>';
+                            studentList.innerHTML = html;
+                        } else {
+                            studentList.innerHTML = '<p style="color: #64748b; text-align: center;">No students enrolled in this course.</p>';
+                        }
+                        if (studentListPopup) studentListPopup.style.display = 'flex';
+                    }
+                });
+            });
+            
+            closePopupBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (studentListPopup) studentListPopup.style.display = 'none';
+                });
+            });
+        })();
+    </script>
+{% endblock %}
+

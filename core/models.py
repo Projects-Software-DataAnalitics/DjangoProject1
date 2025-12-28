@@ -12,6 +12,22 @@ class Faculty(models.Model):
 
 
 class UserProfile(models.Model):
+    """
+    User profile with role and course associations.
+    
+    NOTE: Course-Instructor relationship is stored in multiple places:
+    1. Course.instructor (ForeignKey) - PRIMARY source of truth
+    2. UserProfile.courses (ManyToMany) - Secondary relationship for convenience
+    3. User.instructor_courses (reverse ForeignKey) - Derived from Course.instructor
+    
+    This creates potential synchronization issues:
+    - Course.instructor can differ from UserProfile.courses
+    - Views must check both sources (see all_courses view)
+    
+    For academic purposes this is acceptable, but in production:
+    - Choose ONE source of truth
+    - Use signals or methods to keep them in sync
+    """
     ROLE_CHOICES = [
         ('student', 'Student'),
         ('instructor', 'Instructor'),
@@ -22,6 +38,7 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     faculty = models.ForeignKey(Faculty, null=True, blank=True, on_delete=models.SET_NULL)
     department = models.CharField(max_length=200, blank=True)
+    # NOTE: Secondary course relationship - see docstring above
     courses = models.ManyToManyField('Course', blank=True, related_name='user_profiles')
 
     def __str__(self):
@@ -43,8 +60,29 @@ class Student(models.Model):
         return self.username
 
 class Course(models.Model):
-    name = models.CharField(max_length=100)
+    """
+    Course model.
+    
+    CRITICAL DESIGN ASSUMPTION: Course.name is assumed to be unique system-wide.
+    This is used throughout the system for:
+    - ProgramOutcome.course_name (string reference)
+    - Course lookup by name in views
+    - Announcement course markers
+    
+    If Course.name is not unique, the following will break:
+    - ProgramOutcome relationships (orphaned data)
+    - Course lookups (wrong course selected)
+    - Grade associations (wrong grades shown)
+    
+    NOTE: Model-level uniqueness constraint is required to enforce this assumption.
+    """
+    name = models.CharField(max_length=100, unique=True)  # CRITICAL: Must be unique system-wide
     code = models.CharField(max_length=20, blank=True)
+    # NOTE: Course-Instructor relationship is stored in multiple places:
+    # 1. Course.instructor (ForeignKey) - Primary source of truth
+    # 2. UserProfile.courses (ManyToMany) - Secondary relationship
+    # 3. User.instructor_courses (reverse ForeignKey) - Derived from Course.instructor
+    # This creates potential synchronization issues but is acceptable for academic purposes.
     instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='instructor_courses')
     department = models.CharField(max_length=200, blank=True)
     credits = models.IntegerField(null=True, blank=True)
@@ -55,33 +93,41 @@ class Course(models.Model):
         return self.name
 
 class Assessment(models.Model):
+    """
+    Assessment configuration for a course.
+    
+    CRITICAL: OneToOneField with CASCADE means:
+    - Deleting a Course will permanently delete its Assessment
+    - This is intentional: Assessment has no meaning without Course
+    - If you need to preserve assessment data, change to PROTECT or SET_NULL
+    """
     course = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='assessment')
     midterm = models.IntegerField(default=2)
     final = models.IntegerField(default=1)
-    proje = models.IntegerField(default=0)
-    homework = models.IntegerField(default=0)
+    project = models.IntegerField(default=0)
+    assignment = models.IntegerField(default=0)
     absence = models.IntegerField(default=0)
     quiz = models.IntegerField(default=0)
-    assessment_count = models.IntegerField(default=3)  # midterm + final + proje + homework + absence + quiz
+    assessment_count = models.IntegerField(default=3)  # midterm + final + project + assignment + absence + quiz
     
     # Percentages
     midterm_percentage = models.IntegerField(default=60)
     final_percentage = models.IntegerField(default=40)
-    proje_percentage = models.IntegerField(default=0)
-    homework_percentage = models.IntegerField(default=0)
+    project_percentage = models.IntegerField(default=0)
+    assignment_percentage = models.IntegerField(default=0)
     absence_percentage = models.IntegerField(default=0)
     quiz_percentage = models.IntegerField(default=0)
 
     def save(self, *args, **kwargs):
         # assessment_count'u quiz dahil hesapla
-        self.assessment_count = self.midterm + self.final + self.proje + self.homework + self.absence + self.quiz
+        self.assessment_count = self.midterm + self.final + self.project + self.assignment + self.absence + self.quiz
         super().save(*args, **kwargs)
     
     @property
     def percentage_count(self):
         # percentage_count'u hesapla (tabloya kaydedilmez, sadece property)
-        return (self.midterm_percentage + self.final_percentage + self.proje_percentage + 
-                self.homework_percentage + self.absence_percentage + self.quiz_percentage)
+        return (self.midterm_percentage + self.final_percentage + self.project_percentage + 
+                self.assignment_percentage + self.absence_percentage + self.quiz_percentage)
 
     def __str__(self):
         return f"Assessment for {self.course.name}"
@@ -91,13 +137,17 @@ class Grade(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     
     # Grade fields - stored as average scores (float) for each assessment type
+    # NOTE: These fields are JSONField but store float values (not JSON objects)
+    # This is a design inconsistency - consider using FloatField(null=True, blank=True) instead
+    # Current implementation: JSONField stores float as JSON number
+    # Usage: get_assessment_score() returns float, set_assessment_score() accepts float
     # If multiple assessments exist (e.g., 2 midterms), the average is calculated and stored
     # Example: midterm_1=60, midterm_2=50 -> midterm = 55.0 (average)
     # If assessment count is 0, the field remains empty (None)
     midterm = models.JSONField(default=None, blank=True, null=True)  # Average midterm score
     final = models.JSONField(default=None, blank=True, null=True)  # Average final score
-    proje = models.JSONField(default=None, blank=True, null=True)  # Average project score
-    homework = models.JSONField(default=None, blank=True, null=True)  # Average homework score
+    project = models.JSONField(default=None, blank=True, null=True)  # Average project score
+    assignment = models.JSONField(default=None, blank=True, null=True)  # Average assignment score
     absence = models.JSONField(default=None, blank=True, null=True)  # Average absence score
     quiz = models.JSONField(default=None, blank=True, null=True)  # Average quiz score
     
@@ -107,9 +157,18 @@ class Grade(models.Model):
     
     # Track when grades were last modified
     last_changes_at = models.DateTimeField(null=True, blank=True)  # Last time grades were modified
+    
+    # Overall score calculated from assessment percentages
+    overall_score = models.FloatField(null=True, blank=True)  # Weighted average based on assessment percentages
+    
+    # Letter grade based on overall score
+    letter_grade = models.CharField(max_length=2, null=True, blank=True)  # Letter grade (AA, AB, BB, etc.)
 
     class Meta:
-        unique_together = ['student', 'course']
+        # Modern Django: Use constraints instead of deprecated unique_together
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'course'], name='unique_student_course')
+        ]
 
     def __str__(self):
         return f"{self.student.username} - {self.course.name}"
@@ -185,6 +244,107 @@ class Grade(models.Model):
         if len(scores) == expected_count and expected_count > 0:
             return sum(scores) / len(scores)
         return None
+    
+    def calculate_overall_score(self):
+        """Calculate overall score based on assessment percentages.
+        Only calculates if ALL required assessments have been entered."""
+        try:
+            assessment = Assessment.objects.get(course=self.course)
+        except Assessment.DoesNotExist:
+            self.overall_score = None
+            return None
+        
+        total_score = 0.0
+        total_percentage = 0
+        
+        # Assessment types to check
+        assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
+        
+        # First, check if ALL required assessments are entered
+        all_assessments_entered = True
+        
+        for assessment_type in assessment_types:
+            # Get assessment count and percentage
+            assessment_count = getattr(assessment, assessment_type, 0)
+            percentage = getattr(assessment, f'{assessment_type}_percentage', 0)
+            
+            # Only check if assessment count > 0 and percentage > 0
+            if assessment_count > 0 and percentage > 0:
+                # Check if all individual scores for this assessment type are entered
+                all_scores_entered = True
+                for i in range(1, assessment_count + 1):
+                    key = f"{assessment_type}_{i}"
+                    individual_score = self.get_individual_score(key)
+                    if individual_score is None:
+                        all_scores_entered = False
+                        break
+                
+                # If not all scores are entered, we can't calculate overall score
+                if not all_scores_entered:
+                    all_assessments_entered = False
+                    break
+                
+                # Get the average score for this assessment type
+                score = self.get_assessment_score(assessment_type)
+                
+                # If average score is None, it means not all files are uploaded yet
+                if score is None:
+                    all_assessments_entered = False
+                    break
+        
+        # Only calculate if ALL assessments are entered
+        if not all_assessments_entered:
+            self.overall_score = None
+            return None
+        
+        # Now calculate the weighted average
+        for assessment_type in assessment_types:
+            assessment_count = getattr(assessment, assessment_type, 0)
+            percentage = getattr(assessment, f'{assessment_type}_percentage', 0)
+            
+            if assessment_count > 0 and percentage > 0:
+                score = self.get_assessment_score(assessment_type)
+                if score is not None:
+                    # Add weighted score: score × percentage
+                    total_score += score * percentage
+                    total_percentage += percentage
+        
+        # Calculate overall score: total_score / total_percentage
+        if total_percentage > 0:
+            self.overall_score = total_score / total_percentage
+            # Calculate letter grade based on overall score
+            self.letter_grade = self.calculate_letter_grade(self.overall_score)
+        else:
+            self.overall_score = None
+            self.letter_grade = None
+        
+        return self.overall_score
+    
+    def calculate_letter_grade(self, overall_score):
+        """Calculate letter grade based on overall score"""
+        if overall_score is None:
+            return None
+        
+        score = float(overall_score)
+        
+        if score >= 90:
+            return 'AA'
+        elif score >= 85:
+            return 'AB'
+        elif score >= 80:
+            return 'BB'
+        elif score >= 75:
+            return 'BC'
+        elif score >= 70:
+            return 'CC'
+        elif score >= 65:
+            return 'CD'
+        elif score >= 60:
+            return 'DD'
+        elif score >= 50:
+            return 'FD'
+        else:
+            return 'FF'
 
 class ProgramOutcome(models.Model):
     text = models.CharField(max_length=255)
@@ -204,7 +364,9 @@ class LearningOutcomeProgramOutcome(models.Model):
     percentage = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
 
     class Meta:
-        unique_together = [['learning_outcome', 'program_outcome']]
+        constraints = [
+            models.UniqueConstraint(fields=['learning_outcome', 'program_outcome'], name='unique_lo_po')
+        ]
 
 class Announcement(models.Model):
     ROLE_CHOICES = [

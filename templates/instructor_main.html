@@ -5,7 +5,7 @@
 
 {% block content %}
 <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
-    <h1 style="margin-bottom: 30px; color: #0f172a; font-size: 32px; font-weight: 700;">Welcome {% if instructor_info %}{{ instructor_info.name }}{% else %}{{ request.user.get_full_name|default:request.user.username }}{% endif %}</h1>
+    <h1 id="welcome-message" style="margin-bottom: 30px; color: #0f172a; font-size: 32px; font-weight: 700;">Welcome {% if instructor_info %}{{ instructor_info.name }}{% else %}{{ request.user.get_full_name|default:request.user.username }}{% endif %}</h1>
     
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px;">
         <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 16px; padding: 28px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); color: white; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px;">
@@ -125,7 +125,20 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
+    // Hide welcome message after first visit
     document.addEventListener('DOMContentLoaded', function() {
+        const welcomeMessage = document.getElementById('welcome-message');
+        if (welcomeMessage) {
+            const welcomeKey = 'instructor_welcome_shown';
+            const hasSeenWelcome = localStorage.getItem(welcomeKey);
+            
+            if (hasSeenWelcome) {
+                welcomeMessage.style.display = 'none';
+            } else {
+                localStorage.setItem(welcomeKey, 'true');
+            }
+        }
+        
         {% if chart_data.labels %}
         const ctx = document.getElementById('enrollmentChart');
         if (ctx) {

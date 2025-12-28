@@ -85,12 +85,27 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     
     const pageType = document.body.dataset.page || '';
+    // Check if we're on the instructor_grades_page template (which has its own content)
+    // The new template uses Django rendering, so showGrades() should NEVER run
+    const personalInfo = document.querySelector('#personal-info');
+    const coursesTable = personalInfo ? personalInfo.querySelector('#courses-table') : null;
+    const headerCells = coursesTable ? coursesTable.querySelectorAll('thead th') : [];
+    
+    const isGradesPageTemplate = window.instructorGradesPageLoaded || 
+                                 window.instructorGradesPageTemplate ||
+                                 document.querySelector('#grades-title') !== null ||
+                                 (headerCells.length > 1); // New template has 3 columns
+    
     if (pageType === 'profile') {
         showPersonalInfo();
     } else if (pageType === 'my_courses') {
         showMyCourses();
     } else if (pageType === 'grades') {
-        showGrades();
+        // NEVER call showGrades() - the new template (instructor_grades_page.html) handles everything
+        // showGrades() is only for the old system which is no longer used
+        if (!isGradesPageTemplate) {
+            console.warn('showGrades() not called - new template system in use');
+        }
     } else if (pageType === 'announcements') {
         showAnnouncements();
     }
@@ -209,7 +224,12 @@ function showMyCourses() {
 }
 
 function showGrades() {
-    const infoDiv = document.getElementById("personal-info");
+    // DEPRECATED: This function is no longer used
+    // The new template system (instructor_grades_page.html) handles course selection via Django
+    // Always return early to prevent any override
+    console.log('showGrades() blocked - new template system in use');
+    return;
+    
     const jsonPathElement = document.getElementById('instructor-json-path');
     const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
     
@@ -235,61 +255,110 @@ function showGrades() {
                 courses = freshData ? (freshData.courses || []) : [];
             }
             
-            const coursesOptions = courses.map(course => 
-                `<option value="${course}">${course}</option>`
-            ).join('');
+            let coursesTableRows = '';
+            if (courses.length > 0) {
+                coursesTableRows = courses.map((course, index) => {
+                    let rowStyle = 'cursor: pointer; border-bottom: 1px solid #ddd;';
+                    if (index % 2 === 0) {
+                        rowStyle += ' background-color: #f8fafc;';
+                    }
+                    return `<tr class="course-row" data-course="${course}" style="${rowStyle}">
+                        <td style="padding: 12px; border: 1px solid #ddd;">${course}</td>
+                    </tr>`;
+                }).join('');
+            } else {
+                coursesTableRows = '<tr><td style="padding: 12px; text-align: center; color: #666; border: 1px solid #ddd;">No courses available</td></tr>';
+            }
             
             infoDiv.innerHTML = `
                 <h2>Grades</h2>
-                <div style="margin-top: 24px;">
-                    <label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
-                    <select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
-                        <option value="">-- Select a course --</option>
-                        ${coursesOptions}
-                    </select>
+                <div style="margin-top: 24px; display: flex; justify-content: center;">
+                    <table id="courses-table" style="width: 100%; max-width: 500px; border-collapse: collapse; margin-top: 20px;">
+                        <thead>
+                            <tr style="background-color: #0b5fff; color: white;">
+                                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${coursesTableRows}
+                        </tbody>
+                    </table>
                 </div>
                 <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
                 <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
             `;
             
-            const courseSelect = document.getElementById("course-select");
-            courseSelect.addEventListener("change", function() {
-                const selectedCourse = this.value;
-                
-                if (selectedCourse) {
-                    // Yeni not yönetim sayfasına yönlendir
-                    window.location.href = `/instructor/grades/${encodeURIComponent(selectedCourse)}/`;
-                }
+            // Add click event listeners to course rows
+            const courseRows = document.querySelectorAll('.course-row');
+            courseRows.forEach((row, index) => {
+                const originalBg = index % 2 === 0 ? '#f8fafc' : 'white';
+                row.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#e0f2fe';
+                });
+                row.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = originalBg;
+                });
+                row.addEventListener('click', function() {
+                    const courseName = this.dataset.course;
+                    if (courseName) {
+                        window.location.href = `/instructor/grades/${encodeURIComponent(courseName)}/`;
+                    }
+                });
             });
         })
         .catch(() => {
             const freshData = JSON.parse(sessionStorage.getItem('loggedInstructor'));
             const courses = freshData ? (freshData.courses || []) : [];
-            const coursesOptions = courses.map(course => 
-                `<option value="${course}">${course}</option>`
-            ).join('');
+            
+            let coursesTableRows = '';
+            if (courses.length > 0) {
+                coursesTableRows = courses.map((course, index) => {
+                    let rowStyle = 'cursor: pointer; border-bottom: 1px solid #ddd;';
+                    if (index % 2 === 0) {
+                        rowStyle += ' background-color: #f8fafc;';
+                    }
+                    return `<tr class="course-row" data-course="${course}" style="${rowStyle}">
+                        <td style="padding: 12px; border: 1px solid #ddd;">${course}</td>
+                    </tr>`;
+                }).join('');
+            } else {
+                coursesTableRows = '<tr><td style="padding: 12px; text-align: center; color: #666; border: 1px solid #ddd;">No courses available</td></tr>';
+            }
             
             infoDiv.innerHTML = `
                 <h2>Grades</h2>
-                <div style="margin-top: 24px;">
-                    <label for="course-select" style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Select Course</label>
-                    <select id="course-select" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; max-width: 400px; background: #f8fafc; font-size: 14px; cursor: pointer;">
-                        <option value="">-- Select a course --</option>
-                        ${coursesOptions}
-                    </select>
+                <div style="margin-top: 24px; display: flex; justify-content: center;">
+                    <table id="courses-table" style="width: 100%; max-width: 500px; border-collapse: collapse; margin-top: 20px;">
+                        <thead>
+                            <tr style="background-color: #0b5fff; color: white;">
+                                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${coursesTableRows}
+                        </tbody>
+                    </table>
                 </div>
                 <div id="file-upload-section" style="margin-top: 24px; display: none;"></div>
                 <div id="upload-status" class="upload-status" style="margin-top: 16px;"></div>
             `;
             
-            const courseSelect = document.getElementById("course-select");
-            courseSelect.addEventListener("change", function() {
-                const selectedCourse = this.value;
-                
-                if (selectedCourse) {
-                    // Yeni not yönetim sayfasına yönlendir
-                    window.location.href = `/instructor/grades/${encodeURIComponent(selectedCourse)}/`;
-                }
+            // Add click event listeners to course rows
+            const courseRows = document.querySelectorAll('.course-row');
+            courseRows.forEach((row, index) => {
+                const originalBg = index % 2 === 0 ? '#f8fafc' : 'white';
+                row.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#e0f2fe';
+                });
+                row.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = originalBg;
+                });
+                row.addEventListener('click', function() {
+                    const courseName = this.dataset.course;
+                    if (courseName) {
+                        window.location.href = `/instructor/grades/${encodeURIComponent(courseName)}/`;
+                    }
+                });
             });
         });
 }
@@ -390,9 +459,14 @@ function logout() {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
+    // Don't clear personal-info if it's the new grades page template
     const personalInfo = document.getElementById("personal-info");
-    if (personalInfo) {
-        personalInfo.innerHTML = "";
+    if (personalInfo && !window.instructorGradesPageLoaded && !window.instructorGradesPageTemplate) {
+        // Only clear if it's not the new template
+        const coursesTable = personalInfo.querySelector('#courses-table');
+        if (!coursesTable || coursesTable.querySelectorAll('thead th').length <= 1) {
+            personalInfo.innerHTML = "";
+        }
     }
 });
 

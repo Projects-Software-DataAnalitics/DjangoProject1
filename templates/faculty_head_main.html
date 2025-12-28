@@ -5,7 +5,7 @@
 
 {% block content %}
 <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
-    <h1 style="margin-bottom: 30px; color: #0f172a; font-size: 32px; font-weight: 700;">Welcome {% if faculty_head_info %}{{ faculty_head_info.name }}{% else %}{{ request.user.get_full_name|default:request.user.username }}{% endif %}</h1>
+    <h1 id="welcome-message" style="margin-bottom: 30px; color: #0f172a; font-size: 32px; font-weight: 700;">Welcome {% if faculty_head_info %}{{ faculty_head_info.name }}{% else %}{{ request.user.get_full_name|default:request.user.username }}{% endif %}</h1>
     
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px;">
         <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 16px; padding: 28px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); color: white; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px;">
@@ -126,62 +126,66 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% if chart_data.labels %}
+<script id="chart-data" type="application/json">{{ chart_data_json|safe }}</script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        {% if chart_data.labels %}
+        const chartDataScript = document.getElementById('chart-data');
+        if (!chartDataScript) return;
+        
+        const chartDataRaw = JSON.parse(chartDataScript.textContent);
         const ctx = document.getElementById('enrollmentChart');
-        if (ctx) {
-            const chartDataRaw = {{ chart_data_json|safe }};
-            const chartData = {
-                labels: chartDataRaw.labels,
-                datasets: [{
-                    label: 'Number of Students',
-                    data: chartDataRaw.data,
-                    backgroundColor: [
-                        'rgba(59, 130, 246, 0.8)',
-                        'rgba(16, 185, 129, 0.8)',
-                        'rgba(245, 158, 11, 0.8)',
-                        'rgba(239, 68, 68, 0.8)',
-                        'rgba(139, 92, 246, 0.8)',
-                        'rgba(236, 72, 153, 0.8)',
-                    ],
-                    borderColor: [
-                        'rgba(59, 130, 246, 1)',
-                        'rgba(16, 185, 129, 1)',
-                        'rgba(245, 158, 11, 1)',
-                        'rgba(239, 68, 68, 1)',
-                        'rgba(139, 92, 246, 1)',
-                        'rgba(236, 72, 153, 1)',
-                    ],
-                    borderWidth: 2
-                }]
-            };
-            
-            new Chart(ctx, {
-                type: 'bar',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
+        if (!ctx) return;
+        
+        const chartData = {
+            labels: chartDataRaw.labels,
+            datasets: [{
+                label: 'Number of Students',
+                data: chartDataRaw.data,
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(239, 68, 68, 0.8)',
+                    'rgba(139, 92, 246, 0.8)',
+                    'rgba(236, 72, 153, 0.8)',
+                ],
+                borderColor: [
+                    'rgba(59, 130, 246, 1)',
+                    'rgba(16, 185, 129, 1)',
+                    'rgba(245, 158, 11, 1)',
+                    'rgba(239, 68, 68, 1)',
+                    'rgba(139, 92, 246, 1)',
+                    'rgba(236, 72, 153, 1)',
+                ],
+                borderWidth: 2
+            }]
+        };
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
                         }
                     }
                 }
-            });
-        }
-        {% endif %}
+            }
+        });
     });
 </script>
+{% endif %}
 
 <style>
     @media (max-width: 1200px) {
@@ -205,5 +209,20 @@
         }
     }
 </style>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+    (function() {
+        const welcomeShown = localStorage.getItem('faculty_head_welcome_shown');
+        const welcomeMessage = document.getElementById('welcome-message');
+        
+        if (welcomeShown && welcomeMessage) {
+            welcomeMessage.style.display = 'none';
+        } else if (welcomeMessage) {
+            localStorage.setItem('faculty_head_welcome_shown', 'true');
+        }
+    })();
+</script>
 {% endblock %}
 

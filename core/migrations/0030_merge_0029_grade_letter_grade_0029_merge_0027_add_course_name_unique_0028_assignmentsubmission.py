@@ -6,10 +6,9 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0017_student_advisor'),
-        ('core', '0019_assessment_absence_percentage_and_more'),
+        ('core', '0029_grade_letter_grade'),
+        ('core', '0029_merge_0027_add_course_name_unique_0028_assignmentsubmission'),
     ]
 
     operations = [
     ]
-

@@ -8,34 +8,58 @@
     {% endif %}
     
     {% if page == 'profile' and profile %}
-    <h1>Personal Information</h1>
-    <table class="profile-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-        <tbody>
-            <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd; width: 200px;">Name</td>
-                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.name }}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Username</td>
-                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.username }}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Department</td>
-                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.department|default:"-" }}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Faculty</td>
-                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.faculty }}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 12px; font-weight: bold; background-color: #0b5fff; color: white; border: 1px solid #ddd;">Courses</td>
-                <td style="padding: 12px; border: 1px solid #ddd;">{{ profile.courses|join:", "|default:"No courses assigned" }}</td>
-            </tr>
-        </tbody>
-    </table>
+    <div style="max-width: 800px; margin: 20px auto;">
+        <div style="background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px;">
+            <h1 style="margin: 0 0 24px 0; font-size: 28px; color: #1e293b; font-weight: 700; padding-bottom: 16px; border-bottom: 2px solid #e2e8f0;">Profile</h1>
+            
+            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
+                <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #0b5fff 0%, #3b82f6 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: bold;">
+                    {{ profile.name|first|upper }}
+                </div>
+                <div>
+                    <h2 style="margin: 0 0 8px 0; font-size: 24px; color: #1e293b; font-weight: 700;">{{ profile.name }}</h2>
+                    <p style="margin: 0; color: #64748b; font-size: 14px;">{{ profile.username }}</p>
+                </div>
+            </div>
+
+            <table class="profile-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <tbody>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 16px; font-weight: 600; background-color: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; width: 200px;">Name</td>
+                        <td style="padding: 16px; border: 1px solid #e2e8f0; color: #475569;">{{ profile.name }}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 16px; font-weight: 600; background-color: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0;">Username</td>
+                        <td style="padding: 16px; border: 1px solid #e2e8f0; color: #475569;">{{ profile.username }}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 16px; font-weight: 600; background-color: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0;">Department</td>
+                        <td style="padding: 16px; border: 1px solid #e2e8f0; color: #475569;">{{ profile.department|default:"-" }}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 16px; font-weight: 600; background-color: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0;">Faculty</td>
+                        <td style="padding: 16px; border: 1px solid #e2e8f0; color: #475569;">{{ profile.faculty|default:"-" }}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 16px; font-weight: 600; background-color: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0;">Courses</td>
+                        <td style="padding: 16px; border: 1px solid #e2e8f0; color: #475569;">
+                            {% if profile.courses %}
+                                {{ profile.courses|join:", " }}
+                            {% else %}
+                                No courses assigned
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
     {% elif page == 'profile' %}
-    <h1>Personal Information</h1>
-    <p style="margin-top: 20px; color: #666;">No profile information available.</p>
+    <div style="max-width: 800px; margin: 20px auto;">
+        <div style="background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px; text-align: center;">
+            <p style="margin: 20px 0; color: #64748b; font-size: 16px;">No profile information available.</p>
+        </div>
+    </div>
     {% elif page == 'grades' %}
     <div id="personal-info"></div>
     <script>

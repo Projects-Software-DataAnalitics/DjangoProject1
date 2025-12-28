@@ -22,13 +22,10 @@
         <li>
             <a href="{% url 'instructor' %}">Main Page</a>
         </li>
-        <li id="personal-info-btn">Personal Information</li>
         <li id="my-courses-btn">My Courses</li>
         <li id="grades-btn">Grades</li>
-        <li><a href="{% url 'learning_outcomes' %}" id="learning-outcomes-link">Learning Outcomes</a></li>
         <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
         <li id="announcements-btn">Announcements</li>
-        <li id="logout-btn">Logout</li>
     </ul>
 </div>
 
@@ -126,9 +123,6 @@
 <script src="{% static 'js/instructor.js' %}"></script>
 <script>
     (function() {
-        document.getElementById("personal-info-btn").addEventListener("click", function() {
-            window.location.href = "{% url 'instructor_profile' %}";
-        });
         document.getElementById("my-courses-btn").addEventListener("click", function() {
             window.location.href = "{% url 'instructor_my_courses' %}";
         });
@@ -137,10 +131,6 @@
         });
         document.getElementById("announcements-btn").addEventListener("click", function() {
             window.location.href = "{% url 'instructor_announcements' %}";
-        });
-        document.getElementById("logout-btn").addEventListener("click", function() {
-            sessionStorage.clear();
-            window.location.href = "/";
         });
     })();
 </script>

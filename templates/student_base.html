@@ -5,9 +5,40 @@
     <title>{% block title %}Student Main Page{% endblock %}</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .header-top {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 60px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-icons {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .content-wrapper {
+            margin-top: 60px;
+        }
+        body .sidebar {
+            top: 60px;
+            height: calc(100% - 60px);
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
 
+<<<<<<< HEAD
 <div class="sidebar" id="sidebar">
     <ul>
         <li>
@@ -115,8 +146,8 @@
             </button>
             <div id="profile-dropdown" style="display: none; position: absolute; top: 50px; right: 0; width: 200px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001;">
                 <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
-                    <div style="font-size: 14px; font-weight: 600; color: #111827;">{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}</div>
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">{{ request.user.email|default:"Student" }}</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #111827;">{% if student_info %}{{ student_info.name }}{% else %}{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}{% endif %}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">{% if student_info %}{{ student_info.username }}{% else %}{{ request.user.username|default:"Student" }}{% endif %}</div>
                 </div>
                 <a href="{% url 'student_profile' %}" style="display: block; padding: 12px 16px; color: #374151; text-decoration: none; font-size: 14px; transition: background 0.2s;" 
                    onmouseover="this.style.background='#f9fafb';" 
@@ -144,7 +175,55 @@
             </div>
         </div>
     </div>
+</div>
+
+<div class="sidebar" id="sidebar">
+    <ul>
+        <li>
+            <a href="{% url 'student' %}">Main Page</a>
+        </li>
+        <li>
+            <a href="{% url 'student_courses' %}">My Courses</a>
+        </li>
+        <li>
+            <a href="{% url 'student_grades' %}">Grades</a>
+        </li>
+        <li>
+            <a href="{% url 'student_announcements' %}">Announcements</a>
+        </li>
+        <li>
+            <a href="{% url 'student_program_outcomes' %}">Program Outcomes</a>
+        </li>
+    </ul>
+</div>
+
+<div class="content-wrapper">
+    <div class="content" id="content">
+        <button class="menu-btn" id="menu-btn">☰</button>
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+<div id="popup" class="popup-overlay" style="display: none;">
+    <div class="popup-box">
+        <h3 id="popup-title">Course Details</h3>
+        <p id="popup-content"></p>
+        <button onclick="closePopup()">Close</button>
+    </div>
+</div>
+
+<script src="{% static 'js/student.js' %}"></script>
+<script>
+    function toggleNotificationDropdown() {
+        const dropdown = document.getElementById('notification-dropdown');
+        const profileDropdown = document.getElementById('profile-dropdown');
+        if (profileDropdown) profileDropdown.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+    }
     
+<<<<<<< HEAD
     <script>
         // Set notification icon color based on unread count
         document.addEventListener('DOMContentLoaded', function() {
@@ -189,17 +268,18 @@
                 dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
             }
         }
-        
-        function toggleProfileDropdown() {
-            const dropdown = document.getElementById('profile-dropdown');
-            const notificationDropdown = document.getElementById('notification-dropdown');
-            if (notificationDropdown) notificationDropdown.style.display = 'none';
-            if (dropdown) {
-                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-            }
+    
+    function toggleProfileDropdown() {
+        const dropdown = document.getElementById('profile-dropdown');
+        const notificationDropdown = document.getElementById('notification-dropdown');
+        if (notificationDropdown) notificationDropdown.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
         }
-        
-        // Close dropdowns when clicking outside
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener('click', function(event) {
             const notificationBtn = document.getElementById('notification-btn');
             const notificationDropdown = document.getElementById('notification-dropdown');
@@ -214,6 +294,7 @@
                 profileDropdown.style.display = 'none';
             }
         });
+<<<<<<< HEAD
         
         function markNotificationAsRead(notificationId, event) {
             // If it's a notification (notif_X format), mark it as read
@@ -307,6 +388,7 @@ if (notificationBtn) {
 } else {
     console.error('Notification button NOT found!');
 }
+});
 </script>
 </body>
 </html>

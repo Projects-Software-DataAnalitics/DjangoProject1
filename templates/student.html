@@ -38,13 +38,6 @@
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </a>
-                {% else %}
-                <a href="{% url 'student_profile' %}" style="color: white; text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; opacity: 0.9; transition: opacity 0.2s;" onmouseover="this.style.opacity='1';" onmouseout="this.style.opacity='0.9';">
-                    Detail
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                </a>
                 {% endif %}
             </div>
         </div>
@@ -71,7 +64,7 @@
         <div style="grid-column: span 1; grid-row: span 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; padding: 28px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); color: white; display: flex; flex-direction: column; justify-content: space-between; min-height: 200px;">
             <div>
                 <h2 style="margin: 0 0 12px 0; font-size: 18px; color: rgba(255,255,255,0.9); font-weight: 600;">Current GPA</h2>
-                <div style="font-size: 42px; font-weight: 700; margin: 16px 0;">-</div>
+                <div style="font-size: 42px; font-weight: 700; margin: 16px 0;">{% if gpa is not None %}{{ gpa|floatformat:2 }}{% else %}-{% endif %}</div>
             </div>
             <a href="{% url 'student_grades' %}" style="padding: 10px 16px; background: rgba(255,255,255,0.2); color: white; text-decoration: none; border-radius: 8px; font-size: 14px; display: inline-block; text-align: center; transition: all 0.2s; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);" 
                onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='translateY(-2px)';"

@@ -5,28 +5,213 @@
     <title>{% block title %}Faculty Head{% endblock %}</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .header-top {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 60px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-icons {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            background-color: #f3f4f6;
+        }
+        .header-icon:hover {
+            background-color: #e5e7eb;
+        }
+        .header-icon svg {
+            width: 20px;
+            height: 20px;
+            color: #374151;
+        }
+        .profile-popup {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+            padding: 20px;
+            min-width: 250px;
+            z-index: 1001;
+            display: none;
+        }
+        .profile-popup.show {
+            display: block;
+        }
+        .profile-popup-item {
+            margin-bottom: 12px;
+        }
+        .profile-popup-label {
+            font-weight: 600;
+            color: #374151;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .profile-popup-value {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .content-wrapper {
+            margin-top: 60px;
+        }
+        body .sidebar {
+            top: 60px;
+            height: calc(100% - 60px);
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
+
+<div class="header-top">
+    <div class="header-icons">
+        <!-- Notifications Bell with Dropdown -->
+        <div style="position: relative;">
+            <button id="notification-btn" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: transparent; border: none; cursor: pointer; transition: all 0.2s; color: #64748b;" 
+                    onmouseover="this.style.background='#f3f4f6'; this.style.color='#3b82f6';" 
+                    onmouseout="this.style.background='transparent'; this.style.color='#64748b';"
+                    onclick="toggleNotificationDropdown()"
+                    title="Notifications">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+            </button>
+            <div id="notification-dropdown" style="display: none; position: absolute; top: 50px; right: 0; width: 320px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001; max-height: 400px; overflow-y: auto;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Notifications</h3>
+                    <a href="{% url 'faculty-head-announcements' %}" style="font-size: 12px; color: #3b82f6; text-decoration: none;">View all</a>
+                </div>
+                <div id="notification-list" style="padding: 8px 0;">
+                    <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Profile Icon with Dropdown -->
+        <div style="position: relative;">
+            <button id="profile-btn" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #3b82f6; border: none; cursor: pointer; transition: all 0.2s; color: white;" 
+                    onmouseover="this.style.background='#2563eb'; this.style.transform='scale(1.05)';" 
+                    onmouseout="this.style.background='#3b82f6'; this.style.transform='scale(1)';"
+                    onclick="toggleProfileDropdown()"
+                    title="Profile">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </button>
+            <div id="profile-dropdown" style="display: none; position: absolute; top: 50px; right: 0; width: 200px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
+                    <div style="font-size: 14px; font-weight: 600; color: #111827;">{% if faculty_head_info %}{{ faculty_head_info.name }}{% else %}{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}{% endif %}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">{% if faculty_head_info %}{{ faculty_head_info.username }}{% else %}{{ request.user.username|default:"Faculty Head" }}{% endif %}</div>
+                </div>
+                <a href="{% url 'faculty_head_profile' %}" style="display: block; padding: 12px 16px; color: #374151; text-decoration: none; font-size: 14px; transition: background 0.2s;" 
+                   onmouseover="this.style.background='#f9fafb';" 
+                   onmouseout="this.style.background='transparent';">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        Profile
+                    </div>
+                </a>
+                <a href="{% url 'faculty-head-logout' %}" style="display: block; padding: 12px 16px; color: #dc2626; text-decoration: none; font-size: 14px; transition: background 0.2s; border-top: 1px solid #e5e7eb;" 
+                   onmouseover="this.style.background='#f9fafb';" 
+                   onmouseout="this.style.background='transparent';">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Logout
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <ul>
-        <li><a href="{% url 'faculty_head_profile' %}">Personal Information</a></li>
+        <li><a href="{% url 'faculty-head' %}">Main Page</a></li>
         <li><a href="{% url 'faculty-head-grades' %}">Grades</a></li>
         <li><a href="{% url 'all_courses' %}">All Courses</a></li>
         <li><a href="{% url 'my_courses' %}">My Courses</a></li>
         <li><a href="{% url 'program_outcomes' %}">Program Outcomes</a></li>
         <li><a href="{% url 'faculty-head-announcements' %}">Announcements</a></li>
-        <li><a href="{% url 'faculty-head-logout' %}">Logout</a></li>
     </ul>
 </div>
 
-<!-- Main content -->
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    {% block content %}{% endblock %}
+<div class="content-wrapper">
+    <div class="content" id="content">
+        <button class="menu-btn" id="menu-btn">☰</button>
+        {% block content %}{% endblock %}
+    </div>
 </div>
 
 <script src="{% static 'js/faculty_head.js' %}"></script>
+<script>
+    function toggleNotificationDropdown() {
+        const dropdown = document.getElementById('notification-dropdown');
+        const profileDropdown = document.getElementById('profile-dropdown');
+        if (profileDropdown) profileDropdown.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+    
+    function toggleProfileDropdown() {
+        const dropdown = document.getElementById('profile-dropdown');
+        const notificationDropdown = document.getElementById('notification-dropdown');
+        if (notificationDropdown) notificationDropdown.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('click', function(event) {
+            const notificationBtn = document.getElementById('notification-btn');
+            const notificationDropdown = document.getElementById('notification-dropdown');
+            const profileBtn = document.getElementById('profile-btn');
+            const profileDropdown = document.getElementById('profile-dropdown');
+            
+            if (notificationBtn && notificationDropdown && !notificationBtn.contains(event.target) && !notificationDropdown.contains(event.target)) {
+                notificationDropdown.style.display = 'none';
+            }
+            
+            if (profileBtn && profileDropdown && !profileBtn.contains(event.target) && !profileDropdown.contains(event.target)) {
+                profileDropdown.style.display = 'none';
+            }
+        });
+    });
+</script>
 </body>
 </html>
 
