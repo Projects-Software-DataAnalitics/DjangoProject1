@@ -219,36 +219,7 @@
     <div id="upload-status-messages" style="margin-top: 20px;"></div>
 </div>
 
-<!-- Grades List Section -->
-<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-    <h2 style="margin: 0 0 20px 0; color: #0f172a;">Grades List</h2>
-    
-    <!-- Last Changes Info -->
-    <div id="last-changes-info" style="margin-bottom: 15px; padding: 8px 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 12px; color: #64748b; display: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-        <strong>Last Changed:</strong> <span id="last-changes-time"></span>
-    </div>
-    
-    <!-- Save Button and Error Message -->
-    <div id="grades-list-controls" style="margin-bottom: 15px;">
-        <button type="button" id="save-grade-changes-btn" 
-                style="padding: 8px 16px; background: #94a3b8; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: not-allowed; opacity: 0.6; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"
-                disabled>
-            Save Changes
-        </button>
-        <div id="grade-edit-error" style="margin-top: 10px; padding: 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 10px; display: none; font-size: 13px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"></div>
-    </div>
-    
-    <div id="grades-list-table-container" style="overflow-x: auto;">
-        <table id="grades-list-table" style="width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-            <thead id="grades-table-head">
-                <!-- Table headers will be dynamically generated -->
-            </thead>
-            <tbody id="grades-table-body">
-                <!-- Table rows will be dynamically generated -->
-            </tbody>
-        </table>
-    </div>
-    </div>
+{% include 'faculty/grades_list.html' %}
 
     <script>
 function getCsrfToken() {
@@ -436,13 +407,10 @@ function getCsrfToken() {
                 combinedMessageDiv.style.border = '1px solid #6ee7b7';
                 combinedMessageDiv.textContent = 'Assessment data saved successfully!';
                 
-                // Count'u güncelle
-                if (countResult.assessment_count) {
-                    countDisplay.textContent = countResult.assessment_count;
-                }
-                
-                // Upload kutucuklarını güncelle (yeni assessment değerleriyle)
-                createUploadBoxes();
+                // Reload page after successful save
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
             } else {
                 const errors = [];
                 if (countResult.error) errors.push(`Counts: ${countResult.error}`);
@@ -579,6 +547,7 @@ function getCsrfToken() {
                     const assessmentKey = `${type.key}_${i}`;
                     const box = document.createElement('div');
                     box.style.cssText = 'padding: 20px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);';
+                    
                     box.innerHTML = `
                         <h4 style="margin-top: 0; margin-bottom: 10px; color: #0f172a; font-size: 16px;">${type.label} ${i}</h4>
                         <p style="margin-bottom: 15px; color: #475569; font-size: 12px;">
@@ -622,7 +591,11 @@ function getCsrfToken() {
                             <div id="file-time-${assessmentKey}" style="font-size: 10px;"></div>
                         </div>
                     `;
+                    
                     uploadBoxesDiv.appendChild(box);
+                    
+                    // Get file input from DOM after box is added
+                    const fileInputElement = document.getElementById(`file-${assessmentKey}`);
                     
                     // Show file info if exists
                     if (uploadedFilesInfo[assessmentKey]) {
@@ -640,30 +613,38 @@ function getCsrfToken() {
                     
                     // Add click event listener to file select button
                     const fileSelectBtn = box.querySelector('.file-select-btn');
-                    const fileInputElement = document.getElementById(`file-${assessmentKey}`);
                     const fileSelectedDiv = document.getElementById(`file-selected-${assessmentKey}`);
                     
+                    // File input is already created and stored in fileInput variable, but get it from DOM to be sure
                     if (fileSelectBtn && fileInputElement) {
                         // When button is clicked, trigger file input
-                        fileSelectBtn.addEventListener('click', function() {
+                        fileSelectBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
                             fileInputElement.click();
                         });
                         
                         // Update button text when file is selected
-                        if (fileInputElement) {
-                            fileInputElement.addEventListener('change', function(e) {
-                                if (e.target.files && e.target.files.length > 0) {
-                                    const fileName = e.target.files[0].name;
-                                    fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>${fileName}</span>`;
-                                    fileSelectBtn.style.color = '#059669';
-                                    fileSelectBtn.style.fontWeight = '500';
-                                } else {
-                                    fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
-                                    fileSelectBtn.style.color = '#475569';
-                                    fileSelectBtn.style.fontWeight = '400';
-                                }
-                            });
-                        }
+                        fileInputElement.addEventListener('change', function(e) {
+                            console.log('File selected for', assessmentKey, ':', e.target.files);
+                            if (e.target.files && e.target.files.length > 0) {
+                                const file = e.target.files[0];
+                                const fileName = file.name;
+                                // Store file reference in data attribute for later use
+                                fileInputElement.dataset.selectedFile = fileName;
+                                fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>${fileName}</span>`;
+                                fileSelectBtn.style.color = '#059669';
+                                fileSelectBtn.style.fontWeight = '500';
+                                console.log('File input updated for', assessmentKey, ':', fileName, 'file object:', file, 'files array:', e.target.files);
+                            } else {
+                                delete fileInputElement.dataset.selectedFile;
+                                fileSelectBtn.innerHTML = `<span style="font-size: 16px;">📁</span><span>Choose File</span>`;
+                                fileSelectBtn.style.color = '#475569';
+                                fileSelectBtn.style.fontWeight = '400';
+                            }
+                        });
+                    } else {
+                        console.error('File select button or input not found for', assessmentKey, 'fileSelectBtn:', fileSelectBtn, 'fileInputElement:', fileInputElement);
                     }
                 }
             }
@@ -683,21 +664,63 @@ function getCsrfToken() {
     uploadBoxesDiv.addEventListener('click', function(e) {
         if (e.target.classList.contains('upload-btn') || e.target.closest('.upload-btn')) {
             const btn = e.target.classList.contains('upload-btn') ? e.target : e.target.closest('.upload-btn');
+            e.preventDefault();
+            e.stopPropagation();
+            
             const assessmentType = btn.getAttribute('data-type');
             const assessmentIndex = btn.getAttribute('data-index');
             const assessmentKey = `${assessmentType}_${assessmentIndex}`;
             const fileInput = document.getElementById(`file-${assessmentKey}`);
-    const file = fileInput.files[0];
             const statusDiv = document.getElementById(`status-${assessmentKey}`);
             
-    if (!file) {
-                statusDiv.style.display = 'block';
-                statusDiv.style.background = '#fee2e2';
-                statusDiv.style.color = '#dc2626';
-                statusDiv.style.border = '1px solid #fca5a5';
-                statusDiv.textContent = 'Please select a CSV file';
-        return;
-    }
+            console.log('Upload button clicked for', assessmentKey, 'fileInput:', fileInput);
+            
+            // Check if file input exists
+            if (!fileInput) {
+                console.error('File input not found for:', assessmentKey);
+                if (statusDiv) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#fee2e2';
+                    statusDiv.style.color = '#dc2626';
+                    statusDiv.style.border = '1px solid #fca5a5';
+                    statusDiv.textContent = 'Error: File input not found';
+                }
+                return;
+            }
+            
+            console.log('File input found, files:', fileInput.files, 'length:', fileInput.files ? fileInput.files.length : 0);
+            console.log('File input value:', fileInput.value);
+            console.log('File input dataset:', fileInput.dataset);
+            
+            // Check if file is selected
+            if (!fileInput.files || fileInput.files.length === 0) {
+                // Also check if file was selected but files array is empty (can happen in some browsers)
+                if (!fileInput.value && !fileInput.dataset.selectedFile) {
+                    console.log('No file selected');
+                    if (statusDiv) {
+                        statusDiv.style.display = 'block';
+                        statusDiv.style.background = '#fee2e2';
+                        statusDiv.style.color = '#dc2626';
+                        statusDiv.style.border = '1px solid #fca5a5';
+                        statusDiv.textContent = 'Please select a CSV file';
+                    }
+                    return;
+                }
+            }
+            
+            const file = fileInput.files && fileInput.files.length > 0 ? fileInput.files[0] : null;
+            console.log('File selected:', file ? file.name : 'null');
+            
+            if (!file) {
+                if (statusDiv) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#fee2e2';
+                    statusDiv.style.color = '#dc2626';
+                    statusDiv.style.border = '1px solid #fca5a5';
+                    statusDiv.textContent = 'Please select a CSV file. Make sure you click "Choose File" and select a file before uploading.';
+                }
+                return;
+            }
             
             // Check file type
             const fileName = file.name.toLowerCase();
@@ -933,600 +956,6 @@ function getCsrfToken() {
             }, 500);
         });
     });
-    
-    // Create Grades List Table
-    function createGradesListTable() {
-        const tableHead = document.getElementById('grades-table-head');
-        const tableBody = document.getElementById('grades-table-body');
-        
-        if (!tableHead || !tableBody) return;
-        
-        // Clear existing content
-        tableHead.innerHTML = '';
-        tableBody.innerHTML = '';
-        
-        // Create header row
-        const headerRow = document.createElement('tr');
-        headerRow.style.cssText = 'background: #0f172a; color: white;';
-        
-        // Student ID column
-        const thStudentId = document.createElement('th');
-        thStudentId.textContent = 'Student ID';
-        thStudentId.style.cssText = 'padding: 12px; text-align: left; font-weight: 600; border: 1px solid #334155;';
-        headerRow.appendChild(thStudentId);
-        
-        // Student Full Name column
-        const thFullName = document.createElement('th');
-        thFullName.textContent = 'Student Full Name';
-        thFullName.style.cssText = 'padding: 12px; text-align: left; font-weight: 600; border: 1px solid #334155;';
-        headerRow.appendChild(thFullName);
-        
-        // Assessment columns
-        assessmentColumns.forEach(col => {
-            const th = document.createElement('th');
-            th.textContent = col.label;
-            th.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
-            headerRow.appendChild(th);
-        });
-        
-        // Overall Score column
-        const thOverall = document.createElement('th');
-        thOverall.textContent = 'Overall Score';
-        thOverall.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
-        headerRow.appendChild(thOverall);
-        
-        // Letter Grade column
-        const thLetterGrade = document.createElement('th');
-        thLetterGrade.textContent = 'Letter Grade';
-        thLetterGrade.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
-        headerRow.appendChild(thLetterGrade);
-        
-        tableHead.appendChild(headerRow);
-        
-        // Create data rows
-        gradesData.forEach(student => {
-            const row = document.createElement('tr');
-            row.style.cssText = 'border-bottom: 1px solid #e2e8f0;';
-            
-            // Student ID cell
-            const tdStudentId = document.createElement('td');
-            tdStudentId.textContent = student.student_id;
-            tdStudentId.style.cssText = 'padding: 10px 12px; border: 1px solid #e2e8f0;';
-            row.appendChild(tdStudentId);
-            
-            // Student Full Name cell
-            const tdFullName = document.createElement('td');
-            tdFullName.textContent = student.full_name;
-            tdFullName.style.cssText = 'padding: 10px 12px; border: 1px solid #e2e8f0;';
-            row.appendChild(tdFullName);
-            
-            // Assessment grade cells (editable)
-            assessmentColumns.forEach(col => {
-                const td = document.createElement('td');
-                const score = student.grades[col.key];
-                td.dataset.studentId = student.student_id;
-                td.dataset.assessmentKey = col.key;
-                
-                if (score !== undefined && score !== null) {
-                    td.textContent = score.toFixed(1);
-                } else {
-                    td.textContent = '-';
-                    td.style.color = '#94a3b8';
-                }
-                td.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; cursor: pointer; position: relative;';
-                td.classList.add('editable-grade-cell');
-                
-                // Make cell editable on click
-                td.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    makeCellEditable(this);
-                });
-                
-                row.appendChild(td);
-            });
-            
-            // Overall Score cell
-            const tdOverall = document.createElement('td');
-            if (student.overall_score !== undefined && student.overall_score !== null) {
-                tdOverall.textContent = student.overall_score.toFixed(1);
-                tdOverall.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
-            } else {
-                tdOverall.textContent = '-';
-                tdOverall.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; color: #94a3b8;';
-            }
-            row.appendChild(tdOverall);
-            
-            // Letter Grade cell
-            const tdLetterGrade = document.createElement('td');
-            if (student.letter_grade !== undefined && student.letter_grade !== null) {
-                tdLetterGrade.textContent = student.letter_grade;
-                tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
-            } else {
-                tdLetterGrade.textContent = '-';
-                tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; color: #94a3b8;';
-            }
-            row.appendChild(tdLetterGrade);
-            
-            tableBody.appendChild(row);
-        });
-        
-        // Add hover effect
-        const rows = tableBody.querySelectorAll('tr');
-        rows.forEach(row => {
-            row.addEventListener('mouseenter', function() {
-                this.style.backgroundColor = '#f8fafc';
-            });
-            row.addEventListener('mouseleave', function() {
-                this.style.backgroundColor = 'white';
-            });
-        });
-        
-        // Add hover effect to editable cells
-        const editableCells = tableBody.querySelectorAll('.editable-grade-cell');
-        editableCells.forEach(cell => {
-            cell.addEventListener('mouseenter', function() {
-                if (!this.querySelector('input')) {
-                    this.style.backgroundColor = '#e0f2fe';
-                }
-            });
-            cell.addEventListener('mouseleave', function() {
-                if (!this.querySelector('input')) {
-                    this.style.backgroundColor = 'transparent';
-                }
-            });
-        });
-    }
-    
-    // Track currently editing cell
-    let currentEditingCell = null;
-    let currentEditingInput = null;
-    let currentEditingOriginalValue = null;
-    
-    // Make table cell editable
-    function makeCellEditable(cell) {
-        // If another cell is being edited, save it first (if value changed)
-        if (currentEditingCell && currentEditingCell !== cell) {
-            // If there's an input, update display first
-            if (currentEditingInput) {
-                updateCellDisplay();
-            }
-            // Note: We don't auto-save here, user must click Save button
-            // Just clear the editing state
-            currentEditingCell = null;
-            currentEditingInput = null;
-            currentEditingOriginalValue = null;
-        }
-        
-        const currentValue = cell.textContent.trim();
-        currentEditingOriginalValue = currentValue === '-' ? '' : currentValue;
-        
-        // Create input
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.step = '0.1';
-        input.min = '0';
-        input.max = '100';
-        input.value = currentEditingOriginalValue;
-        input.style.cssText = 'width: 80px; padding: 4px 8px; border: 2px solid #0b5fff; border-radius: 8px; font-size: 14px; text-align: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);';
-        
-        // Replace cell content with input
-        cell.innerHTML = '';
-        cell.appendChild(input);
-        input.focus();
-        input.select();
-        
-        // Store references
-        currentEditingCell = cell;
-        currentEditingInput = input;
-        
-        // Clear error message
-        const errorDiv = document.getElementById('grade-edit-error');
-        if (errorDiv) {
-            errorDiv.style.display = 'none';
-            errorDiv.textContent = '';
-        }
-        
-        // Enable save button and change color to blue when value changes
-        const saveBtn = document.getElementById('save-grade-changes-btn');
-        if (saveBtn) {
-            saveBtn.disabled = false;
-            saveBtn.style.background = '#94a3b8';
-            saveBtn.style.cursor = 'not-allowed';
-            saveBtn.style.opacity = '0.6';
-        }
-        
-        // Validate on input and enable save button when value changes
-        input.addEventListener('input', function() {
-            validateGradeInput(input);
-            // Enable save button and change to blue if value changed
-            if (saveBtn && input.value.trim() !== currentEditingOriginalValue) {
-                saveBtn.disabled = false;
-                saveBtn.style.background = '#0b5fff';
-                saveBtn.style.cursor = 'pointer';
-                saveBtn.style.opacity = '1';
-            } else if (saveBtn && input.value.trim() === currentEditingOriginalValue) {
-                saveBtn.disabled = true;
-                saveBtn.style.background = '#94a3b8';
-                saveBtn.style.cursor = 'not-allowed';
-                saveBtn.style.opacity = '0.6';
-            }
-        });
-        
-        // Update cell display on blur (when input loses focus) - show value but don't save yet
-        input.addEventListener('blur', function() {
-            // Small delay to allow click events to fire first
-            setTimeout(() => {
-                if (currentEditingCell === cell && currentEditingInput === input) {
-                    updateCellDisplay();
-                }
-            }, 200);
-        });
-        
-        // Handle keyboard events
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelCellEdit();
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                updateCellDisplay();
-                // Focus save button
-                const saveBtn = document.getElementById('save-grade-changes-btn');
-                if (saveBtn) {
-                    saveBtn.focus();
-                }
-            }
-        });
-    }
-    
-    // Validate grade input
-    function validateGradeInput(input) {
-        const errorDiv = document.getElementById('grade-edit-error');
-        const value = parseFloat(input.value);
-        
-        if (input.value.trim() === '') {
-            // Empty is allowed (will delete grade)
-            if (errorDiv) {
-                errorDiv.style.display = 'none';
-                errorDiv.textContent = '';
-            }
-            input.style.borderColor = '#0b5fff';
-            return true;
-        }
-        
-        if (isNaN(value)) {
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Please enter a valid number';
-            }
-            input.style.borderColor = '#dc2626';
-            return false;
-        }
-        
-        if (value < 0) {
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Grade cannot be less than 0';
-            }
-            input.style.borderColor = '#dc2626';
-            return false;
-        }
-        
-        if (value > 100) {
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Grade cannot be greater than 100';
-            }
-            input.style.borderColor = '#dc2626';
-            return false;
-        }
-        
-        // Valid
-        if (errorDiv) {
-            errorDiv.style.display = 'none';
-            errorDiv.textContent = '';
-        }
-        input.style.borderColor = '#0b5fff';
-        return true;
-    }
-    
-    // Format score: 95 -> 95.0, 65.5 -> 65.5
-    function formatScore(value) {
-        if (value === '' || value === null || value === undefined) {
-            return null;
-        }
-        const numValue = parseFloat(value);
-        if (isNaN(numValue)) {
-            return null;
-        }
-        // If it's a whole number, return as float (will display as 95.0)
-        // If it has decimals, keep as is
-        return numValue;
-    }
-    
-    // Update cell display without saving (show value in cell)
-    function updateCellDisplay() {
-        if (!currentEditingCell || !currentEditingInput) {
-            return;
-        }
-        
-        const input = currentEditingInput;
-        const cell = currentEditingCell;
-        const newValue = input.value.trim();
-        
-        // Validate
-        if (newValue !== '' && !validateGradeInput(input)) {
-            return; // Don't update if validation fails
-        }
-        
-        // Format score
-        const formattedScore = formatScore(newValue);
-        const scoreToDisplay = formattedScore !== null ? formattedScore : null;
-        
-        // Remove input from cell first
-        if (cell.contains(input)) {
-            cell.removeChild(input);
-        }
-        
-        // Update cell display immediately (show value)
-        if (scoreToDisplay === null || scoreToDisplay === '') {
-            cell.textContent = '-';
-            cell.style.color = '#94a3b8';
-        } else {
-            // Display with 1 decimal place (e.g., 85 -> 85.0)
-            cell.textContent = scoreToDisplay.toFixed(1);
-            cell.style.color = '';
-        }
-        
-        // Clear input reference but keep cell reference for saving
-        currentEditingInput = null;
-    }
-    
-    // Save current edit to server
-    function saveCellEdit() {
-        // If there's still an input, update display first
-        if (currentEditingCell && currentEditingInput) {
-            updateCellDisplay();
-        }
-        
-        if (!currentEditingCell) {
-            return;
-        }
-        
-        const cell = currentEditingCell;
-        const studentId = cell.dataset.studentId;
-        const assessmentKey = cell.dataset.assessmentKey;
-        
-        if (!studentId || !assessmentKey) {
-            console.error('Missing student_id or assessment_key');
-            return;
-        }
-        
-        // Get value from cell display (already formatted)
-        const cellText = cell.textContent.trim();
-        let scoreToSave = null;
-        
-        if (cellText !== '-' && cellText !== '') {
-            scoreToSave = parseFloat(cellText);
-            if (isNaN(scoreToSave)) {
-                scoreToSave = null;
-            }
-        }
-        
-        console.log('Saving grade:', { studentId, assessmentKey, scoreToSave });
-        
-        // Save to server
-        fetch(`/faculty-head/grades/${courseName}/update-individual-grade/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
-        },
-            body: JSON.stringify({
-                student_id: studentId,
-                assessment_key: assessmentKey,
-                score: scoreToSave
-            })
-    })
-    .then(response => response.json())
-    .then(data => {
-            console.log('Save response:', data);
-        if (data.status === 'ok') {
-                // Update cell display with saved value (keep it visible)
-                if (data.score !== null && data.score !== undefined) {
-                    cell.textContent = parseFloat(data.score).toFixed(1);
-                    cell.style.color = '';
-        } else {
-                    cell.textContent = '-';
-                    cell.style.color = '#94a3b8';
-                }
-                
-                // Update local data
-                const studentIndex = gradesData.findIndex(s => s.student_id === studentId);
-                if (studentIndex !== -1) {
-                    if (data.score !== null && data.score !== undefined) {
-                        gradesData[studentIndex].grades[assessmentKey] = parseFloat(data.score);
-                    } else {
-                        delete gradesData[studentIndex].grades[assessmentKey];
-                    }
-                    
-                    // Update overall_score in local data
-                    if (data.overall_score !== undefined) {
-                        gradesData[studentIndex].overall_score = data.overall_score;
-                        
-                        // Update overall_score cell in table
-                        const row = cell.closest('tr');
-                        if (row) {
-                            const overallCell = row.querySelector('td:nth-last-child(2)'); // Second to last (before Letter Grade)
-                            if (overallCell) {
-                                if (data.overall_score !== null && data.overall_score !== undefined) {
-                                    overallCell.textContent = parseFloat(data.overall_score).toFixed(1);
-                                    overallCell.style.color = '';
-                                    overallCell.style.fontWeight = '600';
-            } else {
-                                    overallCell.textContent = '-';
-                                    overallCell.style.color = '#94a3b8';
-                                    overallCell.style.fontWeight = '';
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Update letter_grade in local data
-                    if (data.letter_grade !== undefined) {
-                        gradesData[studentIndex].letter_grade = data.letter_grade;
-                        
-                        // Update letter_grade cell in table
-                        const row = cell.closest('tr');
-                        if (row) {
-                            const letterGradeCell = row.querySelector('td:last-child'); // Last cell
-                            if (letterGradeCell) {
-                                if (data.letter_grade !== null && data.letter_grade !== undefined) {
-                                    letterGradeCell.textContent = data.letter_grade;
-                                    letterGradeCell.style.color = '';
-                                    letterGradeCell.style.fontWeight = '600';
-                                } else {
-                                    letterGradeCell.textContent = '-';
-                                    letterGradeCell.style.color = '#94a3b8';
-                                    letterGradeCell.style.fontWeight = '';
-                                }
-                            }
-                        }
-                    }
-            } else {
-                    console.warn('Student not found in gradesData:', studentId);
-                }
-                
-                // Update last changes timestamp
-                if (data.last_changes_at) {
-                    const lastChangesInfo = document.getElementById('last-changes-info');
-                    const lastChangesTime = document.getElementById('last-changes-time');
-                    if (lastChangesInfo && lastChangesTime) {
-                        const changeDate = new Date(data.last_changes_at);
-                        lastChangesTime.textContent = changeDate.toLocaleString();
-                        lastChangesInfo.style.display = 'block';
-                    }
-                }
-                
-                // Reset save button
-                const saveBtn = document.getElementById('save-grade-changes-btn');
-                if (saveBtn) {
-                    saveBtn.disabled = true;
-                    saveBtn.style.background = '#94a3b8';
-                    saveBtn.style.cursor = 'not-allowed';
-                    saveBtn.style.opacity = '0.6';
-                }
-                
-                // Clear editing state (but keep the displayed value)
-                currentEditingCell = null;
-                currentEditingInput = null;
-                currentEditingOriginalValue = null;
-                
-                // Clear error message
-                const errorDiv = document.getElementById('grade-edit-error');
-                if (errorDiv) {
-                    errorDiv.style.display = 'none';
-                    errorDiv.textContent = '';
-                }
-            } else {
-                alert('Error updating grade: ' + (data.error || 'Unknown error'));
-                // Keep the current value visible (don't revert)
-                const saveBtn = document.getElementById('save-grade-changes-btn');
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.style.background = '#0b5fff';
-                    saveBtn.style.cursor = 'pointer';
-                    saveBtn.style.opacity = '1';
-                }
-                // Don't clear editing state, let user try again
-            }
-        })
-        .catch(error => {
-            console.error('Error saving grade:', error);
-            alert('Error updating grade. Please try again.');
-            // Revert to original value
-            const saveBtn = document.getElementById('save-grade-changes-btn');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.style.background = '#94a3b8';
-                saveBtn.style.cursor = 'not-allowed';
-                saveBtn.style.opacity = '0.6';
-            }
-            // Don't cancel edit, keep the value visible so user can try again
-            // cancelCellEdit();
-        });
-    }
-    
-    // Cancel current edit
-    function cancelCellEdit() {
-        if (!currentEditingCell) {
-            return;
-        }
-        
-        const cell = currentEditingCell;
-        const originalValue = currentEditingOriginalValue;
-        
-        // Remove input if still present
-        if (currentEditingInput && cell.contains(currentEditingInput)) {
-            cell.removeChild(currentEditingInput);
-        }
-        
-        // Restore original value
-        if (originalValue === '' || originalValue === null || originalValue === undefined) {
-            cell.textContent = '-';
-            cell.style.color = '#94a3b8';
-        } else {
-            const numValue = parseFloat(originalValue);
-            if (!isNaN(numValue)) {
-                cell.textContent = numValue.toFixed(1);
-                cell.style.color = '';
-            } else {
-                cell.textContent = '-';
-                cell.style.color = '#94a3b8';
-            }
-        }
-        
-        // Clear references
-        currentEditingCell = null;
-        currentEditingInput = null;
-        currentEditingOriginalValue = null;
-        
-        // Clear error message
-        const errorDiv = document.getElementById('grade-edit-error');
-        if (errorDiv) {
-            errorDiv.style.display = 'none';
-            errorDiv.textContent = '';
-        }
-    }
-    
-    // Save button event listener
-    const saveGradeChangesBtn = document.getElementById('save-grade-changes-btn');
-    if (saveGradeChangesBtn) {
-        saveGradeChangesBtn.addEventListener('click', function() {
-            if (!this.disabled) {
-                saveCellEdit();
-            }
-        });
-    }
-    
-    // Initialize grades list table on page load
-    createGradesListTable();
-    
-    // Show last changes timestamp on page load if available
-    const lastChangesAt = '{{ last_changes_at|escapejs }}';
-    if (lastChangesAt && lastChangesAt !== 'None' && lastChangesAt !== '') {
-        const lastChangesInfo = document.getElementById('last-changes-info');
-        const lastChangesTime = document.getElementById('last-changes-time');
-        if (lastChangesInfo && lastChangesTime) {
-            try {
-                const changeDate = new Date(lastChangesAt);
-                lastChangesTime.textContent = changeDate.toLocaleString();
-                lastChangesInfo.style.display = 'block';
-            } catch (e) {
-                console.error('Error parsing last_changes_at:', e);
-            }
-        }
-    }
     
 })();
     </script>

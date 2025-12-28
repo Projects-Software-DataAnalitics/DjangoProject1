@@ -1,21 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "instructor_base.html" %}
+{% load static %}
 
-<head>
-    <meta charset="UTF-8">
-    <title>Announcements</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <script>
-        (function () {
-            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
-            if (!instructorData) {
-                window.location.href = "/";
-                return;
-            }
-        })();
-    </script>
-</head>
+{% block title %}Announcements{% endblock %}
+
+{% block extra_head %}
 <style>
     .dropdown-container {
         position: relative;
@@ -91,24 +79,12 @@
         accent-color: #3b82f6;
     }
 </style>
+{% endblock %}
 
-<body>
-    <div class="sidebar" id="sidebar">
-        <ul>
-            <li>
-                <a href="{% url 'instructor' %}">Main Page</a>
-            </li>
-            <li id="my-courses-btn">My Courses</li>
-            <li id="grades-btn">Grades</li>
-            <li id="announcements-btn">Announcements</li>
-        </ul>
+{% block content %}
+    <div style="margin-left: 0; margin-top: 10px;">
+        <h1 style="font-size: 32px; margin: 0;">Announcements</h1>
     </div>
-
-    <div class="content" id="content">
-        <button class="menu-btn" id="menu-btn">☰</button>
-        <div style="margin-left: 0; margin-top: 10px;">
-            <h1 style="font-size: 32px; margin: 0;">Announcements</h1>
-        </div>
 
         <div id="announcements-content" style="margin-top: 24px; max-width: 800px;">
             <!-- Tab Headers -->
@@ -731,23 +707,4 @@
                 document.getElementById('message-popup').style.display = 'flex';
             }
         </script>
-    </div>
-
-    <script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
-    <script src="{% static 'js/instructor.js' %}"></script>
-    <script>
-        (function () {
-            document.getElementById("my-courses-btn").addEventListener("click", function () {
-                window.location.href = "{% url 'instructor_my_courses' %}";
-            });
-            document.getElementById("grades-btn").addEventListener("click", function () {
-                window.location.href = "{% url 'instructor_grades' %}";
-            });
-            document.getElementById("announcements-btn").addEventListener("click", function () {
-                window.location.href = "{% url 'instructor_announcements' %}";
-            });
-        })();
-    </script>
-</body>
-
-</html>
+{% endblock %}
