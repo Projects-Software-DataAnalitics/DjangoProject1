@@ -1,0 +1,731 @@
+<!-- Grades List Section -->
+<div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+    <h2 style="margin: 0 0 20px 0; color: #0f172a;">Grades List</h2>
+    
+    <!-- Last Changes Info -->
+    <div id="last-changes-info" style="margin-bottom: 15px; padding: 8px 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 12px; color: #64748b; display: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+        <strong>Last Changed:</strong> <span id="last-changes-time"></span>
+    </div>
+    
+    <!-- Save Button and Error Message -->
+    <div id="grades-list-controls" style="margin-bottom: 15px;">
+        <button type="button" id="save-grade-changes-btn" 
+                style="padding: 8px 16px; background: #94a3b8; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: not-allowed; opacity: 0.6; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"
+                disabled>
+            Save Changes
+        </button>
+        <div id="grade-edit-error" style="margin-top: 10px; padding: 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 10px; display: none; font-size: 13px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);"></div>
+    </div>
+    
+    <div id="grades-list-table-container" style="overflow-x: auto;">
+        <table id="grades-list-table" style="width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+            <thead id="grades-table-head">
+                <!-- Table headers will be dynamically generated -->
+            </thead>
+            <tbody id="grades-table-body">
+                <!-- Table rows will be dynamically generated -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    // Get variables from parent scope or define them here
+    const courseName = typeof window.courseName !== 'undefined' ? window.courseName : "{{ course.name|escapejs }}";
+    const gradesData = typeof window.gradesData !== 'undefined' ? window.gradesData : JSON.parse('{{ grades_data|escapejs }}' || '[]');
+    const assessmentColumns = typeof window.assessmentColumns !== 'undefined' ? window.assessmentColumns : JSON.parse('{{ assessment_columns|escapejs }}' || '[]');
+    
+    // Track currently editing cell
+    let currentEditingCell = null;
+    let currentEditingInput = null;
+    let currentEditingOriginalValue = null;
+    
+    // Store original values when table is created (for comparison on save)
+    let originalCellValues = new Map(); // Map<cellId, originalValue>
+    
+    // Create Grades List Table
+    function createGradesListTable() {
+        const tableHead = document.getElementById('grades-table-head');
+        const tableBody = document.getElementById('grades-table-body');
+        
+        if (!tableHead || !tableBody) return;
+        
+        // Clear existing content
+        tableHead.innerHTML = '';
+        tableBody.innerHTML = '';
+        
+        // Create header row
+        const headerRow = document.createElement('tr');
+        headerRow.style.cssText = 'background: #0f172a; color: white;';
+        
+        // Student ID column
+        const thStudentId = document.createElement('th');
+        thStudentId.textContent = 'Student ID';
+        thStudentId.style.cssText = 'padding: 12px; text-align: left; font-weight: 600; border: 1px solid #334155;';
+        headerRow.appendChild(thStudentId);
+        
+        // Student Full Name column
+        const thFullName = document.createElement('th');
+        thFullName.textContent = 'Student Full Name';
+        thFullName.style.cssText = 'padding: 12px; text-align: left; font-weight: 600; border: 1px solid #334155;';
+        headerRow.appendChild(thFullName);
+        
+        // Assessment columns
+        assessmentColumns.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col.label;
+            th.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
+            headerRow.appendChild(th);
+        });
+        
+        // Overall Score column
+        const thOverall = document.createElement('th');
+        thOverall.textContent = 'Overall Score';
+        thOverall.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
+        headerRow.appendChild(thOverall);
+        
+        // Letter Grade column
+        const thLetterGrade = document.createElement('th');
+        thLetterGrade.textContent = 'Letter Grade';
+        thLetterGrade.style.cssText = 'padding: 12px; text-align: center; font-weight: 600; border: 1px solid #334155;';
+        headerRow.appendChild(thLetterGrade);
+        
+        tableHead.appendChild(headerRow);
+        
+        // Create data rows
+        gradesData.forEach(student => {
+            const row = document.createElement('tr');
+            row.style.cssText = 'border-bottom: 1px solid #e2e8f0;';
+            
+            // Student ID cell
+            const tdStudentId = document.createElement('td');
+            tdStudentId.textContent = student.student_id;
+            tdStudentId.style.cssText = 'padding: 10px 12px; border: 1px solid #e2e8f0;';
+            row.appendChild(tdStudentId);
+            
+            // Student Full Name cell
+            const tdFullName = document.createElement('td');
+            tdFullName.textContent = student.full_name;
+            tdFullName.style.cssText = 'padding: 10px 12px; border: 1px solid #e2e8f0;';
+            row.appendChild(tdFullName);
+            
+            // Assessment grade cells (editable)
+            assessmentColumns.forEach(col => {
+                const td = document.createElement('td');
+                const score = student.grades[col.key];
+                td.dataset.studentId = student.student_id;
+                td.dataset.assessmentKey = col.key;
+                
+                // Store original value for comparison
+                const cellId = `${student.student_id}_${col.key}`;
+                const originalValue = (score !== undefined && score !== null) ? score : null;
+                originalCellValues.set(cellId, originalValue);
+                
+                if (score !== undefined && score !== null) {
+                    td.textContent = score.toFixed(1);
+                } else {
+                    td.textContent = '-';
+                    td.style.color = '#94a3b8';
+                }
+                td.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; cursor: pointer; position: relative;';
+                td.classList.add('editable-grade-cell');
+                
+                // Make cell editable on click
+                td.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    makeCellEditable(this);
+                });
+                
+                row.appendChild(td);
+            });
+            
+            // Overall Score cell
+            const tdOverall = document.createElement('td');
+            if (student.overall_score !== undefined && student.overall_score !== null) {
+                tdOverall.textContent = student.overall_score.toFixed(1);
+                tdOverall.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
+            } else {
+                tdOverall.textContent = '-';
+                tdOverall.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; color: #94a3b8;';
+            }
+            row.appendChild(tdOverall);
+            
+            // Letter Grade cell
+            const tdLetterGrade = document.createElement('td');
+            if (student.letter_grade !== undefined && student.letter_grade !== null) {
+                tdLetterGrade.textContent = student.letter_grade;
+                tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
+            } else {
+                tdLetterGrade.textContent = '-';
+                tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; color: #94a3b8;';
+            }
+            row.appendChild(tdLetterGrade);
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Add hover effect
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#f8fafc';
+            });
+            row.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = 'white';
+            });
+        });
+        
+        // Add hover effect to editable cells
+        const editableCells = tableBody.querySelectorAll('.editable-grade-cell');
+        editableCells.forEach(cell => {
+            cell.addEventListener('mouseenter', function() {
+                if (!this.querySelector('input')) {
+                    this.style.backgroundColor = '#e0f2fe';
+                }
+            });
+            cell.addEventListener('mouseleave', function() {
+                if (!this.querySelector('input')) {
+                    this.style.backgroundColor = 'transparent';
+                }
+            });
+        });
+    }
+    
+    // Make table cell editable
+    function makeCellEditable(cell) {
+        // If another cell is being edited, update display first
+        if (currentEditingCell && currentEditingCell !== cell) {
+            if (currentEditingInput) {
+                updateCellDisplay();
+            }
+            currentEditingCell = null;
+            currentEditingInput = null;
+            currentEditingOriginalValue = null;
+        }
+        
+        const currentValue = cell.textContent.trim();
+        currentEditingOriginalValue = currentValue === '-' ? '' : currentValue;
+        
+        // Create input
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = '0.1';
+        input.min = '0';
+        input.max = '100';
+        input.value = currentEditingOriginalValue;
+        input.style.cssText = 'width: 80px; padding: 4px 8px; border: 2px solid #0b5fff; border-radius: 8px; font-size: 14px; text-align: center; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);';
+        
+        // Replace cell content with input
+        cell.innerHTML = '';
+        cell.appendChild(input);
+        input.focus();
+        input.select();
+        
+        // Store references
+        currentEditingCell = cell;
+        currentEditingInput = input;
+        
+        // Clear error message
+        const errorDiv = document.getElementById('grade-edit-error');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+        }
+        
+        // Enable save button and change color to blue when value changes
+        const saveBtn = document.getElementById('save-grade-changes-btn');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.style.background = '#94a3b8';
+            saveBtn.style.cursor = 'not-allowed';
+            saveBtn.style.opacity = '0.6';
+        }
+        
+        // Validate on input and enable save button when value changes
+        input.addEventListener('input', function() {
+            validateGradeInput(input);
+            const saveBtn = document.getElementById('save-grade-changes-btn');
+            if (saveBtn) {
+                if (input.value.trim() !== currentEditingOriginalValue) {
+                    saveBtn.disabled = false;
+                    saveBtn.style.background = '#0b5fff';
+                    saveBtn.style.cursor = 'pointer';
+                    saveBtn.style.opacity = '1';
+                } else {
+                    updateSaveButtonState();
+                }
+            }
+        });
+        
+        // Update cell display on blur
+        input.addEventListener('blur', function() {
+            setTimeout(() => {
+                if (currentEditingCell === cell && currentEditingInput === input) {
+                    updateCellDisplay();
+                }
+            }, 200);
+        });
+        
+        // Handle keyboard events
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelCellEdit();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                updateCellDisplay();
+                const saveBtn = document.getElementById('save-grade-changes-btn');
+                if (saveBtn) {
+                    saveBtn.focus();
+                }
+            }
+        });
+    }
+    
+    // Validate grade input
+    function validateGradeInput(input) {
+        const errorDiv = document.getElementById('grade-edit-error');
+        const value = parseFloat(input.value);
+        
+        if (input.value.trim() === '') {
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                errorDiv.textContent = '';
+            }
+            input.style.borderColor = '#0b5fff';
+            return true;
+        }
+        
+        if (isNaN(value)) {
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Please enter a valid number';
+            }
+            input.style.borderColor = '#dc2626';
+            return false;
+        }
+        
+        if (value < 0) {
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Grade cannot be less than 0';
+            }
+            input.style.borderColor = '#dc2626';
+            return false;
+        }
+        
+        if (value > 100) {
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Grade cannot be greater than 100';
+            }
+            input.style.borderColor = '#dc2626';
+            return false;
+        }
+        
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+        }
+        input.style.borderColor = '#0b5fff';
+        return true;
+    }
+    
+    // Format score
+    function formatScore(value) {
+        if (value === '' || value === null || value === undefined) {
+            return null;
+        }
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) {
+            return null;
+        }
+        return numValue;
+    }
+    
+    // Update cell display without saving
+    function updateCellDisplay() {
+        if (!currentEditingCell || !currentEditingInput) {
+            return;
+        }
+        
+        const input = currentEditingInput;
+        const cell = currentEditingCell;
+        const newValue = input.value.trim();
+        
+        if (newValue !== '' && !validateGradeInput(input)) {
+            return;
+        }
+        
+        const formattedScore = formatScore(newValue);
+        const scoreToDisplay = formattedScore !== null ? formattedScore : null;
+        
+        if (cell.contains(input)) {
+            cell.removeChild(input);
+        }
+        
+        if (scoreToDisplay === null || scoreToDisplay === '') {
+            cell.textContent = '-';
+            cell.style.color = '#94a3b8';
+        } else {
+            cell.textContent = scoreToDisplay.toFixed(1);
+            cell.style.color = '';
+        }
+        
+        updateSaveButtonState();
+        currentEditingInput = null;
+    }
+    
+    // Update save button state
+    function updateSaveButtonState() {
+        const saveBtn = document.getElementById('save-grade-changes-btn');
+        if (!saveBtn) return;
+        
+        let hasChanges = false;
+        const editableCells = document.querySelectorAll('.editable-grade-cell');
+        
+        for (let cell of editableCells) {
+            const studentId = cell.dataset.studentId;
+            const assessmentKey = cell.dataset.assessmentKey;
+            if (!studentId || !assessmentKey) continue;
+            
+            const cellId = `${studentId}_${assessmentKey}`;
+            const originalValue = originalCellValues.get(cellId);
+            
+            if (cell.querySelector('input')) continue;
+            
+            const cellText = cell.textContent.trim();
+            let currentValue = null;
+            if (cellText !== '-' && cellText !== '') {
+                const parsed = parseFloat(cellText);
+                if (!isNaN(parsed)) {
+                    currentValue = parsed;
+                }
+            }
+            
+            if (originalValue !== currentValue) {
+                hasChanges = true;
+                break;
+            }
+        }
+        
+        if (!hasChanges && currentEditingCell && currentEditingInput) {
+            const newValue = currentEditingInput.value.trim();
+            const originalValue = currentEditingOriginalValue === '' ? null : parseFloat(currentEditingOriginalValue);
+            const formattedScore = formatScore(newValue);
+            const newValueParsed = formattedScore !== null ? formattedScore : null;
+            if (originalValue !== newValueParsed) {
+                hasChanges = true;
+            }
+        }
+        
+        if (hasChanges) {
+            saveBtn.disabled = false;
+            saveBtn.style.background = '#0b5fff';
+            saveBtn.style.cursor = 'pointer';
+            saveBtn.style.opacity = '1';
+        } else {
+            saveBtn.disabled = true;
+            saveBtn.style.background = '#94a3b8';
+            saveBtn.style.cursor = 'not-allowed';
+            saveBtn.style.opacity = '0.6';
+        }
+    }
+    
+    // Save all changes from table to server
+    function saveCellEdit() {
+        if (currentEditingCell && currentEditingInput) {
+            const input = currentEditingInput;
+            const cell = currentEditingCell;
+            const newValue = input.value.trim();
+            
+            if (newValue === '' || validateGradeInput(input)) {
+                const formattedScore = formatScore(newValue);
+                const scoreToDisplay = formattedScore !== null ? formattedScore : null;
+                
+                if (cell.contains(input)) {
+                    cell.removeChild(input);
+                }
+                
+                if (scoreToDisplay === null || scoreToDisplay === '') {
+                    cell.textContent = '-';
+                    cell.style.color = '#94a3b8';
+                } else {
+                    cell.textContent = scoreToDisplay.toFixed(1);
+                    cell.style.color = '';
+                }
+            }
+            
+            currentEditingCell = null;
+            currentEditingInput = null;
+            currentEditingOriginalValue = null;
+        }
+        
+        // Collect all changes from table
+        const changesArray = [];
+        const editableCells = document.querySelectorAll('.editable-grade-cell');
+        
+        editableCells.forEach(cell => {
+            const studentId = cell.dataset.studentId;
+            const assessmentKey = cell.dataset.assessmentKey;
+            if (!studentId || !assessmentKey) return;
+            
+            const cellId = `${studentId}_${assessmentKey}`;
+            const originalValue = originalCellValues.get(cellId);
+            
+            const cellText = cell.textContent.trim();
+            let currentValue = null;
+            if (cellText !== '-' && cellText !== '') {
+                const parsed = parseFloat(cellText);
+                if (!isNaN(parsed)) {
+                    currentValue = parsed;
+                }
+            }
+            
+            if (originalValue !== currentValue) {
+                changesArray.push({
+                    cell: cell,
+                    studentId: studentId,
+                    assessmentKey: assessmentKey,
+                    originalValue: originalValue,
+                    newValue: currentValue
+                });
+            }
+        });
+        
+        if (changesArray.length === 0) {
+            return;
+        }
+        
+        const saveBtn = document.getElementById('save-grade-changes-btn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.style.background = '#94a3b8';
+            saveBtn.style.cursor = 'not-allowed';
+            saveBtn.style.opacity = '0.6';
+            saveBtn.textContent = 'Saving...';
+        }
+        
+        console.log('Saving', changesArray.length, 'changes:', changesArray.map(c => `${c.studentId}_${c.assessmentKey}: ${c.originalValue} -> ${c.newValue}`));
+        
+        // Prepare changes for batch update
+        const changes = changesArray.map(change => ({
+            student_id: change.studentId,
+            assessment_key: change.assessmentKey,
+            score: change.newValue
+        }));
+        
+        // Use batch update endpoint
+        fetch(`/faculty-head/grades/${courseName}/update-multiple-grades/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': typeof getCsrfToken === 'function' ? getCsrfToken() : (document.cookie.match(/csrftoken=([^;]+)/) ? document.cookie.match(/csrftoken=([^;]+)/)[1] : null)
+            },
+            body: JSON.stringify({ changes: changes })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                // Update cells with saved values
+                data.results.forEach(result => {
+                    const change = changesArray.find(c => c.studentId === result.student_id && c.assessmentKey === result.assessment_key);
+                    if (change) {
+                        const cell = change.cell;
+                        if (result.score !== null && result.score !== undefined) {
+                            cell.textContent = parseFloat(result.score).toFixed(1);
+                            cell.style.color = '';
+                        } else {
+                            cell.textContent = '-';
+                            cell.style.color = '#94a3b8';
+                        }
+                        
+                        // Update overall_score and letter_grade
+                        const row = cell.closest('tr');
+                        if (row) {
+                            const overallCell = row.querySelector('td:nth-last-child(2)');
+                            const letterGradeCell = row.querySelector('td:last-child');
+                            
+                            if (overallCell && result.overall_score !== undefined) {
+                                if (result.overall_score !== null && result.overall_score !== undefined) {
+                                    overallCell.textContent = parseFloat(result.overall_score).toFixed(1);
+                                    overallCell.style.color = '';
+                                    overallCell.style.fontWeight = '600';
+                                } else {
+                                    overallCell.textContent = '-';
+                                    overallCell.style.color = '#94a3b8';
+                                    overallCell.style.fontWeight = '';
+                                }
+                            }
+                            
+                            if (letterGradeCell && result.letter_grade !== undefined) {
+                                if (result.letter_grade !== null && result.letter_grade !== undefined) {
+                                    letterGradeCell.textContent = result.letter_grade;
+                                    letterGradeCell.style.color = '';
+                                    letterGradeCell.style.fontWeight = '600';
+                                } else {
+                                    letterGradeCell.textContent = '-';
+                                    letterGradeCell.style.color = '#94a3b8';
+                                    letterGradeCell.style.fontWeight = '';
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Update original values
+                changesArray.forEach(change => {
+                    const cellId = `${change.studentId}_${change.assessmentKey}`;
+                    originalCellValues.set(cellId, change.newValue);
+                });
+                
+                // Update last changes timestamp
+                if (data.last_changes_at) {
+                    const lastChangesInfo = document.getElementById('last-changes-info');
+                    const lastChangesTime = document.getElementById('last-changes-time');
+                    if (lastChangesInfo && lastChangesTime) {
+                        const changeDate = new Date(data.last_changes_at);
+                        lastChangesTime.textContent = changeDate.toLocaleString();
+                        lastChangesInfo.style.display = 'block';
+                    }
+                }
+                
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.style.background = '#94a3b8';
+                    saveBtn.style.cursor = 'not-allowed';
+                    saveBtn.style.opacity = '0.6';
+                    saveBtn.textContent = 'Save Changes';
+                }
+                
+                currentEditingCell = null;
+                currentEditingInput = null;
+                currentEditingOriginalValue = null;
+                
+                const errorDiv = document.getElementById('grade-edit-error');
+                if (errorDiv) {
+                    errorDiv.style.display = 'none';
+                    errorDiv.textContent = '';
+                }
+                
+                console.log(`Successfully saved ${data.updated_count} grade(s)`);
+            } else {
+                alert('Error updating grades: ' + (data.error || 'Unknown error'));
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.style.background = '#0b5fff';
+                    saveBtn.style.cursor = 'pointer';
+                    saveBtn.style.opacity = '1';
+                    saveBtn.textContent = 'Save Changes';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error saving grades:', error);
+            alert('Error updating grades. Please try again.');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.style.background = '#0b5fff';
+                saveBtn.style.cursor = 'pointer';
+                saveBtn.style.opacity = '1';
+                saveBtn.textContent = 'Save Changes';
+            }
+        });
+    }
+    
+    // Cancel current edit
+    function cancelCellEdit() {
+        if (!currentEditingCell) {
+            return;
+        }
+        
+        const cell = currentEditingCell;
+        const originalValue = currentEditingOriginalValue;
+        
+        if (currentEditingInput && cell.contains(currentEditingInput)) {
+            cell.removeChild(currentEditingInput);
+        }
+        
+        if (originalValue === '' || originalValue === null || originalValue === undefined) {
+            cell.textContent = '-';
+            cell.style.color = '#94a3b8';
+        } else {
+            const numValue = parseFloat(originalValue);
+            if (!isNaN(numValue)) {
+                cell.textContent = numValue.toFixed(1);
+                cell.style.color = '';
+            } else {
+                cell.textContent = '-';
+                cell.style.color = '#94a3b8';
+            }
+        }
+        
+        updateSaveButtonState();
+        
+        currentEditingCell = null;
+        currentEditingInput = null;
+        currentEditingOriginalValue = null;
+        
+        const errorDiv = document.getElementById('grade-edit-error');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+        }
+    }
+    
+    // Save button event listener
+    const saveGradeChangesBtn = document.getElementById('save-grade-changes-btn');
+    if (saveGradeChangesBtn) {
+        saveGradeChangesBtn.addEventListener('click', function() {
+            if (!this.disabled) {
+                saveCellEdit();
+            }
+        });
+    }
+    
+    // Initialize grades list table on page load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            createGradesListTable();
+            
+            // Show last changes timestamp if available
+            const lastChangesAt = typeof window.lastChangesAt !== 'undefined' ? window.lastChangesAt : '{{ last_changes_at|escapejs }}';
+            if (lastChangesAt && lastChangesAt !== 'None' && lastChangesAt !== '') {
+                const lastChangesInfo = document.getElementById('last-changes-info');
+                const lastChangesTime = document.getElementById('last-changes-time');
+                if (lastChangesInfo && lastChangesTime) {
+                    try {
+                        const changeDate = new Date(lastChangesAt);
+                        lastChangesTime.textContent = changeDate.toLocaleString();
+                        lastChangesInfo.style.display = 'block';
+                    } catch (e) {
+                        console.error('Error parsing last_changes_at:', e);
+                    }
+                }
+            }
+        });
+    } else {
+        createGradesListTable();
+        
+        // Show last changes timestamp if available
+        const lastChangesAt = typeof window.lastChangesAt !== 'undefined' ? window.lastChangesAt : '{{ last_changes_at|escapejs }}';
+        if (lastChangesAt && lastChangesAt !== 'None' && lastChangesAt !== '') {
+            const lastChangesInfo = document.getElementById('last-changes-info');
+            const lastChangesTime = document.getElementById('last-changes-time');
+            if (lastChangesInfo && lastChangesTime) {
+                try {
+                    const changeDate = new Date(lastChangesAt);
+                    lastChangesTime.textContent = changeDate.toLocaleString();
+                    lastChangesInfo.style.display = 'block';
+                } catch (e) {
+                    console.error('Error parsing last_changes_at:', e);
+                }
+            }
+        }
+    }
+})();
+</script>
+
