@@ -9,7 +9,7 @@
             <span style="font-size: 20px;">←</span>
             <span>Go back</span>
         </a>
-        <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ course_name }}</h1>
+        <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ display_course_name|default:course_name|title }}</h1>
     </div>
 
     <div style="margin-bottom: 24px;">
@@ -99,7 +99,7 @@
     </div>
 
     <div style="margin-top: 32px;">
-        <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes of {{ course_name }}</h2>
+        <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes of {{ display_course_name|default:course_name|title }}</h2>
         {% if outcomes_data %}
             <ul style="list-style: none; padding: 0; margin: 0;">
                 {% for outcome in outcomes_data %}

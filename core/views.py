@@ -602,8 +602,8 @@ def instructor_dashboard(request):
     total_students = len(total_students_set)
     
     latest_announcements = Announcement.objects.filter(
-        Q(sender=instructor_user) | Q(receiver=instructor_user) | Q(receiver__isnull=True)
-    ).select_related('sender', 'receiver').order_by('-created_at')[:5]
+        Q(receiver=instructor_user) | Q(receiver__isnull=True)
+    ).exclude(sender=instructor_user).select_related('sender', 'receiver').order_by('-created_at')[:5]
     
     announcements_list = []
     for ann in latest_announcements:
@@ -4275,11 +4275,15 @@ def course_learning_outcomes(request, course_name):
                     # Use helper function to build outcomes data
                     outcomes_data = build_learning_outcomes_data(outcomes_qs)
                     
+                    # Use course.name if available (properly formatted), otherwise title case the slug-based name
+                    display_course_name = course.name if course else course_name.title()
+                    
                     return render(
                         request,
                         'instructor/course_learning_outcomes.html',
                         {
                             'course_name': course_name,
+                            'display_course_name': display_course_name,
                             'course_id': course_id,
                             'outcomes_data': outcomes_data,
                             'program_outcomes': program_outcomes,
@@ -4325,11 +4329,15 @@ def course_learning_outcomes(request, course_name):
     # Use helper function to build outcomes data
     outcomes_data = build_learning_outcomes_data(outcomes_qs)
     
+    # Use course.name if available (properly formatted), otherwise title case the slug-based name
+    display_course_name = course.name if course else course_name.title()
+    
     return render(
         request,
         'instructor/course_learning_outcomes.html',
         {
             'course_name': course_name,
+            'display_course_name': display_course_name,
             'course_id': course_id,
             'outcomes_data': outcomes_data,
             'program_outcomes': program_outcomes,

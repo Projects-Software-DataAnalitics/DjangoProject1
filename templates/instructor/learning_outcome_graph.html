@@ -194,7 +194,7 @@
                         <h3 class="section-title po-title">Program Outcomes</h3>
                         <div class="po-cards-wrapper">
                             {% for po in program_outcomes %}
-                            <div class="po-card" data-po-id="{{ po.id }}">
+                            <div class="po-card" data-po-id="{{ po.id }}" data-percentage="{{ po.percentage|default:0 }}">
                                 <p class="card-text">{{ po.text }}</p>
                             </div>
                             {% endfor %}
@@ -275,6 +275,7 @@
             
             poCards.forEach(function(poCard) {
                 const poRect = poCard.getBoundingClientRect();
+                const percentage = parseInt(poCard.dataset.percentage || '0');
                 
                 // Calculate PO card center point (left edge, vertical center)
                 const poEndX = poRect.left - containerRect.left;
@@ -300,6 +301,24 @@
                 path.setAttribute('marker-end', 'url(#arrowhead)');
                 
                 svg.appendChild(path);
+                
+                // Add percentage text on top of the arrow (at the midpoint)
+                if (percentage > 0) {
+                    const midX = (loStartX + poEndX) / 2;
+                    const midY = (loStartY + poEndY) / 2;
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', midX.toString());
+                    text.setAttribute('y', midY.toString());
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('dominant-baseline', 'middle');
+                    text.setAttribute('font-size', '14');
+                    text.setAttribute('font-weight', '600');
+                    text.setAttribute('fill', '#000000');
+                    text.setAttribute('class', 'percentage-text');
+                    text.style.pointerEvents = 'none';
+                    text.textContent = percentage + '%';
+                    svg.appendChild(text);
+                }
             });
         }
         
