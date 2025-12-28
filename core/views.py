@@ -95,6 +95,14 @@ def get_faculty_head_data(username):
         return {}
 
 
+def clean_announcement_subject(subject):
+    if subject and subject.startswith('__COURSE:'):
+        end_marker = subject.find('__', 9)  
+        if end_marker != -1:
+            return subject[end_marker + 2:]
+    return subject
+
+
 def get_students_data():
     """Students veritabanı verisini döndür (cache'li)"""
     cache_key = 'students_data_db'
@@ -416,7 +424,11 @@ def student_dashboard(request):
         year_display = f"{student.year}. Year" if student.year else "-"
         department_display = student.department or "-"
         
-        advisor_name = "Prof. Dr. Ahmet Bulut"
+        advisor_name = "-"
+        advisor_username = None
+        if student.advisor:
+            advisor_name = f"{student.advisor.first_name} {student.advisor.last_name}".strip() or student.advisor.username
+            advisor_username = student.advisor.username
         
         courses = student.courses.all().select_related('instructor')
         courses_list = []
@@ -437,6 +449,7 @@ def student_dashboard(request):
         year_display = "-"
         department_display = "-"
         advisor_name = "-"
+        advisor_username = None
         courses_list = []
     
     latest_announcements = Announcement.objects.filter(
@@ -448,7 +461,7 @@ def student_dashboard(request):
         sender_name = ann.sender.get_full_name() or ann.sender.username
         announcements_list.append({
             'id': ann.id,
-            'subject': ann.subject,
+            'subject': clean_announcement_subject(ann.subject),
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -460,6 +473,7 @@ def student_dashboard(request):
         'year_display': year_display,
         'department_display': department_display,
         'advisor_name': advisor_name,
+        'advisor_username': advisor_username,
         'courses_list': courses_list,
     })
 
@@ -547,7 +561,7 @@ def instructor_dashboard(request):
         sender_name = ann.sender.get_full_name() or ann.sender.username
         announcements_list.append({
             'id': ann.id,
-            'subject': ann.subject,
+            'subject': clean_announcement_subject(ann.subject),
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -2511,16 +2525,9 @@ def faculty_head_dashboard(request):
     announcements_list = []
     for ann in latest_announcements:
         sender_name = ann.sender.get_full_name() or ann.sender.username
-        # Remove __COURSE: prefix from subject if present
-        subject = ann.subject
-        if subject.startswith('__COURSE:'):
-            # Find the end of the course marker
-            end_marker = subject.find('__', 9)  # Start after '__COURSE:'
-            if end_marker != -1:
-                subject = subject[end_marker + 2:]  # Remove '__COURSE:...__' prefix
         announcements_list.append({
             'id': ann.id,
-            'subject': subject,
+            'subject': clean_announcement_subject(ann.subject),
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
