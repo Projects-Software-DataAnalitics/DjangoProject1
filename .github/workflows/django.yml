@@ -61,6 +61,12 @@ jobs:
       env:
         PGPASSWORD: postgres
     
+    - name: Create database
+      run: |
+        psql -h localhost -U postgres -d postgres -c "CREATE DATABASE djangoproject2;" || true
+      env:
+        PGPASSWORD: postgres
+    
     - name: Resolve migration conflicts
       run: |
         python manage.py makemigrations --merge --noinput || true
@@ -83,3 +89,4 @@ jobs:
         DB_PASSWORD: postgres
         DB_PORT: 5432
         DJANGO_SETTINGS_MODULE: DjangoProject2.settings
+        SECRET_KEY: django-insecure-test-key-for-ci
