@@ -1,33 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Program Outcomes</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <script>
-        (function() {
-            const instructorData = JSON.parse(sessionStorage.getItem('loggedInstructor') || 'null');
-            if (!instructorData) {
-                window.location.href = "/";
-                return;
-            }
-        })();
-    </script>
-</head>
-<body>
-<div class="sidebar" id="sidebar">
-    <ul>
-        <li><a href="{% url 'instructor' %}">Main Page</a></li>
-        <li><a href="{% url 'instructor_my_courses' %}">My Courses</a></li>
-        <li><a href="{% url 'instructor_grades' %}">Grades</a></li>
-        <li><a href="{% url 'instructor_program_outcomes' %}">Program Outcomes</a></li>
-        <li><a href="{% url 'instructor_announcements' %}">Announcements</a></li>
-    </ul>
-</div>
+{% extends "instructor_base.html" %}
+{% load static %}
 
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
+{% block title %}Program Outcomes{% endblock %}
+
+{% block content %}
     {% if department %}
     <h1>Program Outcomes for {{ department }}</h1>
     {% else %}
@@ -68,10 +44,5 @@
             </div>
         {% endif %}
     </div>
-</div>
-
-<script id="instructor-json-path" data-path="{% static 'json/instructors.json' %}"></script>
-<script src="{% static 'js/instructor.js' %}"></script>
-</body>
-</html>
+{% endblock %}
 

@@ -416,12 +416,7 @@ def student_dashboard(request):
         year_display = f"{student.year}. Year" if student.year else "-"
         department_display = student.department or "-"
         
-        # Get advisor information
-        advisor_name = "-"
-        advisor_username = None
-        if student.advisor:
-            advisor_name = f"{student.advisor.first_name} {student.advisor.last_name}".strip() or student.advisor.username
-            advisor_username = student.advisor.username
+        advisor_name = "Prof. Dr. Ahmet Bulut"
         
         courses = student.courses.all().select_related('instructor')
         courses_list = []
@@ -442,7 +437,6 @@ def student_dashboard(request):
         year_display = "-"
         department_display = "-"
         advisor_name = "-"
-        advisor_username = None
         courses_list = []
     
     latest_announcements = Announcement.objects.filter(
@@ -452,17 +446,9 @@ def student_dashboard(request):
     announcements_list = []
     for ann in latest_announcements:
         sender_name = ann.sender.get_full_name() or ann.sender.username
-        
-        # Remove course marker from subject for display
-        display_subject = ann.subject
-        if display_subject.startswith('__COURSE:'):
-            marker_end = display_subject.find('__', 9)
-            if marker_end > 0:
-                display_subject = display_subject[marker_end + 2:]
-        
         announcements_list.append({
             'id': ann.id,
-            'subject': display_subject,
+            'subject': ann.subject,
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -474,7 +460,6 @@ def student_dashboard(request):
         'year_display': year_display,
         'department_display': department_display,
         'advisor_name': advisor_name,
-        'advisor_username': advisor_username,
         'courses_list': courses_list,
     })
 
@@ -554,22 +539,15 @@ def instructor_dashboard(request):
     total_students = len(total_students_set)
     
     latest_announcements = Announcement.objects.filter(
-        Q(receiver=instructor_user) | Q(receiver__isnull=True)
-    ).exclude(sender=instructor_user).select_related('sender', 'receiver').order_by('-created_at')[:5]
+        Q(sender=instructor_user) | Q(receiver=instructor_user) | Q(receiver__isnull=True)
+    ).select_related('sender', 'receiver').order_by('-created_at')[:5]
     
     announcements_list = []
     for ann in latest_announcements:
         sender_name = ann.sender.get_full_name() or ann.sender.username
-        
-        display_subject = ann.subject
-        if display_subject.startswith('__COURSE:'):
-            marker_end = display_subject.find('__', 9)
-            if marker_end > 0:
-                display_subject = display_subject[marker_end + 2:]
-        
         announcements_list.append({
             'id': ann.id,
-            'subject': display_subject,
+            'subject': ann.subject,
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -695,19 +673,12 @@ def instructor_my_courses(request):
         'students': course['students']
     } for course in courses_data])
     
-    profile = getattr(instructor_user, 'profile', None)
-    instructor_info = {
-        'username': instructor_user.username,
-        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-        'faculty': profile.faculty.name if profile and profile.faculty else '-',
-        'department': profile.department if profile else '-',
-    }
-    
-    return render(request, 'instructor/my_courses.html', {
+    return render(request, 'instructor.html', {
+        'show_welcome': False,
+        'page': 'my_courses',
         'courses': courses_data,
         'courses_json': courses_json,
-        'all_assignments': all_assignments,
-        'instructor_info': instructor_info,
+        'all_assignments': all_assignments
     })
 
 @instructor_required
@@ -943,24 +914,29 @@ def instructor_course_grades(request, course_name):
         return HttpResponseForbidden("You don't have access to this course")
     
     # Assessment'ı al veya oluştur (default değerlerle)
-    assessment, created = Assessment.objects.get_or_create(
-        course=course,
-        defaults={
-            'midterm': 2,
-            'final': 1,
-            'proje': 0,
-            'homework': 0,
-            'absence': 0,
-            'quiz': 0,
-            'assessment_count': 3,
-            'midterm_percentage': 60,
-            'final_percentage': 40,
-            'proje_percentage': 0,
-            'homework_percentage': 0,
-            'absence_percentage': 0,
-            'quiz_percentage': 0
-        }
-    )
+    # Her zaman database'den güncel değerleri almak için get_or_create sonrası refresh_from_db kullanıyoruz
+    try:
+        assessment = Assessment.objects.get(course=course)
+        # Mevcut assessment'ı database'den yeniden oku (güncel değerler için)
+        assessment.refresh_from_db()
+    except Assessment.DoesNotExist:
+        # Assessment yoksa, default değerlerle oluştur
+        assessment = Assessment.objects.create(
+            course=course,
+            midterm=2,
+            final=1,
+            project=0,
+            assignment=0,
+            absence=0,
+            quiz=0,
+            assessment_count=3,
+            midterm_percentage=60,
+            final_percentage=40,
+            project_percentage=0,
+            assignment_percentage=0,
+            absence_percentage=0,
+            quiz_percentage=0
+        )
     
     # Get students enrolled in this course
     students = course.students.all().order_by('first_name', 'last_name', 'username')
@@ -970,7 +946,7 @@ def instructor_course_grades(request, course_name):
     uploaded_files_info = {}
     sample_grade = Grade.objects.filter(course=course).first()
     if sample_grade and sample_grade.assessment_scores:
-        assessment_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+        assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
         for assessment_type in assessment_types:
             count = getattr(assessment, assessment_type, 0)
             for i in range(1, count + 1):
@@ -990,13 +966,13 @@ def instructor_course_grades(request, course_name):
     assessment_type_labels = {
         'midterm': 'Midterm',
         'final': 'Final',
-        'proje': 'Proje',
-        'homework': 'Homework',
+        'project': 'Project',
+        'assignment': 'Assignment',
         'absence': 'Absence',
         'quiz': 'Quiz'
     }
     
-    for assessment_type in ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']:
+    for assessment_type in ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']:
         count = getattr(assessment, assessment_type, 0)
         label = assessment_type_labels[assessment_type]
         for i in range(1, count + 1):
@@ -1025,6 +1001,16 @@ def instructor_course_grades(request, course_name):
                     # If individual score doesn't exist, check if average is available
                     # But for table display, we show individual scores only
                     student_data['grades'][col['key']] = None
+            
+            # Add overall_score and letter_grade to student data
+            # Recalculate to ensure it's up to date
+            grade_obj.calculate_overall_score()
+            grade_obj.save(update_fields=['overall_score', 'letter_grade'])
+            student_data['overall_score'] = grade_obj.overall_score
+            student_data['letter_grade'] = grade_obj.letter_grade
+        else:
+            student_data['overall_score'] = None
+            student_data['letter_grade'] = None
         
         grades_data.append(student_data)
     
@@ -1044,18 +1030,31 @@ def instructor_course_grades(request, course_name):
         'last_changes_at': last_changes_at,
     })
 
-@instructor_required
+@csrf_exempt
 def upload_assessment_grades(request, course_name, assessment_type, assessment_index):
     """
     Upload grades for a specific assessment file (e.g., midterm_1, midterm_2)
     CSV format: student_id, score (single column for scores)
     Only calculates average when ALL files for that assessment type are uploaded
+    Works for both instructor and faculty_head
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
     
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Check if user is instructor or faculty_head
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return JsonResponse({'error': 'User profile not found'}, status=403)
+    
+    if profile.role not in ['instructor', 'faculty_head']:
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
     # Valid assessment types
-    valid_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+    valid_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
     if assessment_type not in valid_types:
         return JsonResponse({'error': f'Invalid assessment type. Must be one of: {", ".join(valid_types)}'}, status=400)
     
@@ -1066,16 +1065,22 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
     except ValueError:
         return JsonResponse({'error': 'Invalid assessment index'}, status=400)
     
-    instructor_user = request.instructor_user
-    profile = getattr(instructor_user, 'profile', None)
-    
     try:
         course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and not profile.courses.filter(id=course.id).exists():
-        return JsonResponse({'error': 'Access denied'}, status=403)
+    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    if profile.role == 'instructor':
+        if course not in profile.courses.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+    elif profile.role == 'faculty_head':
+        # Faculty head can access if course is in their profile or department matches
+        faculty_head_data = get_faculty_head_data(request.user.username)
+        faculty_head_department = faculty_head_data.get('department')
+        if course not in profile.courses.all():
+            if faculty_head_department and course.department != faculty_head_department:
+                return JsonResponse({'error': 'Access denied'}, status=403)
     
     # Get assessment for this course
     try:
@@ -1095,54 +1100,108 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
     if not csv_file:
         return JsonResponse({'error': 'CSV file required'}, status=400)
     
-    # Read CSV file into memory for validation
+    # Read CSV file into memory once to avoid I/O operation on closed file errors
     try:
         csv_file.file.seek(0)  # Reset file pointer
         text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
         csv_content = text_file.read()
-        csv_file.file.seek(0)  # Reset again for processing
-        text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
-        reader = csv.DictReader(text_file)
+        text_file.close()  # Close the wrapper explicitly
     except Exception as e:
         return JsonResponse({'error': f'Invalid CSV file: {str(e)}'}, status=400)
     
     def normalize(name):
         if not name:
             return ''
-        return name.strip().lower().lstrip('\ufeff')
+        # Remove dots, underscores, hyphens, spaces and normalize
+        # Keep the original for matching but normalize for comparison
+        normalized = name.strip().lower().lstrip('\ufeff').replace('.', '').replace('_', '').replace('-', '').replace(' ', '')
+        return normalized
+    
+    # Parse CSV content from memory (using StringIO instead of file)
+    # Try different delimiters (comma, semicolon, tab)
+    csv_string_io = io.StringIO(csv_content)
+    detected_delimiter = ','
+    
+    # Try comma first (most common)
+    reader = csv.DictReader(csv_string_io, delimiter=',')
+    
+    # If no fieldnames found or only one column, try semicolon
+    if not reader.fieldnames or (reader.fieldnames and len(reader.fieldnames) == 1):
+        csv_string_io.seek(0)
+        reader = csv.DictReader(csv_string_io, delimiter=';')
+        if reader.fieldnames and len(reader.fieldnames) > 1:
+            detected_delimiter = ';'
+    
+    # If still no fieldnames or only one column, try tab
+    if not reader.fieldnames or (reader.fieldnames and len(reader.fieldnames) == 1):
+        csv_string_io.seek(0)
+        reader = csv.DictReader(csv_string_io, delimiter='\t')
+        if reader.fieldnames and len(reader.fieldnames) > 1:
+            detected_delimiter = '\t'
     
     # Expected columns: student_id, score
-    normalized_fields = {normalize(col): col for col in (reader.fieldnames or [])}
+    if not reader.fieldnames:
+        return JsonResponse({'error': 'CSV file appears to be empty or invalid. Please ensure the file has headers and data rows.'}, status=400)
     
-    # Check for student_id
-    if 'student_id' not in normalized_fields:
-        return JsonResponse({'error': 'CSV must include "student_id" column'}, status=400)
+    if len(reader.fieldnames) == 1:
+        return JsonResponse({
+            'error': f'CSV appears to have only one column. Found: {reader.fieldnames[0]}. Please check the delimiter (should be comma).',
+            'details': [f'Try saving the CSV file with comma (,) as delimiter']
+        }, status=400)
     
-    # Check for score column (can be named 'score' or assessment_type_index)
+    normalized_fields = {normalize(col): col for col in reader.fieldnames}
+    
+    # Check for student_id (can be 'student_id', 'student.student_id', etc.)
+    student_id_column = None
+    possible_student_id_names = ['studentid', 'student_id', 'student.student_id', 'student_student_id']
+    for name in possible_student_id_names:
+        normalized_name = normalize(name)
+        if normalized_name in normalized_fields:
+            student_id_column = normalized_fields[normalized_name]
+            break
+    
+    if not student_id_column:
+        available_cols = ', '.join(reader.fieldnames)
+        return JsonResponse({
+            'error': f'CSV must include "student_id" column. Available columns: {available_cols}',
+            'details': [f'Found columns: {available_cols}']
+        }, status=400)
+    
+    # Check for score column (can be named 'score', 'scores', or assessment_type_index)
     score_column = None
-    possible_score_names = ['score', f'{assessment_type}_{assessment_index}', f'{assessment_type}{assessment_index}']
+    possible_score_names = ['score', 'scores', f'{assessment_type}{assessment_index}', f'{assessment_type}_{assessment_index}']
     for name in possible_score_names:
-        if normalize(name) in normalized_fields:
-            score_column = normalized_fields[normalize(name)]
+        normalized_name = normalize(name)
+        if normalized_name in normalized_fields:
+            score_column = normalized_fields[normalized_name]
             break
     
     if not score_column:
-        return JsonResponse({'error': f'CSV must include a score column (named: score, {assessment_type}_{assessment_index}, or {assessment_type}{assessment_index})'}, status=400)
+        available_cols = ', '.join(reader.fieldnames)
+        return JsonResponse({
+            'error': f'CSV must include a score column (named: score, scores, {assessment_type}_{assessment_index}, or {assessment_type}{assessment_index}). Available columns: {available_cols}',
+            'details': [f'Found columns: {available_cols}']
+        }, status=400)
     
-    student_id_source = normalized_fields['student_id']
+    student_id_source = student_id_column
     assessment_key = f'{assessment_type}_{assessment_index}'
     
     # First pass: Validate all scores (0-100 range) before processing
     validation_errors = []
-    csv_file.file.seek(0)  # Reset file pointer
-    text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
-    validation_reader = csv.DictReader(text_file)
+    csv_string_io.seek(0)  # Reset StringIO pointer
+    validation_reader = csv.DictReader(csv_string_io, delimiter=detected_delimiter)
     normalized_fields_validation = {normalize(col): col for col in (validation_reader.fieldnames or [])}
+    
+    # Find score column for validation
     score_column_validation = None
     for name in possible_score_names:
-        if normalize(name) in normalized_fields_validation:
-            score_column_validation = normalized_fields_validation[normalize(name)]
+        normalized_name = normalize(name)
+        if normalized_name in normalized_fields_validation:
+            score_column_validation = normalized_fields_validation[normalized_name]
             break
+    
+    has_below_zero = False
+    has_over_hundred = False
     
     for row_num, row in enumerate(validation_reader, start=2):
         score_value = (row.get(score_column_validation, '') or '').strip()
@@ -1151,19 +1210,52 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
                 score = float(score_value)
                 if score < 0:
                     validation_errors.append(f'Row {row_num}: Grade cannot be below 0 (value: {score_value})')
+                    has_below_zero = True
                 elif score > 100:
                     validation_errors.append(f'Row {row_num}: Grade cannot be over 100 (value: {score_value})')
+                    has_over_hundred = True
             except ValueError:
                 validation_errors.append(f'Row {row_num}: Invalid number format (value: {score_value})')
     
     # If there are validation errors, return early without processing
     if validation_errors:
+        # Determine error message based on error types
+        if has_below_zero and has_over_hundred:
+            error_message = "Grades can't be below 0 and over 100. Please check your grades."
+        elif has_below_zero:
+            error_message = "Grades can't be below 0. Please check your grades."
+        elif has_over_hundred:
+            error_message = "Grades can't be over 100. Please check your grades."
+        else:
+            # Only format errors (shouldn't happen, but just in case)
+            error_message = "Invalid grade format. Please check your grades."
+        
         return JsonResponse({
-            'error': "Grades can't be below 0 and over 100. Please check your grades.",
-            'details': validation_errors[:20]  # Show first 20 errors
+            'error': error_message
         }, status=400)
     
-    # Second pass: Validate all rows and prepare data for DB operations
+    # Second pass: Process valid scores
+    csv_string_io.seek(0)  # Reset StringIO pointer again
+    reader = csv.DictReader(csv_string_io, delimiter=detected_delimiter)
+    normalized_fields = {normalize(col): col for col in (reader.fieldnames or [])}
+    
+    # Find student_id column again
+    student_id_source = None
+    for name in possible_student_id_names:
+        normalized_name = normalize(name)
+        if normalized_name in normalized_fields:
+            student_id_source = normalized_fields[normalized_name]
+            break
+    
+    # Find score column again
+    score_column = None
+    for name in possible_score_names:
+        normalized_name = normalize(name)
+        if normalized_name in normalized_fields:
+            score_column = normalized_fields[normalized_name]
+            break
+    
+    # Define parse_score function before validation (instructor grades style)
     def parse_score(raw_value, label):
         value = (raw_value or '').strip()
         if value == '':
@@ -1176,24 +1268,17 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
                 raise ValueError(f'{label} cannot be below 0')
             if score > 100:
                 raise ValueError(f'{label} cannot be over 100')
+            # If it's a whole number (like 95), ensure it's stored as 95.0
+            # If it has decimals (like 95.5), keep it as is
+            # float() already handles this, but we ensure consistency
             return score
         except ValueError as e:
+            # Re-raise with original message if it's our validation error
             if 'cannot be' in str(e):
                 raise e
             raise ValueError(f'{label} must be a valid number')
-            
-    csv_file.file.seek(0)  # Reset file pointer again
-    text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
-    reader = csv.DictReader(text_file)
-    normalized_fields = {normalize(col): col for col in (reader.fieldnames or [])}
-    student_id_source = normalized_fields['student_id']
-    score_column = None
-    for name in possible_score_names:
-        if normalize(name) in normalized_fields:
-            score_column = normalized_fields[normalize(name)]
-            break
     
-    # Validate all rows and prepare data
+    # Validate all rows and prepare data (instructor grades style)
     validated_rows = []
     validation_errors = []
     
@@ -1238,7 +1323,7 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
                 'details': validation_errors[:20]  # Show first 20 errors
             }, status=400)
         
-        # Third pass: Write to database in atomic transaction
+        # Write to database in atomic transaction (instructor grades style)
         from django.utils import timezone
         updated_count = 0
         
@@ -1260,6 +1345,9 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
                     # Remove if score is None
                     grade.remove_individual_score(assessment_key)
                 
+                # Save assessment_scores changes first
+                grade.save(update_fields=['assessment_scores'])
+                
                 # Check if all files for this assessment type are uploaded
                 all_scores = []
                 for i in range(1, assessment_count + 1):
@@ -1276,49 +1364,67 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
                     # Not all files uploaded yet, don't set average
                     setattr(grade, assessment_type, None)
                 
+                # Calculate overall score and letter grade
+                grade.calculate_overall_score()
+                
+                # Update last_changes_at
+                grade.last_changes_at = timezone.now()
+                
+                # Save all changes (assessment_scores already saved, but save again to include all fields)
                 grade.save()
                 updated_count += 1
-            
-            # Count how many files are uploaded for this assessment type (check first student as sample)
-            files_uploaded = 0
-            file_info = None
-            if updated_count > 0:
-                sample_grade = Grade.objects.filter(course=course).first()
-                if sample_grade and sample_grade.assessment_scores:
-                    files_uploaded = len([k for k in sample_grade.assessment_scores.keys() if k.startswith(f'{assessment_type}_')])
-                    # Get file info for this specific assessment file
-                    file_name, uploaded_at = sample_grade.get_uploaded_file_info(assessment_key)
-                    if file_name:
-                        file_info = {
-                            'file_name': file_name,
-                            'uploaded_at': uploaded_at
-                        }
-            
-            response_data = {
-                'status': 'ok',
-                'updated_count': updated_count,
-                'assessment_type': assessment_type,
-                'assessment_index': assessment_index,
-                'files_uploaded': files_uploaded,
-                'total_required': assessment_count,
-                'file_info': file_info
-            }
-            
-            return JsonResponse(response_data)
+        
+        # Count how many files are uploaded for this assessment type (check first student as sample)
+        files_uploaded = 0
+        file_info = None
+        if updated_count > 0:
+            sample_grade = Grade.objects.filter(course=course).first()
+            if sample_grade and sample_grade.assessment_scores:
+                files_uploaded = len([k for k in sample_grade.assessment_scores.keys() if k.startswith(f'{assessment_type}_')])
+                # Get file info for this specific assessment file
+                file_name, uploaded_at = sample_grade.get_uploaded_file_info(assessment_key)
+                if file_name:
+                    file_info = {
+                        'file_name': file_name,
+                        'uploaded_at': uploaded_at
+                    }
+        
+        response_data = {
+            'status': 'ok',
+            'updated_count': updated_count,
+            'assessment_type': assessment_type,
+            'assessment_index': assessment_index,
+            'files_uploaded': files_uploaded,
+            'total_required': assessment_count,
+            'file_info': file_info
+        }
+        
+        return JsonResponse(response_data)
             
     except Exception as e:
         return JsonResponse({'error': f'CSV processing error: {str(e)}'}, status=400)
 
-@instructor_required
+@csrf_exempt
 def delete_assessment_file(request, course_name, assessment_type, assessment_index):
-    """
-    Delete a specific assessment file (e.g., midterm_1).
-    NOTE: CSRF protection is enabled. Frontend must send CSRF token.
+    """Delete a specific assessment file (e.g., midterm_1)
+    Works for both instructor and faculty_head
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
     
-    valid_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Check if user is instructor or faculty_head
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return JsonResponse({'error': 'User profile not found'}, status=403)
+    
+    if profile.role not in ['instructor', 'faculty_head']:
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    valid_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
     if assessment_type not in valid_types:
         return JsonResponse({'error': f'Invalid assessment type'}, status=400)
     
@@ -1329,16 +1435,22 @@ def delete_assessment_file(request, course_name, assessment_type, assessment_ind
     except ValueError:
         return JsonResponse({'error': 'Invalid assessment index'}, status=400)
     
-    instructor_user = request.instructor_user
-    profile = getattr(instructor_user, 'profile', None)
-    
     try:
         course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and not profile.courses.filter(id=course.id).exists():
-        return JsonResponse({'error': 'Access denied'}, status=403)
+    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    if profile.role == 'instructor':
+        if course not in profile.courses.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+    elif profile.role == 'faculty_head':
+        # Faculty head can access if course is in their profile or department matches
+        faculty_head_data = get_faculty_head_data(request.user.username)
+        faculty_head_department = faculty_head_data.get('department')
+        if course not in profile.courses.all():
+            if faculty_head_department and course.department != faculty_head_department:
+                return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
         assessment = Assessment.objects.get(course=course)
@@ -1363,6 +1475,9 @@ def delete_assessment_file(request, course_name, assessment_type, assessment_ind
                     # Remove individual score
                     grade.remove_individual_score(assessment_key)
                     
+                    # Save assessment_scores changes first
+                    grade.save(update_fields=['assessment_scores'])
+                    
                     # Recalculate average if needed
                     all_scores = []
                     for i in range(1, assessment_count + 1):
@@ -1379,6 +1494,14 @@ def delete_assessment_file(request, course_name, assessment_type, assessment_ind
                         # Not all files uploaded, clear average
                         setattr(grade, assessment_type, None)
                     
+                    # Calculate overall score and letter grade
+                    grade.calculate_overall_score()
+                    
+                    # Update last_changes_at
+                    from django.utils import timezone
+                    grade.last_changes_at = timezone.now()
+                    
+                    # Save all changes
                     grade.save()
                     updated_count += 1
                 except Grade.DoesNotExist:
@@ -1394,23 +1517,42 @@ def delete_assessment_file(request, course_name, assessment_type, assessment_ind
     except Exception as e:
         return JsonResponse({'error': f'Delete error: {str(e)}'}, status=400)
 
-@instructor_required
+@csrf_exempt
 def update_individual_grade(request, course_name):
-    """Update individual grade score from table cell edit"""
+    """Update individual grade score from table cell edit
+    Works for both instructor and faculty_head
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
     
-    instructor_user = request.instructor_user
-    profile = getattr(instructor_user, 'profile', None)
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Check if user is instructor or faculty_head
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return JsonResponse({'error': 'User profile not found'}, status=403)
+    
+    if profile.role not in ['instructor', 'faculty_head']:
+        return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
         course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Optimized query: use exists() instead of loading all courses into memory
-    if profile and not profile.courses.filter(id=course.id).exists():
-        return JsonResponse({'error': 'Access denied'}, status=403)
+    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    if profile.role == 'instructor':
+        if course not in profile.courses.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+    elif profile.role == 'faculty_head':
+        # Faculty head can access if course is in their profile or department matches
+        faculty_head_data = get_faculty_head_data(request.user.username)
+        faculty_head_department = faculty_head_data.get('department')
+        if course not in profile.courses.all():
+            if faculty_head_department and course.department != faculty_head_department:
+                return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
         data = json.loads(request.body)
@@ -1465,69 +1607,270 @@ def update_individual_grade(request, course_name):
             else:
                 # Set individual score
                 grade.set_individual_score(assessment_key, score_value, file_name=existing_file_name)
-        
-        # Recalculate average for this assessment type if needed
-        assessment_type = assessment_key.split('_')[0]
-        try:
-            assessment = Assessment.objects.get(course=course)
-            assessment_count = getattr(assessment, assessment_type, 0)
             
-            if assessment_count > 0:
-                all_scores = []
-                for i in range(1, assessment_count + 1):
-                    key = f'{assessment_type}_{i}'
-                    individual_score = grade.get_individual_score(key)
-                    if individual_score is not None:
-                        all_scores.append(individual_score)
+            # Save assessment_scores changes first
+            grade.save(update_fields=['assessment_scores'])
+            
+            # Recalculate average for this assessment type if needed
+            assessment_type = assessment_key.split('_')[0]
+            try:
+                assessment = Assessment.objects.get(course=course)
+                assessment_count = getattr(assessment, assessment_type, 0)
                 
-                # Only set average if ALL files are uploaded
-                if len(all_scores) == assessment_count:
-                    average_score = sum(all_scores) / len(all_scores)
-                    setattr(grade, assessment_type, average_score)
-                else:
-                    # Not all files uploaded, clear average
-                    setattr(grade, assessment_type, None)
-        except Assessment.DoesNotExist:
-            pass
+                if assessment_count > 0:
+                    all_scores = []
+                    for i in range(1, assessment_count + 1):
+                        key = f'{assessment_type}_{i}'
+                        individual_score = grade.get_individual_score(key)
+                        if individual_score is not None:
+                            all_scores.append(individual_score)
+                    
+                    # Only set average if ALL assessments are entered
+                    if len(all_scores) == assessment_count and assessment_count > 0:
+                        average_score = sum(all_scores) / len(all_scores)
+                        setattr(grade, assessment_type, average_score)
+                    else:
+                        # Not all assessments entered, clear average
+                        setattr(grade, assessment_type, None)
+            except Assessment.DoesNotExist:
+                pass
+            
+            # Calculate overall score
+            grade.calculate_overall_score()
+            
+            # Update last_changes_at
+            from django.utils import timezone
+            grade.last_changes_at = timezone.now()
+            
+            # Save all changes
+            grade.save()
         
-        # Update last_changes_at
-        from django.utils import timezone
-        grade.last_changes_at = timezone.now()
-        grade.save()
+        # Refresh from database to ensure we have the latest data
+        grade.refresh_from_db()
+        
+        # Verify the score was saved correctly
+        saved_score = grade.get_individual_score(assessment_key)
         
         return JsonResponse({
             'status': 'ok',
-            'score': score_value,
+            'score': saved_score,  # Return the actual saved score from database
             'assessment_key': assessment_key,
+            'overall_score': grade.overall_score,  # Return updated overall_score
+            'letter_grade': grade.letter_grade,  # Return updated letter_grade
             'last_changes_at': grade.last_changes_at.isoformat() if grade.last_changes_at else None
         })
         
     except Exception as e:
         return JsonResponse({'error': f'Update error: {str(e)}'}, status=400)
 
-@instructor_required
-def update_assessment(request, course_name):
+@csrf_exempt
+def update_multiple_grades(request, course_name):
+    """Update multiple individual grade scores from table edits in batch
+    Works for both instructor and faculty_head
+    """
     if request.method != 'POST':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
     
-    instructor_user = request.instructor_user
-    profile = getattr(instructor_user, 'profile', None)
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Check if user is instructor or faculty_head
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return JsonResponse({'error': 'User profile not found'}, status=403)
+    
+    if profile.role not in ['instructor', 'faculty_head']:
+        return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
         course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Optimized query: use exists() instead of loading all courses into memory
-    if profile and not profile.courses.filter(id=course.id).exists():
+    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    if profile.role == 'instructor':
+        if course not in profile.courses.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+    elif profile.role == 'faculty_head':
+        # Faculty head can access if course is in their profile or department matches
+        faculty_head_data = get_faculty_head_data(request.user.username)
+        faculty_head_department = faculty_head_data.get('department')
+        if course not in profile.courses.all():
+            if faculty_head_department and course.department != faculty_head_department:
+                return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+        changes = data.get('changes', [])  # List of {student_id, assessment_key, score}
+        
+        if not changes or len(changes) == 0:
+            return JsonResponse({'error': 'No changes provided'}, status=400)
+        
+        # Validate all changes first
+        validated_changes = []
+        for change in changes:
+            student_id = change.get('student_id')
+            assessment_key = change.get('assessment_key')
+            score = change.get('score')
+            
+            if not student_id or not assessment_key:
+                continue
+            
+            # Get student
+            try:
+                student = Student.objects.get(student_id=student_id)
+            except Student.DoesNotExist:
+                continue
+            
+            # Check if student is enrolled
+            if not student.courses.filter(id=course.id).exists():
+                continue
+            
+            # Parse and validate score
+            score_value = None
+            if score is not None and score != '':
+                try:
+                    score_value = float(score)
+                    if score_value < 0 or score_value > 100:
+                        continue
+                except ValueError:
+                    continue
+            
+            validated_changes.append({
+                'student': student,
+                'assessment_key': assessment_key,
+                'score': score_value
+            })
+        
+        if len(validated_changes) == 0:
+            return JsonResponse({'error': 'No valid changes'}, status=400)
+        
+        # Process all changes in a single transaction
+        from django.utils import timezone
+        updated_count = 0
+        results = []
+        
+        with transaction.atomic():
+            for change in validated_changes:
+                student = change['student']
+                assessment_key = change['assessment_key']
+                score_value = change['score']
+                
+                # Get or create grade
+                grade, created = Grade.objects.get_or_create(
+                    student=student,
+                    course=course
+                )
+                
+                # Keep existing file_name if exists
+                existing_file_name = ''
+                if grade.assessment_scores and assessment_key in grade.assessment_scores:
+                    existing_file_name = grade.assessment_scores[assessment_key].get('file_name', '')
+                
+                # Update score
+                if score_value is None:
+                    grade.remove_individual_score(assessment_key)
+                else:
+                    grade.set_individual_score(assessment_key, score_value, file_name=existing_file_name)
+                
+                # Save assessment_scores changes
+                grade.save(update_fields=['assessment_scores'])
+                
+                # Recalculate average for this assessment type if needed
+                assessment_type = assessment_key.split('_')[0]
+                try:
+                    assessment = Assessment.objects.get(course=course)
+                    assessment_count = getattr(assessment, assessment_type, 0)
+                    
+                    if assessment_count > 0:
+                        all_scores = []
+                        for i in range(1, assessment_count + 1):
+                            key = f'{assessment_type}_{i}'
+                            individual_score = grade.get_individual_score(key)
+                            if individual_score is not None:
+                                all_scores.append(individual_score)
+                        
+                        # Only set average if ALL assessments are entered
+                        if len(all_scores) == assessment_count and assessment_count > 0:
+                            average_score = sum(all_scores) / len(all_scores)
+                            setattr(grade, assessment_type, average_score)
+                        else:
+                            setattr(grade, assessment_type, None)
+                except Assessment.DoesNotExist:
+                    pass
+                
+                # Calculate overall score
+                grade.calculate_overall_score()
+                
+                # Update last_changes_at
+                grade.last_changes_at = timezone.now()
+                
+                # Save all changes
+                grade.save()
+                
+                updated_count += 1
+                results.append({
+                    'student_id': student.student_id,
+                    'assessment_key': assessment_key,
+                    'score': grade.get_individual_score(assessment_key),
+                    'overall_score': grade.overall_score,
+                    'letter_grade': grade.letter_grade
+                })
+        
+        return JsonResponse({
+            'status': 'ok',
+            'updated_count': updated_count,
+            'results': results,
+            'last_changes_at': timezone.now().isoformat()
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': f'Update error: {str(e)}'}, status=400)
+
+@csrf_exempt
+def update_assessment(request, course_name):
+    """Update assessment counts
+    Works for both instructor and faculty_head
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Check if user is instructor or faculty_head
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return JsonResponse({'error': 'User profile not found'}, status=403)
+    
+    if profile.role not in ['instructor', 'faculty_head']:
         return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    if profile.role == 'instructor':
+        if course not in profile.courses.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+    elif profile.role == 'faculty_head':
+        # Faculty head can access if course is in their profile or department matches
+        faculty_head_data = get_faculty_head_data(request.user.username)
+        faculty_head_department = faculty_head_data.get('department')
+        if course not in profile.courses.all():
+            if faculty_head_department and course.department != faculty_head_department:
+                return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
         data = json.loads(request.body)
         midterm = data.get('midterm')
         final = data.get('final')
-        proje = data.get('proje')
-        homework = data.get('homework')
+        project = data.get('project')
+        assignment = data.get('assignment')
         absence = data.get('absence')
         quiz = data.get('quiz')
         
@@ -1535,8 +1878,8 @@ def update_assessment(request, course_name):
         values = {
             'midterm': midterm,
             'final': final,
-            'proje': proje,
-            'homework': homework,
+            'project': project,
+            'assignment': assignment,
             'absence': absence,
             'quiz': quiz
         }
@@ -1554,66 +1897,95 @@ def update_assessment(request, course_name):
                 return JsonResponse({'error': f'{key} cannot be negative'}, status=400)
             values[key] = int_value
         
-        # All validation passed, now perform DB operations in atomic transaction
-        # This ensures config changes are atomic and consistent
+        # Assessment'ı güncelle veya oluştur
+        from django.db import transaction
         with transaction.atomic():
-            # Assessment'ı güncelle veya oluştur
-            assessment, created = Assessment.objects.get_or_create(
-            course=course,
-            defaults={
-                'midterm': values['midterm'],
-                'final': values['final'],
-                'proje': values['proje'],
-                'homework': values['homework'],
-                'absence': values['absence'],
-                'quiz': values['quiz'],
-            }
-            )
-            
-            if not created:
+            try:
+                assessment = Assessment.objects.select_for_update().get(course=course)
+                # Mevcut assessment'ı güncelle
                 assessment.midterm = values['midterm']
                 assessment.final = values['final']
-                assessment.proje = values['proje']
-                assessment.homework = values['homework']
+                assessment.project = values['project']
+                assessment.assignment = values['assignment']
                 assessment.absence = values['absence']
                 assessment.quiz = values['quiz']
                 # save() metodu assessment_count'u otomatik hesaplayacak
                 assessment.save()
+            except Assessment.DoesNotExist:
+                # Assessment yoksa oluştur
+                assessment = Assessment.objects.create(
+                    course=course,
+                    midterm=values['midterm'],
+                    final=values['final'],
+                    project=values['project'],
+                    assignment=values['assignment'],
+                    absence=values['absence'],
+                    quiz=values['quiz']
+                )
+        
+        # Database'den yeniden oku (güncel değerleri garantilemek için)
+        assessment.refresh_from_db()
+        
+        # Recalculate overall_score for all grades in this course
+        # (Assessment counts changed, so overall scores might need recalculation)
+        grades = Grade.objects.filter(course=course)
+        for grade in grades:
+            grade.calculate_overall_score()
+            grade.save(update_fields=['overall_score'])
         
         return JsonResponse({
             'status': 'ok',
             'assessment_count': assessment.assessment_count
         })
         
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        return JsonResponse({'error': f'Update error: {str(e)}\n{error_trace}'}, status=400)
 
-@instructor_required
+@csrf_exempt
 def update_assessment_percentages(request, course_name):
-    """
-    Update assessment percentages for a course.
-    NOTE: CSRF protection is enabled. Frontend must send CSRF token.
+    """Update assessment percentages
+    Works for both instructor and faculty_head
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
-    instructor_user = request.instructor_user
-    profile = getattr(instructor_user, 'profile', None)
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Check if user is instructor or faculty_head
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return JsonResponse({'error': 'User profile not found'}, status=403)
+    
+    if profile.role not in ['instructor', 'faculty_head']:
+        return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
         course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    if profile and not profile.courses.filter(id=course.id).exists():
-        return JsonResponse({'error': 'Access denied'}, status=403)
+    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    if profile.role == 'instructor':
+        if course not in profile.courses.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+    elif profile.role == 'faculty_head':
+        # Faculty head can access if course is in their profile or department matches
+        faculty_head_data = get_faculty_head_data(request.user.username)
+        faculty_head_department = faculty_head_data.get('department')
+        if course not in profile.courses.all():
+            if faculty_head_department and course.department != faculty_head_department:
+                return JsonResponse({'error': 'Access denied'}, status=403)
     
     try:
         data = json.loads(request.body)
         midterm_percentage = data.get('midterm_percentage')
         final_percentage = data.get('final_percentage')
-        proje_percentage = data.get('proje_percentage')
-        homework_percentage = data.get('homework_percentage')
+        project_percentage = data.get('project_percentage')
+        assignment_percentage = data.get('assignment_percentage')
         absence_percentage = data.get('absence_percentage')
         quiz_percentage = data.get('quiz_percentage')
         
@@ -1621,8 +1993,8 @@ def update_assessment_percentages(request, course_name):
         values = {
             'midterm_percentage': midterm_percentage,
             'final_percentage': final_percentage,
-            'proje_percentage': proje_percentage,
-            'homework_percentage': homework_percentage,
+            'project_percentage': project_percentage,
+            'assignment_percentage': assignment_percentage,
             'absence_percentage': absence_percentage,
             'quiz_percentage': quiz_percentage
         }
@@ -1646,33 +2018,48 @@ def update_assessment_percentages(request, course_name):
             return JsonResponse({'error': f'Total percentage must be exactly 100. Current total: {total}'}, status=400)
         
         # Assessment'ı güncelle veya oluştur
-        assessment, created = Assessment.objects.get_or_create(
-            course=course,
-            defaults={
-                'midterm_percentage': values['midterm_percentage'],
-                'final_percentage': values['final_percentage'],
-                'proje_percentage': values['proje_percentage'],
-                'homework_percentage': values['homework_percentage'],
-                'absence_percentage': values['absence_percentage'],
-                'quiz_percentage': values['quiz_percentage'],
-            }
-        )
+        from django.db import transaction
+        with transaction.atomic():
+            try:
+                assessment = Assessment.objects.select_for_update().get(course=course)
+                # Mevcut assessment'ı güncelle
+                assessment.midterm_percentage = values['midterm_percentage']
+                assessment.final_percentage = values['final_percentage']
+                assessment.project_percentage = values['project_percentage']
+                assessment.assignment_percentage = values['assignment_percentage']
+                assessment.absence_percentage = values['absence_percentage']
+                assessment.quiz_percentage = values['quiz_percentage']
+                assessment.save()
+            except Assessment.DoesNotExist:
+                # Assessment yoksa oluştur (default count değerleriyle)
+                assessment = Assessment.objects.create(
+                    course=course,
+                    midterm_percentage=values['midterm_percentage'],
+                    final_percentage=values['final_percentage'],
+                    project_percentage=values['project_percentage'],
+                    assignment_percentage=values['assignment_percentage'],
+                    absence_percentage=values['absence_percentage'],
+                    quiz_percentage=values['quiz_percentage']
+                )
         
-        if not created:
-            assessment.midterm_percentage = values['midterm_percentage']
-            assessment.final_percentage = values['final_percentage']
-            assessment.proje_percentage = values['proje_percentage']
-            assessment.homework_percentage = values['homework_percentage']
-            assessment.absence_percentage = values['absence_percentage']
-            assessment.quiz_percentage = values['quiz_percentage']
-            assessment.save()
+        # Database'den yeniden oku (güncel değerleri garantilemek için)
+        assessment.refresh_from_db()
+        
+        # Recalculate overall_score and letter_grade for all grades in this course
+        grades = Grade.objects.filter(course=course)
+        for grade in grades:
+            grade.calculate_overall_score()
+            grade.save(update_fields=['overall_score', 'letter_grade'])
         
         return JsonResponse({
-            'status': 'ok'
+            'status': 'ok',
+            'percentage_count': assessment.percentage_count
         })
         
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        return JsonResponse({'error': f'Update error: {str(e)}\n{error_trace}'}, status=400)
 
 
 # Helper functions for instructor_announcements view
@@ -2021,22 +2408,12 @@ def instructor_announcements(request):
         'is_sent': ann['is_sent']
     } for ann in announcements_data})
     
-    # Prepare instructor_info for header
-    profile = getattr(instructor_user, 'profile', None)
-    instructor_info = {
-        'username': instructor_user.username,
-        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-        'faculty': profile.faculty.name if profile and profile.faculty else '-',
-        'department': profile.department if profile else '-',
-    }
-    
     return render(request, 'instructor/instructor_announcements.html', {
         'all_announcements': announcements_data,
         'announcements_json': announcements_json,
         'sent_messages': sent_messages,
         'received_messages': received_messages,
         'recipients': recipients,
-        'instructor_info': instructor_info,
     })
 
 
@@ -2071,8 +2448,7 @@ def faculty_head_dashboard(request):
     faculty_head_user = request.user
     profile = getattr(faculty_head_user, 'profile', None)
     faculty_head_data = get_faculty_head_data(faculty_head_user.username)
-    # Use profile.department as primary source, fallback to JSON data
-    faculty_head_department = profile.department if profile and profile.department else faculty_head_data.get('department')
+    faculty_head_department = faculty_head_data.get('department')
     
     faculty_head_info = {
         'username': faculty_head_user.username,
@@ -2097,12 +2473,7 @@ def faculty_head_dashboard(request):
     chart_data = {'labels': [], 'data': []}
     
     if faculty_head_department:
-        # Filter courses by department - case-insensitive match and exclude empty departments
-        courses = Course.objects.filter(
-            department__iexact=faculty_head_department
-        ).exclude(
-            department=''
-        ).select_related('instructor').prefetch_related('students')
+        courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='').select_related('instructor').prefetch_related('students')
         for course in courses:
             students = course.students.all()
             student_count = students.count()
@@ -2134,23 +2505,22 @@ def faculty_head_dashboard(request):
     total_instructors = len(total_instructors_set)
     
     latest_announcements = Announcement.objects.filter(
-        Q(receiver=faculty_head_user) | Q(receiver__isnull=True)
+        Q(receiver=faculty_head_user)
     ).exclude(sender=faculty_head_user).select_related('sender', 'receiver').order_by('-created_at')[:5]
     
     announcements_list = []
     for ann in latest_announcements:
         sender_name = ann.sender.get_full_name() or ann.sender.username
-        
-        # Remove course marker from subject for display
-        display_subject = ann.subject
-        if display_subject and display_subject.startswith('__COURSE:'):
-            marker_end = display_subject.find('__', 9)
-            if marker_end > 0:
-                display_subject = display_subject[marker_end + 2:]
-        
+        # Remove __COURSE: prefix from subject if present
+        subject = ann.subject
+        if subject.startswith('__COURSE:'):
+            # Find the end of the course marker
+            end_marker = subject.find('__', 9)  # Start after '__COURSE:'
+            if end_marker != -1:
+                subject = subject[end_marker + 2:]  # Remove '__COURSE:...__' prefix
         announcements_list.append({
             'id': ann.id,
-            'subject': display_subject,
+            'subject': subject,
             'sender': sender_name,
             'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -3299,49 +3669,32 @@ def give_grade(request, course_id):
     return render(request, 'faculty/give_grade.html', {'course': course})
 
 @faculty_head_required
-def faculty_head_grades(request):
-    profile = getattr(request.user, 'profile', None)
-    
-    faculty_head_data = get_faculty_head_data(request.user.username)
-    faculty_head_department = profile.department if profile and profile.department else faculty_head_data.get('department')
-    
-    courses = []
-    if profile and faculty_head_department:
-        # Normalize department for comparison
-        fh_dept_normalized = faculty_head_department.strip().lower()
-        
-        # Get courses directly from database filtered by department (case-insensitive)
-        # This ensures we only get courses that actually belong to the faculty head's department
-        from core.models import Course
-        department_courses = Course.objects.filter(
-            department__iexact=faculty_head_department
-        ).exclude(
-            department=''
-        )
-        
-        # Also check that the course is in the profile (additional security check)
-        profile_course_names = set(profile.courses.values_list('name', flat=True))
-        
-        for course in department_courses:
-            # Only include courses that are also in the profile
-            if course.name in profile_course_names:
-                courses.append(course.name)
-    
-    context = {
-        'faculty_head_courses': courses,
-        'faculty_head': json.dumps(faculty_head_data),
-        'user': request.user,
-    }
-    return render(request, 'faculty/faculty_head_grades.html', context)
-
-@faculty_head_required
-def faculty_head_course_grades(request, course_name):
+def faculty_head_grades(request, course_name=None):
     from .models import Assessment
     
     profile = getattr(request.user, 'profile', None)
-    faculty_head_data = get_faculty_head_data(request.user.username)
-    faculty_head_department = profile.department if profile and profile.department else faculty_head_data.get('department')
     
+    # Get faculty head's department
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    # If no course_name provided, show course selection page
+    if not course_name:
+        courses = []
+        if profile:
+            all_courses = profile.courses.all()
+            for course in all_courses:
+                if faculty_head_department:
+                    if not course.department or course.department.lower() != faculty_head_department.lower():
+                        continue
+                courses.append(course.name)
+        
+        return render(request, 'faculty/faculty_head_grades.html', {
+            'show_course_selection': True,
+            'faculty_head_courses': courses
+        })
+    
+    # Get course
     try:
         course = Course.objects.get(name=course_name)
     except Course.DoesNotExist:
@@ -3350,90 +3703,41 @@ def faculty_head_course_grades(request, course_name):
     if profile and course not in profile.courses.all():
         return HttpResponseForbidden("You don't have access to this course")
     
-    # Check department match (case-insensitive)
     if faculty_head_department:
-        course_dept_normalized = course.department.strip().lower() if course.department else ''
-        fh_dept_normalized = faculty_head_department.strip().lower()
-        if course_dept_normalized != fh_dept_normalized:
+        if not course.department or course.department.lower() != faculty_head_department.lower():
             return HttpResponseForbidden("You don't have access to this course")
     
     # Assessment'ı al veya oluştur (default değerlerle)
-    assessment, created = Assessment.objects.get_or_create(
-        course=course,
-        defaults={
-            'midterm': 2,
-            'final': 1,
-            'proje': 0,
-            'homework': 0,
-            'absence': 0,
-            'quiz': 0,
-            'assessment_count': 3,
-            'midterm_percentage': 60,
-            'final_percentage': 40,
-            'proje_percentage': 0,
-            'homework_percentage': 0,
-            'absence_percentage': 0,
-            'quiz_percentage': 0
-        }
-    )
+    try:
+        assessment = Assessment.objects.get(course=course)
+        assessment.refresh_from_db()
+    except Assessment.DoesNotExist:
+        assessment = Assessment.objects.create(
+            course=course,
+            midterm=2,
+            final=1,
+            project=0,
+            assignment=0,
+            absence=0,
+            quiz=0,
+            assessment_count=3,
+            midterm_percentage=60,
+            final_percentage=40,
+            project_percentage=0,
+            assignment_percentage=0,
+            absence_percentage=0,
+            quiz_percentage=0
+        )
     
-    # Course'a kayıtlı öğrencileri al
-    students = Student.objects.filter(courses=course).order_by('username')
-    students_with_grades = []
-    for student in students:
-        grade_obj = Grade.objects.filter(student=student, course=course).first()
-        grades_dict = {}
-        is_finalized = False
-        
-        if grade_obj:
-            # Assessment scores'dan notları al
-            if grade_obj.assessment_scores:
-                # Get individual scores from assessment_scores
-                assessment_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
-                for assessment_type in assessment_types:
-                    count = getattr(assessment, assessment_type, 0)
-                    for i in range(1, count + 1):
-                        key = f'{assessment_type}_{i}'
-                        score = grade_obj.get_individual_score(key)
-                        if score is not None:
-                            assessment_type_labels = {
-                                'midterm': 'Midterm',
-                                'final': 'Final',
-                                'proje': 'Proje',
-                                'homework': 'Homework',
-                                'absence': 'Absence',
-                                'quiz': 'Quiz'
-                            }
-                            label = assessment_type_labels.get(assessment_type, assessment_type.capitalize())
-                            grades_dict[f'{label} {i}'] = score
-            
-            # Eski alanlardan notları al (geriye dönük uyumluluk)
-            if not grades_dict:
-                if grade_obj.midterm is not None:
-                    grades_dict['Midterm'] = grade_obj.midterm
-                if grade_obj.final is not None:
-                    grades_dict['Final'] = grade_obj.final
-                if grade_obj.proje is not None:
-                    grades_dict['Proje'] = grade_obj.proje
-                if grade_obj.homework is not None:
-                    grades_dict['Homework'] = grade_obj.homework
-                if grade_obj.absence is not None:
-                    grades_dict['Absence'] = grade_obj.absence
-                if grade_obj.quiz is not None:
-                    grades_dict['Quiz'] = grade_obj.quiz
-            
-            is_finalized = getattr(grade_obj, 'is_finalized', False)
-        
-        students_with_grades.append({
-            'student': student,
-            'grades': grades_dict,
-            'is_finalized': is_finalized
-        })
+    # Get students enrolled in this course
+    students = course.students.all().order_by('first_name', 'last_name', 'username')
+    students_list = [{'id': student.id, 'student_id': student.student_id, 'name': f"{student.first_name} {student.last_name}".strip() or student.username} for student in students]
     
+    # Get uploaded file info for each assessment (from first student as sample)
     uploaded_files_info = {}
     sample_grade = Grade.objects.filter(course=course).first()
     if sample_grade and sample_grade.assessment_scores:
-        assessment_types = ['midterm', 'final', 'proje', 'homework', 'absence', 'quiz']
+        assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
         for assessment_type in assessment_types:
             count = getattr(assessment, assessment_type, 0)
             for i in range(1, count + 1):
@@ -3445,28 +3749,75 @@ def faculty_head_course_grades(request, course_name):
                         'uploaded_at': uploaded_at
                     }
     
-    is_finalized = all(item['is_finalized'] for item in students_with_grades if item['grades'])
-    students_with_grades_json = json.dumps([
-        {
-            'id': item['student'].id,
-            'username': item['student'].username,
-            'first_name': item['student'].first_name or '',
-            'last_name': item['student'].last_name or '',
-            'grades': item['grades'],
-            'is_finalized': item['is_finalized']
-        }
-        for item in students_with_grades
-    ])
+    # Prepare grades data for the grades list table
+    grades_data = []
+    assessment_columns = []
     
-    return render(request, 'faculty/faculty_head_course_grades.html', {
+    # Build assessment columns based on assessment counts
+    assessment_type_labels = {
+        'midterm': 'Midterm',
+        'final': 'Final',
+        'project': 'Project',
+        'assignment': 'Assignment',
+        'absence': 'Absence',
+        'quiz': 'Quiz'
+    }
+    
+    for assessment_type in ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']:
+        count = getattr(assessment, assessment_type, 0)
+        label = assessment_type_labels[assessment_type]
+        for i in range(1, count + 1):
+            assessment_columns.append({
+                'key': f'{assessment_type}_{i}',
+                'label': f'{label} {i}',
+                'type': assessment_type
+            })
+    
+    # Get grades for all students
+    for student in students:
+        grade_obj = Grade.objects.filter(student=student, course=course).first()
+        student_data = {
+            'student_id': student.student_id,
+            'full_name': f"{student.first_name} {student.last_name}".strip() or student.username,
+            'grades': {}
+        }
+        
+        if grade_obj:
+            # Get individual scores for each assessment column
+            for col in assessment_columns:
+                score = grade_obj.get_individual_score(col['key'])
+                if score is not None:
+                    student_data['grades'][col['key']] = score
+                else:
+                    student_data['grades'][col['key']] = None
+            
+            # Add overall_score and letter_grade to student data
+            grade_obj.calculate_overall_score()
+            grade_obj.save(update_fields=['overall_score', 'letter_grade'])
+            student_data['overall_score'] = grade_obj.overall_score
+            student_data['letter_grade'] = grade_obj.letter_grade
+        else:
+            student_data['overall_score'] = None
+            student_data['letter_grade'] = None
+        
+        grades_data.append(student_data)
+    
+    # Get last changes timestamp (from any grade in this course)
+    last_changes_at = None
+    any_grade = Grade.objects.filter(course=course).exclude(last_changes_at__isnull=True).order_by('-last_changes_at').first()
+    if any_grade and any_grade.last_changes_at:
+        last_changes_at = any_grade.last_changes_at.isoformat()
+    
+    return render(request, 'faculty/faculty_head_grades.html', {
         'course': course,
         'assessment': assessment,
-        'students': students,
-        'students_with_grades': students_with_grades,
-        'students_with_grades_json': students_with_grades_json,
+        'students': students,  # Pass students queryset directly
         'uploaded_files_info': json.dumps(uploaded_files_info),
-        'is_finalized': is_finalized
+        'grades_data': json.dumps(grades_data),
+        'assessment_columns': json.dumps(assessment_columns),
+        'last_changes_at': last_changes_at,
     })
+
 
 @faculty_head_required
 def faculty_head_delete_uploaded_csv(request, course_name):
@@ -3502,26 +3853,14 @@ def faculty_head_delete_uploaded_csv(request, course_name):
     if profile and not profile.courses.filter(id=course.id).exists():
         return JsonResponse({'error': 'Access denied'}, status=403)
     
-    if faculty_head_department:
-        course_dept_normalized = course.department.strip().lower() if course.department else ''
-        fh_dept_normalized = faculty_head_department.strip().lower()
-        if course_dept_normalized != fh_dept_normalized:
-            return JsonResponse({'error': 'Access denied'}, status=403)
+    if faculty_head_department and course.department != faculty_head_department:
+        return JsonResponse({'error': 'Access denied'}, status=403)
     
     # Course'daki tüm grade'lerden uploaded file bilgisini temizle
-    from django.db import transaction
-    with transaction.atomic():
-        grades = Grade.objects.filter(course=course)
-        for grade in grades:
-            if grade.assessment_scores:
-                updated_scores = {}
-                for key, value in grade.assessment_scores.items():
-                    if isinstance(value, dict):
-                        updated_scores[key] = {'score': value.get('score')}
-                    else:
-                        updated_scores[key] = value
-                grade.assessment_scores = updated_scores
-                grade.save()
+    Grade.objects.filter(course=course).update(
+        uploaded_file_name='',
+        uploaded_at=None
+    )
     
     return JsonResponse({'status': 'ok'})
 
@@ -3778,29 +4117,20 @@ def course_learning_outcomes(request, course_name):
                 else:
                     # Error case: Reuse same logic as GET request
                     outcomes_qs = ProgramOutcome.objects.filter(
-                        course_name__iexact=course_name
+                        course_name=course_name
                     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
                     
-                    course = Course.objects.filter(name__iexact=course_name, instructor=instructor_user).first()
-                    if not course:
-                        profile = getattr(instructor_user, 'profile', None)
-                        if profile:
-                            course = profile.courses.filter(name__iexact=course_name).first()
-                        if not course:
-                            course = instructor_user.instructor_courses.filter(name__iexact=course_name).first()
+                    course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
                     course_id = course.id if course else None
                     
                     # Use helper function to build outcomes data
                     outcomes_data = build_learning_outcomes_data(outcomes_qs)
                     
-                    # Use title() to capitalize first letter of each word
-                    display_course_name = course.name.title() if course and course.name else course_name.title()
-                    
                     return render(
                         request,
                         'instructor/course_learning_outcomes.html',
                         {
-                            'course_name': display_course_name,
+                            'course_name': course_name,
                             'course_id': course_id,
                             'outcomes_data': outcomes_data,
                             'program_outcomes': program_outcomes,
@@ -3816,52 +4146,39 @@ def course_learning_outcomes(request, course_name):
                 course_name_slug = generate_course_slug(course_name)
                 return redirect('course_learning_outcomes', course_name=course_name_slug)
     
-    # Use case-insensitive search for course_name to handle name variations
     outcomes_qs = ProgramOutcome.objects.filter(
-        course_name__iexact=course_name
+        course_name=course_name
     ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
     
     # CRITICAL: Verify instructor owns this course
     # Try to find course - first by instructor, then by name, then from profile
-    # Use case-insensitive search (iexact) to handle name variations
-    course = Course.objects.filter(name__iexact=course_name, instructor=instructor_user).first()
+    course = Course.objects.filter(name=course_name, instructor=instructor_user).first()
     if not course:
         # Try to find from instructor's profile courses
         profile = getattr(instructor_user, 'profile', None)
         if profile:
-            course = profile.courses.filter(name__iexact=course_name).first()
+            course = profile.courses.filter(name=course_name).first()
         if not course:
-            course = instructor_user.instructor_courses.filter(name__iexact=course_name).first()
+            # Try from instructor_courses
+            course = instructor_user.instructor_courses.filter(name=course_name).first()
     
     # CRITICAL: If course not found or instructor doesn't own it, deny access
     if not course:
         return HttpResponseForbidden("You don't have access to this course.")
     
     course_id = course.id if course else None
-    # Use title() to capitalize first letter of each word (e.g., "computer architecture" -> "Computer Architecture")
-    display_course_name = course.name.title() if course.name else course_name.title()
     
     # Use helper function to build outcomes data
     outcomes_data = build_learning_outcomes_data(outcomes_qs)
-    
-    # Prepare instructor_info for header
-    profile = getattr(instructor_user, 'profile', None)
-    instructor_info = {
-        'username': instructor_user.username,
-        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-        'faculty': profile.faculty.name if profile and profile.faculty else '-',
-        'department': profile.department if profile else '-',
-    }
     
     return render(
         request,
         'instructor/course_learning_outcomes.html',
         {
-            'course_name': display_course_name,
+            'course_name': course_name,
             'course_id': course_id,
             'outcomes_data': outcomes_data,
             'program_outcomes': program_outcomes,
-            'instructor_info': instructor_info,
         }
     )
 
@@ -3904,14 +4221,6 @@ def learning_outcome_detail(request, course_id, outcome_id):
     
     course_name_slug = generate_course_slug(outcome.course_name)
     
-    profile = getattr(instructor_user, 'profile', None)
-    instructor_info = {
-        'username': instructor_user.username,
-        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-        'faculty': profile.faculty.name if profile and profile.faculty else '-',
-        'department': profile.department if profile else '-',
-    }
-    
     return render(
         request,
         'instructor/learning_outcome_detail.html',
@@ -3922,7 +4231,6 @@ def learning_outcome_detail(request, course_id, outcome_id):
             'available_program_outcomes': available_program_outcomes,
             'course_name_slug': course_name_slug,
             'is_faculty_head': is_faculty_head,
-            'instructor_info': instructor_info,
         }
     )
 
@@ -3939,16 +4247,6 @@ def learning_outcome_graph(request, course_id, outcome_id):
     
     course_name_slug = generate_course_slug(outcome.course_name)
     
-    instructor_info = None
-    if instructor_user and not is_faculty_head:
-        profile = getattr(instructor_user, 'profile', None)
-        instructor_info = {
-            'username': instructor_user.username,
-            'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-            'faculty': profile.faculty.name if profile and profile.faculty else '-',
-            'department': profile.department if profile else '-',
-        }
-    
     return render(
         request,
         'instructor/learning_outcome_graph.html',
@@ -3958,7 +4256,6 @@ def learning_outcome_graph(request, course_id, outcome_id):
             'program_outcomes': program_outcomes_data,
             'course_name_slug': course_name_slug,
             'is_faculty_head': is_faculty_head,
-            'instructor_info': instructor_info,
         }
     )
 
@@ -4231,15 +4528,6 @@ def create_learning_outcome(request):
             course_names_from_json = instructor_data.get('courses', []) or []
             course_names = list(set(course_names_from_db + course_names_from_json))
             
-            # Prepare instructor_info for header
-            profile = getattr(instructor_user, 'profile', None)
-            instructor_info = {
-                'username': instructor_user.username,
-                'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-                'faculty': profile.faculty.name if profile and profile.faculty else '-',
-                'department': profile.department if profile else '-',
-            }
-            
             return render(
                 request,
                 'instructor/create_learning_outcome.html',
@@ -4247,7 +4535,6 @@ def create_learning_outcome(request):
                     'error': 'Outcome text and course are required.',
                     'course_name': course_name,
                     'instructor_courses': course_names,
-                    'instructor_info': instructor_info,
                 }
             )
         
@@ -4264,22 +4551,12 @@ def create_learning_outcome(request):
     
     course_name_from_get = request.GET.get('course', '')
     
-    # Prepare instructor_info for header
-    profile = getattr(instructor_user, 'profile', None)
-    instructor_info = {
-        'username': instructor_user.username,
-        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-        'faculty': profile.faculty.name if profile and profile.faculty else '-',
-        'department': profile.department if profile else '-',
-    }
-    
     return render(
         request,
         'instructor/create_learning_outcome.html',
         {
             'course_name': course_name_from_get,
             'instructor_courses': course_names,
-            'instructor_info': instructor_info,
         }
     )
 
@@ -4557,45 +4834,142 @@ def student_grades(request):
     if not request.user.is_authenticated:
         return redirect('student-login')
     
+    from .models import Assessment
+    
     try:
         student = Student.objects.get(user=request.user)
-        courses = student.courses.all()
+        courses = student.courses.all().order_by('name')
         grades_qs = Grade.objects.filter(student=student).select_related('course')
         
         courses_with_grades = []
         for course in courses:
             grade_obj = grades_qs.filter(course=course).first()
-            grades_dict = grade_obj.grades if grade_obj and grade_obj.grades else {}
             
-            if not grades_dict and grade_obj:
-                if grade_obj.midterm is not None:
-                    grades_dict['Midterm'] = grade_obj.midterm
-                if grade_obj.assignment is not None:
-                    grades_dict['Assignment'] = grade_obj.assignment
-                if grade_obj.final is not None:
-                    grades_dict['Final'] = grade_obj.final
+            # Get assessment configuration for this course
+            try:
+                assessment = Assessment.objects.get(course=course)
+            except Assessment.DoesNotExist:
+                assessment = None
+            
+            # Build assessment columns and grades
+            assessment_columns = []
+            
+            if assessment:
+                assessment_type_labels = {
+                    'midterm': 'Midterm',
+                    'final': 'Final',
+                    'project': 'Project',
+                    'assignment': 'Assignment',
+                    'absence': 'Absence',
+                    'quiz': 'Quiz'
+                }
+                
+                for assessment_type in ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']:
+                    count = getattr(assessment, assessment_type, 0)
+                    label = assessment_type_labels[assessment_type]
+                    
+                    if count > 0:
+                        # Multiple assessments (e.g., midterm_1, midterm_2)
+                        if count > 1:
+                            for i in range(1, count + 1):
+                                key = f'{assessment_type}_{i}'
+                                score = None
+                                if grade_obj:
+                                    score = grade_obj.get_individual_score(key)
+                                assessment_columns.append({
+                                    'key': key,
+                                    'label': f'{label} {i}',
+                                    'type': assessment_type,
+                                    'score': score
+                                })
+                        else:
+                            # Single assessment - show average
+                            score = None
+                            if grade_obj:
+                                score = grade_obj.get_assessment_score(assessment_type)
+                            assessment_columns.append({
+                                'key': assessment_type,
+                                'label': label,
+                                'type': assessment_type,
+                                'score': score
+                            })
+            
+            # Get assessment percentages
+            assessment_percentages = {}
+            if assessment:
+                assessment_type_labels = {
+                    'midterm': 'Midterm',
+                    'final': 'Final',
+                    'project': 'Project',
+                    'assignment': 'Assignment',
+                    'absence': 'Absence',
+                    'quiz': 'Quiz'
+                }
+                
+                for assessment_type in ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']:
+                    count = getattr(assessment, assessment_type, 0)
+                    percentage = getattr(assessment, f'{assessment_type}_percentage', 0)
+                    if count > 0 and percentage > 0:
+                        label = assessment_type_labels[assessment_type]
+                        assessment_percentages[assessment_type] = {
+                            'label': label,
+                            'count': count,
+                            'percentage': percentage
+                        }
+            
+            # Get instructor name
+            instructor_name = ''
+            if course.instructor:
+                full_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip()
+                instructor_name = full_name if full_name else course.instructor.username
             
             course_data = {
                 'course_name': course.name,
-                'grades': grades_dict,
-                'credits': course.credits,
+                'course_code': getattr(course, 'code', ''),
+                'credits': course.credits or 0,
+                'instructor_name': instructor_name,
+                'assessment_columns': assessment_columns,
+                'assessment_percentages': assessment_percentages,
+                'overall_score': grade_obj.overall_score if grade_obj else None,
+                'letter_grade': grade_obj.letter_grade if grade_obj else None,
             }
-            
-            if grade_obj:
-                course_data['midterm'] = grade_obj.midterm
-                course_data['assignment'] = grade_obj.assignment
-                course_data['final'] = grade_obj.final
-            else:
-                course_data['midterm'] = None
-                course_data['assignment'] = None
-                course_data['final'] = None
             
             courses_with_grades.append(course_data)
     except Student.DoesNotExist:
         courses_with_grades = []
     
+    import json
+    # Convert assessment_percentages to JSON-serializable format
+    courses_json = []
+    for course_data in courses_with_grades:
+        course_json = {
+            'course_name': course_data['course_name'],
+            'assessment_percentages': course_data['assessment_percentages']
+        }
+        courses_json.append(course_json)
+    
+    # Calculate GPA
+    # Formula: (sum of (overall_score × credits) for all courses) / (sum of credits) / 25
+    total_weighted_score = 0
+    total_credits = 0
+    
+    for course_data in courses_with_grades:
+        overall_score = course_data.get('overall_score')
+        credits = course_data.get('credits', 0)
+        
+        if overall_score is not None and credits > 0:
+            total_weighted_score += overall_score * credits
+            total_credits += credits
+    
+    gpa = None
+    if total_credits > 0:
+        average_score = total_weighted_score / total_credits
+        gpa = average_score / 25.0
+    
     return render(request, "student/grades.html", {
-        'courses_with_grades': courses_with_grades
+        'courses_with_grades': courses_with_grades,
+        'courses_json': json.dumps(courses_json),
+        'gpa': gpa
     })
 
 
@@ -4741,19 +5115,10 @@ def instructor_program_outcomes(request):
             'linked_learning_outcomes': linked_learning_outcomes,
         })
     
-    # Prepare instructor_info for header
-    profile = getattr(instructor_user, 'profile', None)
-    instructor_info = {
-        'username': instructor_user.username,
-        'name': f"{instructor_user.first_name} {instructor_user.last_name}".strip() or instructor_user.username,
-        'faculty': profile.faculty.name if profile and profile.faculty else '-',
-        'department': profile.department if profile else '-',
-    }
-    
     return render(request, "instructor/program_outcomes.html", {
         'outcomes_data': outcomes_data,
         'department': instructor_department,
-        'instructor_info': instructor_info,
+        'department': instructor_department,
     })
 
 def student_program_outcomes(request):
@@ -5364,21 +5729,12 @@ def advisor_profile(request, username):
         advisor = User.objects.get(username=username)
         profile = getattr(advisor, 'profile', None)
         
-        # Get courses from profile or instructor_courses
-        courses_list = []
-        if profile:
-            courses_list = [course.name for course in profile.courses.all()]
-        # Also check instructor_courses (reverse ForeignKey from Course.instructor)
-        instructor_courses = [course.name for course in advisor.instructor_courses.all()]
-        courses_list = list(set(courses_list + instructor_courses))  # Remove duplicates
-        
         advisor_data = {
             'username': advisor.username,
             'name': f"{advisor.first_name} {advisor.last_name}".strip() or advisor.username,
-            'role': profile.role if profile else '-',
             'department': profile.department if profile else '-',
             'faculty': profile.faculty.name if profile and profile.faculty else '-',
-            'courses': courses_list,
+            'email': advisor.email or '-',
         }
         
         return render(request, 'student/advisor_profile.html', {

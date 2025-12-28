@@ -380,13 +380,10 @@ function getCsrfToken() {
                 combinedMessageDiv.style.border = '1px solid #6ee7b7';
                 combinedMessageDiv.textContent = 'Assessment data saved successfully!';
                 
-                // Count'u güncelle
-                if (countResult.assessment_count) {
-                    countDisplay.textContent = countResult.assessment_count;
-                }
-                
-                // Upload kutucuklarını güncelle (yeni assessment değerleriyle)
-                createUploadBoxes();
+                // Reload page after successful save
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
             } else {
                 const errors = [];
                 if (countResult.error) errors.push(`Counts: ${countResult.error}`);
