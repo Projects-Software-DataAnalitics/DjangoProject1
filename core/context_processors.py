@@ -6,18 +6,39 @@ def student_info(request):
         try:
             student = Student.objects.get(user=request.user)
             # Get unread notifications
-            unread_notifications_list = list(Notification.objects.filter(user=request.user, is_read=False).select_related('assignment').order_by('-created_at')[:10])
+            try:
+                unread_notifications_list = list(Notification.objects.filter(user=request.user, is_read=False).select_related('assignment', 'announcement').order_by('-created_at')[:10])
+            except Exception as e:
+                import sys
+                print(f"ERROR getting notifications for {request.user.username}: {e}", file=sys.stderr)
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+                unread_notifications_list = []
             
             # Get unread announcements (not read by user)
-            unread_announcements = Announcement.objects.filter(
-                (Q(receiver=request.user) | Q(receiver__isnull=True))
-            ).exclude(read_by=request.user).select_related('sender').order_by('-created_at')[:10]
+            try:
+                unread_announcements = Announcement.objects.filter(
+                    (Q(receiver=request.user) | Q(receiver__isnull=True))
+                ).exclude(read_by=request.user).select_related('sender').order_by('-created_at')[:10]
+            except Exception as e:
+                import sys
+                print(f"ERROR getting announcements for {request.user.username}: {e}", file=sys.stderr)
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+                unread_announcements = Announcement.objects.none()
             
             # Get recent assignments from student's courses
-            student_courses = student.courses.all()
-            recent_assignments = Assignment.objects.filter(
-                course__in=student_courses
-            ).select_related('course', 'created_by').order_by('-created_at')[:10]
+            try:
+                student_courses = student.courses.all()
+                recent_assignments = Assignment.objects.filter(
+                    course__in=student_courses
+                ).select_related('course', 'created_by').order_by('-created_at')[:10]
+            except Exception as e:
+                import sys
+                print(f"ERROR getting assignments for {request.user.username}: {e}", file=sys.stderr)
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+                recent_assignments = Assignment.objects.none()
             
             # Combine all notifications
             all_notifications = []
@@ -31,6 +52,7 @@ def student_info(request):
                     'created_at': notif.created_at,
                     'is_assignment': notif.assignment is not None,
                     'assignment_id': notif.assignment.id if notif.assignment else None,
+                    'announcement_id': notif.announcement.id if notif.announcement else None,
                     'type': 'notification'
                 })
             
@@ -117,10 +139,16 @@ def student_info(request):
             print(f"ERROR in student_info context processor: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc(file=sys.stderr)
+            # Return empty but with debug info
             return {
-                'student_info': None, 
+                'student_info': {
+                    'username': request.user.username if request.user.is_authenticated else 'anonymous',
+                    'name': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'anonymous',
+                    'student_id': '-',
+                },
                 'unread_notifications_count': 0, 
-                'unread_notifications': []
+                'unread_notifications': [],
+                'debug_error': str(e)
             }
     
     return {'student_info': None, 'unread_notifications_count': 0, 'unread_notifications': []}

@@ -420,7 +420,7 @@ def student_dashboard(request):
         return redirect('student-login')
     
     from datetime import datetime
-    from .models import Announcement
+    from .models import Announcement, Assignment
     from django.db.models import Q
     
     try:
@@ -459,7 +459,10 @@ def student_dashboard(request):
         
         advisor_name = "-"
         advisor_username = None
-        if student.advisor:
+        # If department is Computer Engineering, set advisor to Prof. Dr. Ahmet Bulut
+        if department_display and department_display.lower().strip() == "computer engineering":
+            advisor_name = "Prof. Dr. Ahmet Bulut"
+        elif student.advisor:
             advisor_name = f"{student.advisor.first_name} {student.advisor.last_name}".strip() or student.advisor.username
             advisor_username = student.advisor.username
         
@@ -470,6 +473,9 @@ def student_dashboard(request):
                 'name': course.name,
                 'code': course.code,
                 'credits': course.credits,
+                'day': course.day,
+                'time': course.time,
+                'room': course.room,
             })
         
         # Calculate GPA (same logic as student_grades view)
@@ -544,18 +550,50 @@ def student_dashboard(request):
         })
     
     # Get assignments from student's courses
+    upcoming_assignments = []
     try:
         student = Student.objects.get(user=request.user)
         student_courses = student.courses.all()
-        assignments = Assignment.objects.filter(
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Get assignments with deadlines, ordered by deadline (soonest first)
+        # Show both future and past assignments, but prioritize future ones
+        now = timezone.now()
+        all_assignments_qs = Assignment.objects.filter(
             course__in=student_courses
-        ).select_related('course', 'created_by').order_by('-created_at')[:10]
+        ).select_related('course', 'created_by')
+        
+        # Convert to list to sort
+        all_assignments_list = list(all_assignments_qs)
+        
+        # Separate future and past assignments
+        future_assignments = [a for a in all_assignments_list if a.deadline >= now]
+        past_assignments = [a for a in all_assignments_list if a.deadline < now]
+        
+        # Sort each group by deadline
+        future_assignments.sort(key=lambda x: x.deadline)
+        past_assignments.sort(key=lambda x: x.deadline, reverse=True)  # Most recent past first
+        
+        # Show future assignments first, then past ones (limit to 10 total)
+        assignments = (future_assignments + past_assignments)[:10]
         
         instructors_map = get_instructors_map()
         faculty_heads_map = get_faculty_heads_map()
         
         for assignment in assignments:
             creator_name = instructors_map.get(assignment.created_by.username) or faculty_heads_map.get(assignment.created_by.username) or assignment.created_by.get_full_name() or assignment.created_by.username
+            
+            # Check if deadline is approaching (within 7 days)
+            time_diff = assignment.deadline - now
+            days_until_deadline = time_diff.days
+            # If less than 24 hours, count as 0 days
+            if time_diff.total_seconds() < 86400 and time_diff.total_seconds() >= 0:
+                days_until_deadline = 0
+            elif time_diff.total_seconds() < 0:
+                # Past deadline
+                days_until_deadline = -1
+            is_urgent = days_until_deadline <= 3 and days_until_deadline >= 0
             
             announcements_list.append({
                 'id': f"assignment_{assignment.id}",
@@ -564,12 +602,26 @@ def student_dashboard(request):
                 'created_at': assignment.created_at.strftime('%Y-%m-%d %H:%M'),
                 'is_assignment': True,
             })
+            
+            upcoming_assignments.append({
+                'id': assignment.id,
+                'title': assignment.title,
+                'course_name': assignment.course.name,
+                'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                'deadline_datetime': assignment.deadline.isoformat(),
+                'days_until': days_until_deadline,
+                'is_urgent': is_urgent,
+            })
     except Student.DoesNotExist:
         pass
     
     # Sort by created_at and take top 5
     announcements_list.sort(key=lambda x: x['created_at'], reverse=True)
     announcements_list = announcements_list[:5]
+    
+    # Prepare schedule data for template
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots = ['09:00-10:30', '11:00-12:30', '14:00-15:30', '16:00-17:30']
     
     return render(request, 'student.html', {
         'student_info': student_info,
@@ -581,6 +633,9 @@ def student_dashboard(request):
         'advisor_username': advisor_username,
         'courses_list': courses_list,
         'gpa': gpa,
+        'days': days,
+        'time_slots': time_slots,
+        'upcoming_assignments': upcoming_assignments,
     })
 
 
@@ -608,8 +663,9 @@ def instructor_required(view_func):
 @instructor_required
 def instructor_dashboard(request):
     from datetime import datetime
-    from .models import Announcement
+    from .models import Announcement, Assignment
     from django.db.models import Q
+    from django.utils import timezone
     
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
@@ -635,6 +691,9 @@ def instructor_dashboard(request):
     total_students_set = set()
     chart_data = {'labels': [], 'data': []}
     
+    # Get assignments from instructor's courses
+    upcoming_assignments = []
+    
     if profile:
         courses = profile.courses.all().select_related('instructor').prefetch_related('students')
         for course in courses:
@@ -654,6 +713,54 @@ def instructor_dashboard(request):
             
             chart_data['labels'].append(course.name)
             chart_data['data'].append(student_count)
+        
+        # Get assignments with deadlines, ordered by deadline (soonest first)
+        # Show both future and past assignments, but prioritize future ones
+        now = timezone.now()
+        all_assignments_qs = Assignment.objects.filter(
+            course__in=courses
+        ).select_related('course', 'created_by')
+        
+        # Convert to list to sort
+        all_assignments_list = list(all_assignments_qs)
+        
+        # Separate future and past assignments
+        future_assignments = [a for a in all_assignments_list if a.deadline >= now]
+        past_assignments = [a for a in all_assignments_list if a.deadline < now]
+        
+        # Sort each group by deadline
+        future_assignments.sort(key=lambda x: x.deadline)
+        past_assignments.sort(key=lambda x: x.deadline, reverse=True)  # Most recent past first
+        
+        # Show future assignments first, then past ones (limit to 10 total)
+        assignments = (future_assignments + past_assignments)[:10]
+        
+        instructors_map = get_instructors_map()
+        faculty_heads_map = get_faculty_heads_map()
+        
+        for assignment in assignments:
+            creator_name = instructors_map.get(assignment.created_by.username) or faculty_heads_map.get(assignment.created_by.username) or assignment.created_by.get_full_name() or assignment.created_by.username
+            
+            # Check if deadline is approaching (within 7 days)
+            time_diff = assignment.deadline - now
+            days_until_deadline = time_diff.days
+            # If less than 24 hours, count as 0 days
+            if time_diff.total_seconds() < 86400 and time_diff.total_seconds() >= 0:
+                days_until_deadline = 0
+            elif time_diff.total_seconds() < 0:
+                # Past deadline
+                days_until_deadline = -1
+            is_urgent = days_until_deadline <= 3 and days_until_deadline >= 0
+            
+            upcoming_assignments.append({
+                'id': assignment.id,
+                'title': assignment.title,
+                'course_name': assignment.course.name,
+                'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                'deadline_datetime': assignment.deadline.isoformat(),
+                'days_until': days_until_deadline,
+                'is_urgent': is_urgent,
+            })
     
     total_courses = len(courses_list)
     total_students = len(total_students_set)
@@ -683,6 +790,7 @@ def instructor_dashboard(request):
         'chart_data': chart_data,
         'chart_data_json': chart_data_json,
         'latest_announcements': announcements_list,
+        'upcoming_assignments': upcoming_assignments,
     })
 
 @instructor_required
@@ -784,6 +892,9 @@ def instructor_my_courses(request):
                 'students': students_list,
                 'students_json': json.dumps(students_list),
                 'assignments': assignments_list,
+                'day': course.day,
+                'time': course.time,
+                'room': course.room,
             })
     
     # Prepare JSON data for template
@@ -793,12 +904,18 @@ def instructor_my_courses(request):
         'students': course['students']
     } for course in courses_data])
     
+    # Prepare schedule data for template
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots = ['09:00-10:30', '11:00-12:30', '14:00-15:30', '16:00-17:30']
+    
     return render(request, 'instructor.html', {
         'show_welcome': False,
         'page': 'my_courses',
         'courses': courses_data,
         'courses_json': courses_json,
-        'all_assignments': all_assignments
+        'all_assignments': all_assignments,
+        'days': days,
+        'time_slots': time_slots
     })
 
 @instructor_required
@@ -2714,7 +2831,7 @@ def send_announcements(sender, message, subject, receivers_list):
     Send announcements to receivers (users or course students).
     Returns number of announcements created.
     """
-    from .models import Announcement
+    from .models import Announcement, Notification
     
     if not message:
         return 0
@@ -2741,13 +2858,22 @@ def send_announcements(sender, message, subject, receivers_list):
                         for student in students:
                             student_user = student.user
                             if student_user:
-                                Announcement.objects.create(
+                                announcement = Announcement.objects.create(
                                     sender=sender,
                                     receiver=student_user,
                                     subject=marked_subject,
                                     message=message,
                                     sender_role='instructor',
                                     receiver_role='student'
+                                )
+                                # Create notification for the student
+                                Notification.objects.create(
+                                    user=student_user,
+                                    notification_type='announcement_created',
+                                    title=clean_announcement_subject(marked_subject),
+                                    message=message[:100] + ('...' if len(message) > 100 else ''),
+                                    assignment=None,
+                                    announcement=announcement
                                 )
                                 count += 1
                 except Course.DoesNotExist:
@@ -2761,7 +2887,7 @@ def send_announcements(sender, message, subject, receivers_list):
                     if profile:
                         receiver_role = profile.role
                     
-                    Announcement.objects.create(
+                    announcement = Announcement.objects.create(
                         sender=sender,
                         receiver=receiver,
                         subject=subject,
@@ -2769,6 +2895,16 @@ def send_announcements(sender, message, subject, receivers_list):
                         sender_role='instructor',
                         receiver_role=receiver_role
                     )
+                    # Create notification for the receiver (if student)
+                    if receiver_role == 'student' or (profile and profile.role == 'student'):
+                        Notification.objects.create(
+                            user=receiver,
+                            notification_type='announcement_created',
+                            title=subject,
+                            message=message[:100] + ('...' if len(message) > 100 else ''),
+                            assignment=None,
+                            announcement=announcement
+                        )
                     count += 1
                 except User.DoesNotExist:
                     pass
@@ -3452,8 +3588,6 @@ def all_courses(request):
 
 @faculty_head_required
 def my_courses(request):
-    from .models import Assignment, AssignmentSubmission
-    
     profile = getattr(request.user, 'profile', None)
     
     # Get faculty head's department
@@ -3461,10 +3595,9 @@ def my_courses(request):
     faculty_head_department = faculty_head_data.get('department')
     
     courses_data = []
-    all_assignments = []
     
     if profile:
-        courses = profile.courses.all().select_related('instructor').prefetch_related('assignments')
+        courses = profile.courses.all().select_related('instructor')
         
         # Optimize: Fetch all learning outcomes in one query to avoid N+1 pattern
         # NOTE: Small N+1 risk - For each course, we query ProgramOutcome separately.
@@ -3490,9 +3623,55 @@ def my_courses(request):
             
             first_learning_outcome = learning_outcomes_dict.get(course.name)
             
+            courses_data.append({
+                'id': course.id,
+                'name': course.name,
+                'code': course.code,
+                'instructor': instructor_name,
+                'department': course.department,
+                'credits': course.credits,
+                'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
+                'day': course.day,
+                'time': course.time,
+                'room': course.room,
+            })
+    
+    # Prepare schedule data for template
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots = ['09:00-10:30', '11:00-12:30', '14:00-15:30', '16:00-17:30']
+    
+    context = {
+        'courses': courses_data,
+        'days': days,
+        'time_slots': time_slots
+    }
+    return render(request, 'faculty/my_courses.html', context)
+
+@faculty_head_required
+def faculty_head_assignments(request):
+    from .models import Assignment, AssignmentSubmission
+    
+    profile = getattr(request.user, 'profile', None)
+    
+    # Get faculty head's department
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
+    
+    all_assignments = []
+    courses_list = []
+    
+    if profile:
+        courses = profile.courses.all().select_related('instructor').prefetch_related('assignments')
+        
+        # Filter by department if faculty head has a department
+        if faculty_head_department:
+            courses = courses.filter(department=faculty_head_department)
+        
+        courses_list = [{'id': course.id, 'name': course.name} for course in courses]
+        
+        for course in courses:
             # Get assignments for this course
             assignments = course.assignments.all().order_by('-created_at')
-            assignments_list = []
             for assignment in assignments:
                 # Get submissions for this assignment
                 submissions = AssignmentSubmission.objects.filter(assignment=assignment).select_related('student')
@@ -3511,6 +3690,7 @@ def my_courses(request):
                 assignment_data = {
                     'id': assignment.id,
                     'course_name': course.name,
+                    'course_code': course.code,
                     'title': assignment.title,
                     'details': assignment.details,
                     'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
@@ -3521,26 +3701,15 @@ def my_courses(request):
                     'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
                     'created_by_id': assignment.created_by.id,
                     'submissions': json.dumps(submissions_list),
+                    'submissions_count': len(submissions_list),
                 }
-                assignments_list.append(assignment_data)
                 all_assignments.append(assignment_data)
-            
-            courses_data.append({
-                'id': course.id,
-                'name': course.name,
-                'code': course.code,
-                'instructor': instructor_name,
-                'department': course.department,
-                'credits': course.credits,
-                'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
-                'assignments': assignments_list,
-            })
     
     context = {
-        'courses': courses_data,
-        'all_assignments': all_assignments,
+        'assignments': all_assignments,
+        'courses': courses_list,
     }
-    return render(request, 'faculty/my_courses.html', context)
+    return render(request, 'faculty/assignments.html', context)
 
 # Helper function for program_outcomes view
 def build_program_outcomes_data(outcomes_qs, faculty_heads_map, instructors_map):
@@ -5323,14 +5492,23 @@ def student_courses(request):
                 'department': course.department,
                 'credits': course.credits,
                 'assignments': assignments_list,
+                'day': course.day,
+                'time': course.time,
+                'room': course.room,
             })
     except Student.DoesNotExist:
         courses_data = []
         all_assignments = []
     
+    # Prepare schedule data for template
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots = ['09:00-10:30', '11:00-12:30', '14:00-15:30', '16:00-17:30']
+    
     return render(request, "student/courses.html", {
         'courses': courses_data,
-        'all_assignments': all_assignments
+        'all_assignments': all_assignments,
+        'days': days,
+        'time_slots': time_slots
     })
 
 def student_assignments(request):
@@ -6175,13 +6353,23 @@ def faculty_head_announcements(request):
                                 for student in students:
                                     student_user = student.user
                                     if student_user:
-                                        Announcement.objects.create(
+                                        announcement = Announcement.objects.create(
                                             sender=faculty_head_user,
                                             receiver=student_user,
                                             subject=marked_subject,
                                             message=message,
                                             sender_role='faculty_head',
                                             receiver_role='student'
+                                        )
+                                        # Create notification for the student
+                                        from .models import Notification
+                                        Notification.objects.create(
+                                            user=student_user,
+                                            notification_type='announcement_created',
+                                            title=clean_announcement_subject(marked_subject),
+                                            message=message[:100] + ('...' if len(message) > 100 else ''),
+                                            assignment=None,
+                                            announcement=announcement
                                         )
                         except Course.DoesNotExist:
                             pass
@@ -6193,7 +6381,7 @@ def faculty_head_announcements(request):
                             if profile:
                                 receiver_role = profile.role
                             
-                            Announcement.objects.create(
+                            announcement = Announcement.objects.create(
                                 sender=faculty_head_user,
                                 receiver=receiver,
                                 subject=subject,
@@ -6201,6 +6389,17 @@ def faculty_head_announcements(request):
                                 sender_role='faculty_head',
                                 receiver_role=receiver_role
                             )
+                            # Create notification for the receiver (if student)
+                            if receiver_role == 'student' or (profile and profile.role == 'student'):
+                                from .models import Notification
+                                Notification.objects.create(
+                                    user=receiver,
+                                    notification_type='announcement_created',
+                                    title=subject,
+                                    message=message[:100] + ('...' if len(message) > 100 else ''),
+                                    assignment=None,
+                                    announcement=announcement
+                                )
                         except User.DoesNotExist:
                             pass
             
@@ -6556,7 +6755,7 @@ def advisor_profile(request, username):
 
 
 def mark_notification_read(request, notification_id):
-    """Mark notification as read and redirect to my courses"""
+    """Mark notification as read and redirect based on notification type"""
     if not request.user.is_authenticated:
         return redirect('student-login')
     
@@ -6565,25 +6764,45 @@ def mark_notification_read(request, notification_id):
         notification.is_read = True
         notification.save()
         
-        # Redirect to my courses page based on user role
-        if hasattr(request.user, 'student_profile') and request.user.student_profile:
-            return redirect('student_courses')
-        elif hasattr(request.user, 'profile') and request.user.profile.role == 'instructor':
-            return redirect('instructor_my_courses')
-        elif hasattr(request.user, 'profile') and request.user.profile.role == 'faculty_head':
-            return redirect('my_courses')
+        # Redirect based on notification type
+        if notification.assignment:
+            # Assignment notification - redirect to assignments page
+            return redirect('student_assignments')
+        elif notification.announcement:
+            # Announcement notification - redirect to announcements page
+            return redirect('student_announcements')
         else:
-            return redirect('student_courses')
+            # Default: redirect based on user role
+            if hasattr(request.user, 'student_profile') and request.user.student_profile:
+                return redirect('student_announcements')
+            elif hasattr(request.user, 'profile') and request.user.profile.role == 'instructor':
+                return redirect('instructor_my_courses')
+            elif hasattr(request.user, 'profile') and request.user.profile.role == 'faculty_head':
+                return redirect('my_courses')
+            else:
+                return redirect('student_announcements')
     except Notification.DoesNotExist:
         # If notification doesn't exist, just redirect
         if hasattr(request.user, 'student_profile') and request.user.student_profile:
-            return redirect('student_courses')
+            return redirect('student_announcements')
         elif hasattr(request.user, 'profile') and request.user.profile.role == 'instructor':
             return redirect('instructor_my_courses')
         elif hasattr(request.user, 'profile') and request.user.profile.role == 'faculty_head':
             return redirect('my_courses')
         else:
-            return redirect('student_courses')
+            return redirect('student_announcements')
+
+@csrf_exempt
+def mark_all_notifications_read(request):
+    """Mark all unread notifications as read for the current user"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    try:
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return JsonResponse({'status': 'success', 'message': 'All notifications marked as read'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 @faculty_head_required
 def faculty_head_department_graph(request):
