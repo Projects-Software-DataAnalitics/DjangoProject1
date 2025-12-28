@@ -1,0 +1,78 @@
+name: Django Deployment
+
+on:
+  workflow_run:
+    workflows: ["Django Tests"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only run if CI workflow succeeded and triggered from master branch
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.workflow_run.head_branch }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Verify CI success
+      run: |
+        echo "=========================================="
+        echo "✅ CI Pipeline Completed Successfully"
+        echo "=========================================="
+        echo "Branch: ${{ github.event.workflow_run.head_branch }}"
+        echo "Workflow: ${{ github.event.workflow_run.name }}"
+        echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
+        echo ""
+        echo "All CI checks and tests passed. Proceeding with deployment..."
+    
+    - name: Simulate database migration
+      run: |
+        echo "🔄 Simulating database migration..."
+        echo "  → Database connection established"
+        echo "  → Running migrations..."
+        echo "  → Database schema updated"
+        echo "✅ Database migration completed"
+    
+    - name: Simulate static files collection
+      run: |
+        echo "📦 Simulating static files collection..."
+        echo "  → Collecting static files..."
+        echo "  → Processing media files..."
+        echo "✅ Static files collection completed"
+    
+    - name: Simulate application deployment
+      run: |
+        echo "🚀 Simulating application deployment..."
+        echo "  → Building application..."
+        echo "  → Deploying to production environment..."
+        echo "  → Restarting application server..."
+        echo "  → Reloading services..."
+        echo "✅ Application deployment completed"
+    
+    - name: Deployment verification
+      run: |
+        echo ""
+        echo "=========================================="
+        echo "✅ Continuous Delivery Pipeline Completed"
+        echo "=========================================="
+        echo ""
+        echo "Deployment Status: SUCCESS"
+        echo "Branch: master"
+        echo "Triggered by: CI workflow success"
+        echo ""
+        echo "Note: This is a simulated deployment."
+        echo "In production, this would deploy to your server."
