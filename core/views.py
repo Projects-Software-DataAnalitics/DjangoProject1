@@ -441,7 +441,20 @@ def student_dashboard(request):
         else:
             academic_term = f"{current_year - 1}-{current_year} Fall"
         
-        year_display = f"{student.year}. Year" if student.year else "-"
+        # Format year as 1st, 2nd, 3rd, 4th Year
+        if student.year:
+            if student.year == 1:
+                year_display = "1st Year"
+            elif student.year == 2:
+                year_display = "2nd Year"
+            elif student.year == 3:
+                year_display = "3rd Year"
+            elif student.year == 4:
+                year_display = "4th Year"
+            else:
+                year_display = f"{student.year}th Year"
+        else:
+            year_display = "-"
         department_display = student.department or "-"
         
         advisor_name = "-"
@@ -460,11 +473,13 @@ def student_dashboard(request):
             })
         
         # Calculate GPA (same logic as student_grades view)
+        # GPA is only calculated if ALL courses have overall_score determined
         from .models import Assessment, Grade
         grades_qs = Grade.objects.filter(student=student).select_related('course')
         
         total_weighted_score = 0
         total_credits = 0
+        all_courses_have_scores = True
         
         for course in courses:
             grade_obj = grades_qs.filter(course=course).first()
@@ -475,14 +490,19 @@ def student_dashboard(request):
             else:
                 overall_score = None
             
-            credits = course.credits or 0
+            if overall_score is None:
+                # If any course doesn't have overall_score, GPA cannot be calculated
+                all_courses_have_scores = False
+                break
             
-            if overall_score is not None and credits > 0:
+            credits = course.credits or 0
+            if credits > 0:
                 total_weighted_score += overall_score * credits
                 total_credits += credits
         
         gpa = None
-        if total_credits > 0:
+        # Only calculate GPA if all courses have overall_score and total_credits > 0
+        if all_courses_have_scores and total_credits > 0:
             average_score = total_weighted_score / total_credits
             gpa = average_score / 25.0
         
@@ -952,14 +972,35 @@ def instructor_grades(request):
     instructor_user = request.instructor_user
     profile = getattr(instructor_user, 'profile', None)
     
-    courses = []
-    if profile:
-        courses = [course.name for course in profile.courses.all()]
+    # Get courses from both sources (profile.courses and Course.instructor)
+    courses_from_profile = []
+    courses_from_instructor = []
     
-    return render(request, 'instructor.html', {
-        'show_welcome': False,
-        'page': 'grades',
-        'instructor_courses': courses
+    if profile:
+        courses_from_profile = profile.courses.all().select_related('instructor').prefetch_related('students')
+    
+    # Also get courses where this user is the instructor (primary source of truth)
+    courses_from_instructor = instructor_user.instructor_courses.all().select_related('instructor').prefetch_related('students')
+    
+    # Combine courses and deduplicate by name, keeping Course objects
+    all_courses_dict = {}
+    for course in list(courses_from_profile) + list(courses_from_instructor):
+        if course.name not in all_courses_dict:
+            all_courses_dict[course.name] = course
+    
+    # Convert to list of dictionaries with course info
+    courses_list = []
+    for course in all_courses_dict.values():
+        student_count = course.students.count()
+        courses_list.append({
+            'name': course.name,
+            'credits': course.credits if course.credits is not None else '-',
+            'student_count': student_count
+        })
+    
+    return render(request, 'instructor/instructor_grades_page.html', {
+        'instructor_courses': courses_list,
+        'page': 'grades'  # Add page context
     })
 
 @instructor_required
@@ -973,7 +1014,14 @@ def instructor_course_grades(request, course_name):
     except Course.DoesNotExist:
         return redirect('instructor_grades')
     
-    if profile and not profile.courses.filter(id=course.id).exists():
+    # Check access: instructor must have course in profile OR be the course instructor
+    has_access = False
+    if profile and profile.courses.filter(id=course.id).exists():
+        has_access = True
+    elif course.instructor == instructor_user:
+        has_access = True
+    
+    if not has_access:
         return HttpResponseForbidden("You don't have access to this course")
     
     # Assessment'ı al veya oluştur (default değerlerle)
@@ -1133,9 +1181,14 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    # Check access: instructor must have course in profile OR be the course instructor, faculty_head must have course in profile or department match
     if profile.role == 'instructor':
-        if course not in profile.courses.all():
+        has_access = False
+        if course in profile.courses.all():
+            has_access = True
+        elif course.instructor == request.user:
+            has_access = True
+        if not has_access:
             return JsonResponse({'error': 'Access denied'}, status=403)
     elif profile.role == 'faculty_head':
         # Faculty head can access if course is in their profile or department matches
@@ -1468,6 +1521,319 @@ def upload_assessment_grades(request, course_name, assessment_type, assessment_i
         return JsonResponse({'error': f'CSV processing error: {str(e)}'}, status=400)
 
 @csrf_exempt
+def upload_all_assessments(request, course_name):
+    """
+    Upload all assessments for a course in a single CSV file
+    CSV format: student_id, midterm_1, midterm_2, ..., final_1, final_2, ..., project_1, ..., assignment_1, ..., absence_1, ..., quiz_1, ...
+    Works for both instructor and faculty_head
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Check if user is instructor or faculty_head
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return JsonResponse({'error': 'User profile not found'}, status=403)
+    
+    if profile.role not in ['instructor', 'faculty_head']:
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    try:
+        course = Course.objects.get(name=course_name)
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)
+    
+    # Check access: instructor must have course in profile OR be the course instructor, faculty_head must have course in profile or department match
+    if profile.role == 'instructor':
+        has_access = False
+        if course in profile.courses.all():
+            has_access = True
+        elif course.instructor == request.user:
+            has_access = True
+        if not has_access:
+            return JsonResponse({'error': 'Access denied'}, status=403)
+    elif profile.role == 'faculty_head':
+        # Faculty head can access if course is in their profile or department matches
+        faculty_head_data = get_faculty_head_data(request.user.username)
+        faculty_head_department = faculty_head_data.get('department')
+        if course not in profile.courses.all():
+            if faculty_head_department and course.department != faculty_head_department:
+                return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    # Get assessment for this course
+    try:
+        assessment = Assessment.objects.get(course=course)
+    except Assessment.DoesNotExist:
+        return JsonResponse({'error': 'Assessment not found for this course. Please configure assessment first.'}, status=404)
+    
+    csv_file = request.FILES.get('csv_file')
+    if not csv_file:
+        return JsonResponse({'error': 'CSV file required'}, status=400)
+    
+    # Read CSV file into memory
+    try:
+        csv_file.file.seek(0)
+        text_file = io.TextIOWrapper(csv_file.file, encoding='utf-8')
+        csv_content = text_file.read()
+        text_file.close()
+    except Exception as e:
+        return JsonResponse({'error': f'Invalid CSV file: {str(e)}'}, status=400)
+    
+    def normalize(name):
+        if not name:
+            return ''
+        normalized = name.strip().lower().lstrip('\ufeff').replace('.', '').replace('_', '').replace('-', '').replace(' ', '')
+        return normalized
+    
+    # Parse CSV content
+    csv_string_io = io.StringIO(csv_content)
+    detected_delimiter = ','
+    
+    # Try comma first
+    reader = csv.DictReader(csv_string_io, delimiter=',')
+    
+    # If no fieldnames found or only one column, try semicolon
+    if not reader.fieldnames or (reader.fieldnames and len(reader.fieldnames) == 1):
+        csv_string_io.seek(0)
+        reader = csv.DictReader(csv_string_io, delimiter=';')
+        if reader.fieldnames and len(reader.fieldnames) > 1:
+            detected_delimiter = ';'
+    
+    # If still no fieldnames or only one column, try tab
+    if not reader.fieldnames or (reader.fieldnames and len(reader.fieldnames) == 1):
+        csv_string_io.seek(0)
+        reader = csv.DictReader(csv_string_io, delimiter='\t')
+        if reader.fieldnames and len(reader.fieldnames) > 1:
+            detected_delimiter = '\t'
+    
+    if not reader.fieldnames:
+        return JsonResponse({'error': 'CSV file appears to be empty or invalid. Please ensure the file has headers and data rows.'}, status=400)
+    
+    if len(reader.fieldnames) == 1:
+        return JsonResponse({
+            'error': f'CSV appears to have only one column. Found: {reader.fieldnames[0]}. Please check the delimiter (should be comma).',
+            'details': [f'Try saving the CSV file with comma (,) as delimiter']
+        }, status=400)
+    
+    normalized_fields = {normalize(col): col for col in reader.fieldnames}
+    
+    # Check for student_id
+    student_id_column = None
+    possible_student_id_names = ['studentid', 'student_id', 'student.student_id', 'student_student_id']
+    for name in possible_student_id_names:
+        normalized_name = normalize(name)
+        if normalized_name in normalized_fields:
+            student_id_column = normalized_fields[normalized_name]
+            break
+    
+    if not student_id_column:
+        available_cols = ', '.join(reader.fieldnames)
+        return JsonResponse({
+            'error': f'CSV must include "student_id" column. Available columns: {available_cols}',
+            'details': [f'Found columns: {available_cols}']
+        }, status=400)
+    
+    # Build expected columns based on assessment counts
+    assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
+    expected_columns = {}
+    for assessment_type in assessment_types:
+        count = getattr(assessment, assessment_type, 0)
+        if count > 0:
+            for i in range(1, count + 1):
+                key = f'{assessment_type}_{i}'
+                expected_columns[key] = {
+                    'type': assessment_type,
+                    'index': i,
+                    'key': key
+                }
+    
+    # Check which columns are present in CSV
+    found_columns = {}
+    missing_columns = []
+    
+    for key, info in expected_columns.items():
+        # Try to find column with various naming formats
+        found = False
+        possible_names = [
+            key,  # midterm_1
+            key.replace('_', ''),  # midterm1
+            key.replace('_', '-'),  # midterm-1
+            key.replace('_', ' '),  # midterm 1
+            key.upper(),  # MIDTERM_1
+            key.lower(),  # midterm_1
+        ]
+        
+        for name in possible_names:
+            normalized_name = normalize(name)
+            if normalized_name in normalized_fields:
+                found_columns[key] = {
+                    'column_name': normalized_fields[normalized_name],
+                    'type': info['type'],
+                    'index': info['index'],
+                    'key': key
+                }
+                found = True
+                break
+        
+        if not found:
+            missing_columns.append(key)
+    
+    # If no assessment columns found, return error
+    if not found_columns:
+        return JsonResponse({
+            'error': 'No assessment columns found in CSV. Expected columns: ' + ', '.join(expected_columns.keys()),
+            'details': [f'Found columns: {", ".join(reader.fieldnames)}']
+        }, status=400)
+    
+    # Parse score function
+    def parse_score(raw_value, label):
+        value = (raw_value or '').strip()
+        if value == '':
+            return None
+        try:
+            score = float(value)
+            if score < 0:
+                raise ValueError(f'{label} cannot be below 0')
+            if score > 100:
+                raise ValueError(f'{label} cannot be over 100')
+            return score
+        except ValueError as e:
+            if 'cannot be' in str(e):
+                raise e
+            raise ValueError(f'{label} must be a valid number')
+    
+    # Validate all rows
+    validated_rows = []
+    validation_errors = []
+    
+    csv_string_io.seek(0)
+    reader = csv.DictReader(csv_string_io, delimiter=detected_delimiter)
+    normalized_fields = {normalize(col): col for col in (reader.fieldnames or [])}
+    
+    # Find student_id column again
+    student_id_source = None
+    for name in possible_student_id_names:
+        normalized_name = normalize(name)
+        if normalized_name in normalized_fields:
+            student_id_source = normalized_fields[normalized_name]
+            break
+    
+    try:
+        for row_num, row in enumerate(reader, start=2):
+            try:
+                student_id_str = (row[student_id_source] or '').strip()
+                if not student_id_str:
+                    validation_errors.append(f'Row {row_num}: student_id is required')
+                    continue
+                
+                # Get student
+                try:
+                    student = Student.objects.get(student_id=student_id_str)
+                except Student.DoesNotExist:
+                    validation_errors.append(f'Row {row_num}: Student with student_id {student_id_str} not found')
+                    continue
+                except Student.MultipleObjectsReturned:
+                    validation_errors.append(f'Row {row_num}: Multiple students found with student_id {student_id_str}')
+                    continue
+                
+                # Check if student is enrolled
+                if not student.courses.filter(id=course.id).exists():
+                    validation_errors.append(f'Row {row_num}: Student {student_id_str} is not enrolled in course {course_name}')
+                    continue
+                
+                # Parse all assessment scores
+                row_scores = {}
+                for key, info in found_columns.items():
+                    column_name = info['column_name']
+                    score_value = (row.get(column_name, '') or '').strip()
+                    if score_value != '':
+                        try:
+                            score = parse_score(score_value, key)
+                            row_scores[key] = score
+                        except ValueError as e:
+                            validation_errors.append(f'Row {row_num}, {key}: {str(e)}')
+                
+                validated_rows.append({
+                    'student': student,
+                    'scores': row_scores
+                })
+                    
+            except Exception as e:
+                validation_errors.append(f'Row {row_num}: {str(e)}')
+        
+        # If there are validation errors, return before processing
+        if validation_errors:
+            return JsonResponse({
+                'error': 'CSV validation failed',
+                'details': validation_errors[:20]
+            }, status=400)
+        
+        # Write to database in atomic transaction
+        from django.utils import timezone
+        updated_count = 0
+        
+        with transaction.atomic():
+            for row_data in validated_rows:
+                student = row_data['student']
+                scores = row_data['scores']
+                
+                # Get or create grade record
+                grade, created = Grade.objects.get_or_create(
+                    student=student,
+                    course=course
+                )
+                
+                # Store all scores
+                for key, score in scores.items():
+                    grade.set_individual_score(key, score, file_name=csv_file.name)
+                
+                # Calculate averages for each assessment type
+                for assessment_type in assessment_types:
+                    count = getattr(assessment, assessment_type, 0)
+                    if count > 0:
+                        all_scores = []
+                        for i in range(1, count + 1):
+                            key = f'{assessment_type}_{i}'
+                            individual_score = grade.get_individual_score(key)
+                            if individual_score is not None:
+                                all_scores.append(individual_score)
+                        
+                        # Set average if all files are present
+                        if len(all_scores) == count and count > 0:
+                            average_score = sum(all_scores) / len(all_scores)
+                            setattr(grade, assessment_type, average_score)
+                        else:
+                            # If not all files present, don't change existing average
+                            # Only set to None if we explicitly uploaded scores and some are missing
+                            pass
+                
+                # Calculate overall score and letter grade
+                grade.calculate_overall_score()
+                
+                # Update last_changes_at
+                grade.last_changes_at = timezone.now()
+                
+                # Save all changes
+                grade.save()
+                updated_count += 1
+        
+        response_data = {
+            'status': 'ok',
+            'updated_count': updated_count,
+            'assessments_uploaded': list(found_columns.keys()),
+            'file_name': csv_file.name
+        }
+        
+        return JsonResponse(response_data)
+            
+    except Exception as e:
+        return JsonResponse({'error': f'CSV processing error: {str(e)}'}, status=400)
+
+@csrf_exempt
 def delete_assessment_file(request, course_name, assessment_type, assessment_index):
     """Delete a specific assessment file (e.g., midterm_1)
     Works for both instructor and faculty_head
@@ -1503,9 +1869,14 @@ def delete_assessment_file(request, course_name, assessment_type, assessment_ind
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    # Check access: instructor must have course in profile OR be the course instructor, faculty_head must have course in profile or department match
     if profile.role == 'instructor':
-        if course not in profile.courses.all():
+        has_access = False
+        if course in profile.courses.all():
+            has_access = True
+        elif course.instructor == request.user:
+            has_access = True
+        if not has_access:
             return JsonResponse({'error': 'Access denied'}, status=403)
     elif profile.role == 'faculty_head':
         # Faculty head can access if course is in their profile or department matches
@@ -1605,9 +1976,14 @@ def update_individual_grade(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    # Check access: instructor must have course in profile OR be the course instructor, faculty_head must have course in profile or department match
     if profile.role == 'instructor':
-        if course not in profile.courses.all():
+        has_access = False
+        if course in profile.courses.all():
+            has_access = True
+        elif course.instructor == request.user:
+            has_access = True
+        if not has_access:
             return JsonResponse({'error': 'Access denied'}, status=403)
     elif profile.role == 'faculty_head':
         # Faculty head can access if course is in their profile or department matches
@@ -1751,9 +2127,14 @@ def update_multiple_grades(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    # Check access: instructor must have course in profile OR be the course instructor, faculty_head must have course in profile or department match
     if profile.role == 'instructor':
-        if course not in profile.courses.all():
+        has_access = False
+        if course in profile.courses.all():
+            has_access = True
+        elif course.instructor == request.user:
+            has_access = True
+        if not has_access:
             return JsonResponse({'error': 'Access denied'}, status=403)
     elif profile.role == 'faculty_head':
         # Faculty head can access if course is in their profile or department matches
@@ -1944,9 +2325,14 @@ def update_assessment(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    # Check access: instructor must have course in profile OR be the course instructor, faculty_head must have course in profile or department match
     if profile.role == 'instructor':
-        if course not in profile.courses.all():
+        has_access = False
+        if course in profile.courses.all():
+            has_access = True
+        elif course.instructor == request.user:
+            has_access = True
+        if not has_access:
             return JsonResponse({'error': 'Access denied'}, status=403)
     elif profile.role == 'faculty_head':
         # Faculty head can access if course is in their profile or department matches
@@ -2059,9 +2445,14 @@ def update_assessment_percentages(request, course_name):
     except Course.DoesNotExist:
         return JsonResponse({'error': 'Course not found'}, status=404)
     
-    # Check access: instructor must have course in profile, faculty_head must have course in profile or department match
+    # Check access: instructor must have course in profile OR be the course instructor, faculty_head must have course in profile or department match
     if profile.role == 'instructor':
-        if course not in profile.courses.all():
+        has_access = False
+        if course in profile.courses.all():
+            has_access = True
+        elif course.instructor == request.user:
+            has_access = True
+        if not has_access:
             return JsonResponse({'error': 'Access denied'}, status=403)
     elif profile.role == 'faculty_head':
         # Faculty head can access if course is in their profile or department matches
@@ -2738,10 +3129,24 @@ def all_courses(request):
                 )
                 
                 if not created:
+                    old_instructor = course.instructor
                     course.instructor = instructor_user
                     if credits is not None:
                         course.credits = credits
                     course.save()
+                    
+                    # Eski instructor'ın profile.courses'undan çıkar
+                    if old_instructor and old_instructor != instructor_user:
+                        old_profile = getattr(old_instructor, 'profile', None)
+                        if old_profile and course in old_profile.courses.all():
+                            old_profile.courses.remove(course)
+                
+                # Yeni instructor'ın profile.courses'una ekle
+                if instructor_user:
+                    instructor_profile = getattr(instructor_user, 'profile', None)
+                    if instructor_profile and instructor_profile.role in ['instructor', 'faculty_head']:
+                        if course not in instructor_profile.courses.all():
+                            instructor_profile.courses.add(course)
         
         elif action == 'update_course':
             course_id = request.POST.get('course_id')
@@ -2755,6 +3160,8 @@ def all_courses(request):
                 if course_name:
                     course.name = course_name
                 
+                old_instructor = course.instructor
+                
                 if instructor_username:
                     try:
                         instructor_user = User.objects.get(username=instructor_username)
@@ -2764,6 +3171,9 @@ def all_courses(request):
                         import logging
                         logger = logging.getLogger(__name__)
                         logger.warning(f"Instructor not found: {instructor_username} when updating course {course.id}")
+                        instructor_user = None
+                else:
+                    instructor_user = course.instructor
                 
                 if credits_str:
                     try:
@@ -2775,6 +3185,19 @@ def all_courses(request):
                     course.credits = None
                 
                 course.save()
+                
+                # Eski instructor'ın profile.courses'undan çıkar
+                if old_instructor and old_instructor != instructor_user:
+                    old_profile = getattr(old_instructor, 'profile', None)
+                    if old_profile and course in old_profile.courses.all():
+                        old_profile.courses.remove(course)
+                
+                # Yeni instructor'ın profile.courses'una ekle
+                if instructor_user:
+                    instructor_profile = getattr(instructor_user, 'profile', None)
+                    if instructor_profile and instructor_profile.role in ['instructor', 'faculty_head']:
+                        if course not in instructor_profile.courses.all():
+                            instructor_profile.courses.add(course)
             except Course.DoesNotExist:
                 # Log warning instead of silently failing
                 import logging
@@ -3091,9 +3514,7 @@ def get_course_for_outcome(profile, course_name):
     # If not found, try to find by name (case-insensitive)
     if not course:
         course = Course.objects.filter(name__iexact=course_name).first()
-        if course and profile:
-            with transaction.atomic():
-                profile.courses.add(course)
+        # Note: profile.courses will be synced automatically via signals when Course.instructor is set
     
     course_id = course.id if course else None
     return course, course_id
@@ -3488,9 +3909,7 @@ def faculty_head_course_learning_outcomes(request, course_name):
                 break
         if not course:
             course = Course.objects.filter(name__iexact=course_name).first()
-            if course and profile:
-                with transaction.atomic():
-                    profile.courses.add(course)
+            # Note: profile.courses will be synced automatically via signals when Course.instructor is set
         if not course:
             return HttpResponseForbidden("You don't have access to this course.")
         course_id = course.id
@@ -3580,9 +3999,7 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
     """Show detail page for a learning outcome with linked program outcomes (for faculty head)"""
     profile = getattr(request.user, 'profile', None)
     course = get_object_or_404(Course, id=course_id)
-    if profile:
-        if not profile.courses.filter(id=course.id).exists():
-            profile.courses.add(course)
+    # Note: profile.courses will be synced automatically via signals when Course.instructor is set
     
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
     
@@ -3783,8 +4200,7 @@ def faculty_head_link_program_outcomes(request, outcome_id):
                 break
         if not course:
             course = Course.objects.filter(name__iexact=outcome.course_name).first()
-            if course and profile:
-                profile.courses.add(course)
+            # Note: profile.courses will be synced automatically via signals when Course.instructor is set
         course_id = course.id if course else None
         if course_id:
             return redirect('faculty_head_learning_outcome_detail', course_id=course_id, outcome_id=outcome_id)
@@ -5098,19 +5514,27 @@ def student_grades(request):
     
     # Calculate GPA
     # Formula: (sum of (overall_score × credits) for all courses) / (sum of credits) / 25
+    # GPA is only calculated if ALL courses have overall_score determined
     total_weighted_score = 0
     total_credits = 0
+    all_courses_have_scores = True
     
     for course_data in courses_with_grades:
         overall_score = course_data.get('overall_score')
         credits = course_data.get('credits', 0)
         
-        if overall_score is not None and credits > 0:
+        if overall_score is None:
+            # If any course doesn't have overall_score, GPA cannot be calculated
+            all_courses_have_scores = False
+            break
+        
+        if credits > 0:
             total_weighted_score += overall_score * credits
             total_credits += credits
     
     gpa = None
-    if total_credits > 0:
+    # Only calculate GPA if all courses have overall_score and total_credits > 0
+    if all_courses_have_scores and total_credits > 0:
         average_score = total_weighted_score / total_credits
         gpa = average_score / 25.0
     
