@@ -153,9 +153,10 @@
             }
             row.appendChild(tdOverall);
             
-            // Letter Grade cell
+            // Letter Grade cell - only show if overall_score exists
             const tdLetterGrade = document.createElement('td');
-            if (student.letter_grade !== undefined && student.letter_grade !== null) {
+            if (student.overall_score !== undefined && student.overall_score !== null && 
+                student.letter_grade !== undefined && student.letter_grade !== null) {
                 tdLetterGrade.textContent = student.letter_grade;
                 tdLetterGrade.style.cssText = 'padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;';
             } else {
@@ -585,7 +586,9 @@
                             }
                             
                             if (letterGradeCell && result.letter_grade !== undefined) {
-                                if (result.letter_grade !== null && result.letter_grade !== undefined) {
+                                // Only show letter grade if overall_score exists
+                                if (result.overall_score !== null && result.overall_score !== undefined &&
+                                    result.letter_grade !== null && result.letter_grade !== undefined) {
                                     letterGradeCell.textContent = result.letter_grade;
                                     letterGradeCell.style.color = '';
                                     letterGradeCell.style.fontWeight = '600';
