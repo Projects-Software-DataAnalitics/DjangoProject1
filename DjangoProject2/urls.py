@@ -63,7 +63,6 @@ urlpatterns = [
     path('instructor/announcements/', core_views.instructor_announcements, name='instructor_announcements'),
 ]
 
-# Faculty Head URLs
 urlpatterns += [
     path('faculty-head/', core_views.faculty_head_dashboard, name='faculty-head'),
     path('faculty-head/profile/', core_views.faculty_head_profile, name='faculty_head_profile'),
@@ -89,6 +88,8 @@ urlpatterns += [
     path('faculty-head/learning-outcomes/<int:outcome_id>/unlink-program-outcome/<int:program_outcome_id>/', core_views.faculty_head_unlink_program_outcome, name='faculty_head_unlink_program_outcome'),
     path('faculty-head/learning-outcomes/<int:outcome_id>/get-assessments/', core_views.faculty_head_get_available_assessments, name='faculty_head_get_available_assessments'),
     path('faculty-head/learning-outcomes/<int:outcome_id>/link-assessment/', core_views.faculty_head_link_assessment_to_lo, name='faculty_head_link_assessment_to_lo'),
+    path('faculty-head/learning-outcomes/<int:outcome_id>/update-assessment-percentage/<int:relation_id>/', core_views.faculty_head_update_assessment_lo_percentage, name='faculty_head_update_assessment_lo_percentage'),
+    path('faculty-head/learning-outcomes/<int:outcome_id>/unlink-assessment/<int:relation_id>/', core_views.faculty_head_unlink_assessment_from_lo, name='faculty_head_unlink_assessment_from_lo'),
     path('faculty-head/learning-outcomes/<int:outcome_id>/update-percentage/<int:program_outcome_id>/', core_views.faculty_head_update_percentage, name='faculty_head_update_percentage'),
     path('faculty-head/announcements/', core_views.faculty_head_announcements, name='faculty-head-announcements'),
     path('faculty-head/announcements/<int:announcement_id>/mark-read/', core_views.mark_announcement_as_read, name='faculty_head_mark_announcement_read'),

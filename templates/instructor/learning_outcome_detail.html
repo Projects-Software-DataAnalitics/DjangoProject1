@@ -248,8 +248,11 @@
         <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Select Assessment to Link</h3>
         <div id="assessments-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-bottom: 20px; max-height: 400px; overflow-y: auto;">
         </div>
-        <div style="display: flex; justify-content: center; gap: 12px;">
-            <button id="close-add-assessment-btn" style="padding: 10px 20px; background: #6b7280; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+            <button id="link-selected-assessments-btn" style="padding: 10px 20px; background: #10b981; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; display: none;">
+                Link Selected
+            </button>
+            <button id="close-add-assessment-btn" style="padding: 10px 20px; background: #6b7280; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; margin-left: auto;">
                 Close
             </button>
         </div>
@@ -688,63 +691,116 @@
                         data.assessments.forEach(assessment => {
                             const card = document.createElement('div');
                             card.className = 'assessment-card';
-                            card.style.cssText = 'padding: 16px; border: 2px solid #e2e8f0; border-radius: 10px; background: #ffffff; cursor: pointer; transition: all 0.2s;';
+                            card.style.cssText = 'padding: 16px; border: 2px solid #e2e8f0; border-radius: 10px; background: #ffffff; transition: all 0.2s;';
                             card.innerHTML = `
-                                <p style="margin: 0; font-size: 14px; color: #1e293b; font-weight: 500;">${assessment.display_name}</p>
-                                <input type="number" class="assessment-percentage-input" data-assessment-id="${assessment.id}" min="0" max="100" step="1" placeholder="%" style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center; margin-top: 8px; display: none;">
-                                <button class="link-assessment-btn" data-assessment-id="${assessment.id}" data-course-name="${assessment.course_name}" data-assessment-type="${assessment.assessment_type}" data-assessment-type-label="${assessment.assessment_type_label || assessment.display_name}" style="display: none; margin-top: 8px; padding: 6px 12px; background: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Link</button>
+                                <div style="display: flex; align-items: start; gap: 12px;">
+                                    <input type="checkbox" class="assessment-checkbox" data-assessment-id="${assessment.id}" data-assessment-type="${assessment.assessment_type}" data-assessment-index="${assessment.assessment_index || 1}" style="margin-top: 2px; width: 18px; height: 18px; cursor: pointer; accent-color: #10b981; flex-shrink: 0;">
+                                    <div style="flex: 1;">
+                                        <p style="margin: 0 0 8px 0; font-size: 14px; color: #1e293b; font-weight: 500;">${assessment.display_name}</p>
+                                        <input type="number" class="assessment-percentage-input" data-assessment-id="${assessment.id}" min="0" max="100" step="1" placeholder="%" style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center; display: none;">
+                                    </div>
+                                </div>
                             `;
                             
-                            card.addEventListener('click', function(e) {
-                                if (e.target.classList.contains('link-assessment-btn') || e.target.classList.contains('assessment-percentage-input')) {
-                                    return;
-                                }
-                                const percentageInput = card.querySelector('.assessment-percentage-input');
-                                const linkBtn = card.querySelector('.link-assessment-btn');
-                                const isOpen = percentageInput.style.display !== 'none';
-                                
-                                if (isOpen) {
-                                    // Close: hide inputs and reset styling
-                                    percentageInput.style.display = 'none';
-                                    linkBtn.style.display = 'none';
-                                    card.style.borderColor = '#e2e8f0';
-                                    card.style.background = '#ffffff';
-                                    percentageInput.value = '';
-                                } else {
-                                    // Open: show inputs and highlight card
-                                    percentageInput.style.display = 'block';
-                                    linkBtn.style.display = 'block';
+                            const checkbox = card.querySelector('.assessment-checkbox');
+                            const percentageInput = card.querySelector('.assessment-percentage-input');
+                            
+                            checkbox.addEventListener('change', function() {
+                                if (this.checked) {
                                     card.style.borderColor = '#10b981';
                                     card.style.background = '#f0fdf4';
+                                    percentageInput.style.display = 'block';
                                     percentageInput.focus();
+                                    updateLinkButtonVisibility();
+                                } else {
+                                    card.style.borderColor = '#e2e8f0';
+                                    card.style.background = '#ffffff';
+                                    percentageInput.style.display = 'none';
+                                    percentageInput.value = '';
+                                    updateLinkButtonVisibility();
                                 }
                             });
                             
-                            const linkBtn = card.querySelector('.link-assessment-btn');
-                            linkBtn.addEventListener('click', function(e) {
-                                e.stopPropagation();
-                                const assessmentId = this.dataset.assessmentId;
+                            percentageInput.addEventListener('input', function() {
+                                updateLinkButtonVisibility();
+                            });
+                            
+                            assessmentsList.appendChild(card);
+                        });
+                        
+                        function updateLinkButtonVisibility() {
+                            const linkBtn = document.getElementById('link-selected-assessments-btn');
+                            const checkedBoxes = document.querySelectorAll('.assessment-checkbox:checked');
+                            let hasValidSelection = false;
+                            
+                            checkedBoxes.forEach(function(checkbox) {
+                                const card = checkbox.closest('.assessment-card');
+                                const percentageInput = card.querySelector('.assessment-percentage-input');
+                                const percentage = percentageInput.value.trim();
+                                if (percentage && !isNaN(parseInt(percentage)) && parseInt(percentage) >= 0 && parseInt(percentage) <= 100) {
+                                    hasValidSelection = true;
+                                }
+                            });
+                            
+                            if (checkedBoxes.length > 0 && hasValidSelection) {
+                                linkBtn.style.display = 'block';
+                            } else {
+                                linkBtn.style.display = 'none';
+                            }
+                        }
+                        
+                        const linkSelectedBtn = document.getElementById('link-selected-assessments-btn');
+                        linkSelectedBtn.addEventListener('click', function() {
+                            const checkedBoxes = document.querySelectorAll('.assessment-checkbox:checked');
+                            if (checkedBoxes.length === 0) {
+                                alert('Please select at least one assessment.');
+                                return;
+                            }
+                            
+                            const assessmentsToLink = [];
+                            let hasError = false;
+                            
+                            checkedBoxes.forEach(function(checkbox) {
+                                const card = checkbox.closest('.assessment-card');
                                 const percentageInput = card.querySelector('.assessment-percentage-input');
                                 const percentage = percentageInput.value.trim();
                                 
                                 if (!percentage) {
-                                    alert('Please enter a contribution percentage.');
+                                    alert('Please enter a contribution percentage for all selected assessments.');
                                     percentageInput.focus();
+                                    hasError = true;
                                     return;
                                 }
                                 
                                 const value = parseInt(percentage);
                                 if (isNaN(value) || value < 0 || value > 100) {
-                                    alert('Percentage must be between 0 and 100.');
+                                    alert('Percentage must be between 0 and 100 for all selected assessments.');
                                     percentageInput.focus();
+                                    hasError = true;
                                     return;
                                 }
                                 
-                                const assessmentType = this.dataset.assessmentType;
+                                assessmentsToLink.push({
+                                    assessment_id: checkbox.dataset.assessmentId,
+                                    assessment_type: checkbox.dataset.assessmentType,
+                                    assessment_index: checkbox.dataset.assessmentIndex || '1',
+                                    percentage: value
+                                });
+                            });
+                            
+                            if (hasError) {
+                                return;
+                            }
+                            
+                            let completed = 0;
+                            let failed = false;
+                            
+                            assessmentsToLink.forEach(function(assessment) {
                                 const formData = new FormData();
-                                formData.append('assessment_id', assessmentId);
-                                formData.append('assessment_type', assessmentType);
-                                formData.append('percentage', value);
+                                formData.append('assessment_id', assessment.assessment_id);
+                                formData.append('assessment_type', assessment.assessment_type);
+                                formData.append('assessment_index', assessment.assessment_index);
+                                formData.append('percentage', assessment.percentage);
                                 
                                 fetch(`/instructor/learning-outcomes/${outcomeId}/link-assessment/`, {
                                     method: 'POST',
@@ -755,18 +811,26 @@
                                 })
                                 .then(response => response.json())
                                 .then(data => {
-                                    if (data.status === 'success') {
-                                        location.reload();
-                                    } else {
-                                        alert(data.message || 'Failed to link assessment.');
+                                    completed++;
+                                    if (data.status !== 'success') {
+                                        failed = true;
+                                    }
+                                    if (completed === assessmentsToLink.length) {
+                                        if (failed) {
+                                            alert('Some assessments failed to link. Please try again.');
+                                        } else {
+                                            location.reload();
+                                        }
                                     }
                                 })
                                 .catch(error => {
-                                    alert('Error linking assessment. Please try again.');
+                                    completed++;
+                                    failed = true;
+                                    if (completed === assessmentsToLink.length) {
+                                        alert('Error linking assessments. Please try again.');
+                                    }
                                 });
                             });
-                            
-                            assessmentsList.appendChild(card);
                         });
                     } else {
                         assessmentsList.innerHTML = '<p style="text-align: center; color: #64748b; padding: 20px;">No available assessments to link.</p>';
@@ -792,7 +856,6 @@
             });
         }
         
-        // Edit/Delete assessment percentage handlers
         const isFacultyHead = mainContainer ? mainContainer.getAttribute('data-is-faculty-head') === 'true' : false;
         if (!isFacultyHead) {
             document.querySelectorAll('.edit-assessment-percentage-btn').forEach(btn => {

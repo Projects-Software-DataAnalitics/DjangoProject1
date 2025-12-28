@@ -32,8 +32,6 @@ def get_instructors_map():
         else:
             instructors_map[user.username] = user.username
     
-    # Cache'e kaydet (1 saat)
-    # TODO: Cache invalidation - When User/Profile/Student is updated, call:
     cache.set(cache_key, instructors_map, 3600)
     return instructors_map
 
@@ -54,8 +52,6 @@ def get_faculty_heads_map():
         else:
             faculty_heads_map[user.username] = user.username
     
-    # Cache'e kaydet (1 saat)
-    # TODO: Cache invalidation - When User/Profile is updated, call:
     cache.set(cache_key, faculty_heads_map, 3600)
     return faculty_heads_map
 
@@ -4472,16 +4468,37 @@ def get_existing_learning_outcomes(request):
         
         outcomes_qs = ProgramOutcome.objects.filter(
             course_name__in=all_course_names
-        ).exclude(course_name='').select_related('created_by').order_by('-created_at', 'course_name')
+        ).exclude(course_name='').select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at', 'course_name')
         
+        from .models import LearningOutcomeProgramOutcome
         learning_outcomes = []
         for outcome in outcomes_qs:
+            # Get linked program outcomes with percentages
+            linked_program_outcomes = []
+            related_pos = outcome.related_program_outcomes.all()
+            for po in related_pos:
+                try:
+                    lo_po = LearningOutcomeProgramOutcome.objects.get(
+                        learning_outcome=outcome,
+                        program_outcome=po
+                    )
+                    percentage = lo_po.percentage
+                except LearningOutcomeProgramOutcome.DoesNotExist:
+                    percentage = 0
+                
+                linked_program_outcomes.append({
+                    'id': po.id,
+                    'text': po.text,
+                    'percentage': percentage
+                })
+            
             learning_outcomes.append({
                 'id': outcome.id,
                 'text': outcome.text,
                 'course_name': outcome.course_name,
                 'created_by': outcome.created_by.get_full_name() or outcome.created_by.username,
                 'created_at': outcome.created_at.strftime('%Y-%m-%d %H:%M'),
+                'linked_program_outcomes': linked_program_outcomes
             })
         
         return JsonResponse({'learning_outcomes': learning_outcomes})
@@ -4963,35 +4980,17 @@ def get_available_assessments(request, outcome_id):
     
     from .models import Assessment, AssessmentLORelation, Course
     
-    course = Course.objects.filter(name__iexact=outcome.course_name, instructor=instructor_user).first()
-    if not course:
-        profile = getattr(instructor_user, 'profile', None)
-        if profile:
-            course = profile.courses.filter(name__iexact=outcome.course_name).first()
-        if not course:
-            course = instructor_user.instructor_courses.filter(name__iexact=outcome.course_name).first()
+    instructor_courses = Course.objects.filter(instructor=instructor_user)
+    profile = getattr(instructor_user, 'profile', None)
+    if profile:
+        profile_courses = profile.courses.all()
+        instructor_courses = instructor_courses.union(profile_courses)
     
-    if not course:
-        return JsonResponse({'assessments': [], 'error': 'Course not found'})
+    instructor_course_ids = instructor_courses.values_list('id', flat=True)
+    assessments = Assessment.objects.filter(course_id__in=instructor_course_ids).select_related('course')
     
-    try:
-        assessment = Assessment.objects.get(course=course)
-    except Assessment.DoesNotExist:
-        return JsonResponse({'assessments': [], 'error': 'No assessment configuration found for this course'})
-    except Assessment.MultipleObjectsReturned:
-        assessment = Assessment.objects.filter(course=course).first()
-    
-    linked_assessment_ids = AssessmentLORelation.objects.filter(
-        learning_outcome=outcome
-    ).values_list('assessment_id', flat=True)
-    
-    if assessment.id in linked_assessment_ids:
-        assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
-        all_types_linked = True
-        for atype in assessment_types:
-            count = getattr(assessment, atype, 0)
-            if count > 0:
-                pass
+    if not assessments.exists():
+        return JsonResponse({'assessments': [], 'error': 'No assessments found for your courses'})
     
     assessments_list = []
     assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
@@ -5004,24 +5003,47 @@ def get_available_assessments(request, outcome_id):
         'quiz': 'Quiz'
     }
     
-    linked_assessment_types = set(
-        AssessmentLORelation.objects.filter(
-            assessment=assessment,
-            learning_outcome=outcome
-        ).values_list('assessment_type', flat=True)
-    )
+    # Get already linked assessment relations for this learning outcome
+    linked_relations = AssessmentLORelation.objects.filter(
+        learning_outcome=outcome
+    ).select_related('assessment')
     
-    for atype in assessment_types:
-        count = getattr(assessment, atype, 0)
-        if count > 0 and atype not in linked_assessment_types:
-            label = assessment_type_labels[atype]
-            assessments_list.append({
-                'id': assessment.id,
-                'course_name': course.name,
-                'assessment_type': atype,  
-                'assessment_type_label': label,
-                'display_name': label 
-            })
+    # Create a set of (assessment_id, assessment_type, assessment_index) tuples for quick lookup
+    linked_set = set()
+    for rel in linked_relations:
+        linked_set.add((rel.assessment.id, rel.assessment_type, rel.assessment_index))
+    
+    # Process each assessment
+    for assessment in assessments:
+        course = assessment.course
+        for atype in assessment_types:
+            count = getattr(assessment, atype, 0)
+            if count > 0:
+                label = assessment_type_labels[atype]
+                # If count > 1, create multiple entries with numbered display names
+                if count > 1:
+                    for i in range(1, count + 1):
+                        # Only add if this (assessment, type, index) is not already linked
+                        if (assessment.id, atype, i) not in linked_set:
+                            assessments_list.append({
+                                'id': assessment.id,
+                                'course_name': course.name,
+                                'assessment_type': atype,  
+                                'assessment_type_label': label,
+                                'display_name': f'{course.name} - {label} {i}',
+                                'assessment_index': i
+                            })
+                else:
+                    # Single assessment - index is always 1
+                    if (assessment.id, atype, 1) not in linked_set:
+                        assessments_list.append({
+                            'id': assessment.id,
+                            'course_name': course.name,
+                            'assessment_type': atype,  
+                            'assessment_type_label': label,
+                            'display_name': f'{course.name} - {label}',
+                            'assessment_index': 1
+                        })
     
     return JsonResponse({'assessments': assessments_list})
 
@@ -5037,6 +5059,7 @@ def link_assessment_to_lo(request, outcome_id):
         assessment_id = request.POST.get('assessment_id', '').strip()
         assessment_type = request.POST.get('assessment_type', '').strip()
         percentage_value = request.POST.get('percentage', '').strip()
+        assessment_index_str = request.POST.get('assessment_index', '1').strip()
         
         if not assessment_id:
             return JsonResponse({'status': 'error', 'message': 'Assessment ID is required.'}, status=400)
@@ -5058,19 +5081,56 @@ def link_assessment_to_lo(request, outcome_id):
         except (ValueError, TypeError):
             return JsonResponse({'status': 'error', 'message': 'Invalid percentage value.'}, status=400)
         
+        try:
+            assessment_index = int(assessment_index_str)
+            if assessment_index < 1:
+                return JsonResponse({'status': 'error', 'message': 'Assessment index must be at least 1.'}, status=400)
+        except (ValueError, TypeError):
+            assessment_index = 1  # Default to 1 if not provided or invalid
+        
         from .models import Assessment, AssessmentLORelation
+        from django.db import transaction
         assessment = get_object_or_404(Assessment, id=assessment_id)
         
-        relation, created = AssessmentLORelation.objects.get_or_create(
-            assessment=assessment,
-            learning_outcome=outcome,
-            assessment_type=assessment_type,
-            defaults={'contribution_percentage': percentage}
-        )
-        
-        if not created:
-            relation.contribution_percentage = percentage
-            relation.save()
+        with transaction.atomic():
+            # Link assessment to learning outcome
+            relation, created = AssessmentLORelation.objects.get_or_create(
+                assessment=assessment,
+                learning_outcome=outcome,
+                assessment_type=assessment_type,
+                assessment_index=assessment_index,
+                defaults={'contribution_percentage': percentage}
+            )
+            
+            if not created:
+                relation.contribution_percentage = percentage
+                relation.save()
+            
+            # If assessment's course is different from LO's course, add LO to assessment's course
+            if assessment.course.name != outcome.course_name:
+                # Check if LO with same text already exists in assessment's course
+                existing_lo = ProgramOutcome.objects.filter(
+                    text=outcome.text,
+                    course_name=assessment.course.name
+                ).first()
+                
+                if not existing_lo:
+                    # Create new LO in assessment's course
+                    new_lo = ProgramOutcome.objects.create(
+                        text=outcome.text,
+                        course_name=assessment.course.name,
+                        created_by=outcome.created_by,
+                        faculty=outcome.faculty
+                    )
+                    
+                    # Copy linked program outcomes to new LO
+                    from .models import LearningOutcomeProgramOutcome
+                    for lo_po in LearningOutcomeProgramOutcome.objects.filter(learning_outcome=outcome):
+                        LearningOutcomeProgramOutcome.objects.get_or_create(
+                            learning_outcome=new_lo,
+                            program_outcome=lo_po.program_outcome,
+                            defaults={'percentage': lo_po.percentage}
+                        )
         
         return JsonResponse({
             'status': 'success',
@@ -5078,6 +5138,7 @@ def link_assessment_to_lo(request, outcome_id):
             'relation_id': relation.id,
             'course_name': assessment.course.name,
             'assessment_type': assessment_type,
+            'assessment_index': assessment_index,
             'percentage': percentage
         })
     
@@ -5140,20 +5201,37 @@ def faculty_head_get_available_assessments(request, outcome_id):
     
     from .models import Assessment, AssessmentLORelation, Course
     
-    course = Course.objects.filter(name__iexact=outcome.course_name).first()
-    if not course:
-        return JsonResponse({'assessments': [], 'error': 'Course not found'})
+    # Get faculty head's department
+    faculty_head_data = get_faculty_head_data(request.user.username)
+    faculty_head_department = faculty_head_data.get('department')
     
+    # Get all courses for this faculty head (by department or by profile)
+    faculty_head_courses = Course.objects.none()
+    if faculty_head_department:
+        faculty_head_courses = Course.objects.filter(department=faculty_head_department)
     if profile:
-        if not profile.courses.filter(id=course.id).exists():
-            profile.courses.add(course)
+        profile_courses = profile.courses.all()
+        if faculty_head_courses.exists():
+            faculty_head_courses = faculty_head_courses.union(profile_courses)
+        else:
+            faculty_head_courses = profile_courses
     
-    try:
-        assessment = Assessment.objects.get(course=course)
-    except Assessment.DoesNotExist:
-        return JsonResponse({'assessments': [], 'error': 'No assessment configuration found for this course'})
-    except Assessment.MultipleObjectsReturned:
-        assessment = Assessment.objects.filter(course=course).first()
+    # Also include courses where faculty head is the instructor
+    instructor_courses = Course.objects.filter(instructor=request.user)
+    if faculty_head_courses.exists():
+        faculty_head_courses = faculty_head_courses.union(instructor_courses)
+    else:
+        faculty_head_courses = instructor_courses
+    
+    if not faculty_head_courses.exists():
+        return JsonResponse({'assessments': [], 'error': 'No courses found'})
+    
+    # Get all assessments for faculty head's courses
+    faculty_head_course_ids = faculty_head_courses.values_list('id', flat=True)
+    assessments = Assessment.objects.filter(course_id__in=faculty_head_course_ids).select_related('course')
+    
+    if not assessments.exists():
+        return JsonResponse({'assessments': [], 'error': 'No assessments found for your courses'})
     
     assessments_list = []
     assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
@@ -5166,24 +5244,47 @@ def faculty_head_get_available_assessments(request, outcome_id):
         'quiz': 'Quiz'
     }
     
-    linked_assessment_types = set(
-        AssessmentLORelation.objects.filter(
-            assessment=assessment,
-            learning_outcome=outcome
-        ).values_list('assessment_type', flat=True)
-    )
+    # Get already linked assessment relations for this learning outcome
+    linked_relations = AssessmentLORelation.objects.filter(
+        learning_outcome=outcome
+    ).select_related('assessment')
     
-    for atype in assessment_types:
-        count = getattr(assessment, atype, 0)
-        if count > 0 and atype not in linked_assessment_types:
-            label = assessment_type_labels[atype]
-            assessments_list.append({
-                'id': assessment.id,
-                'course_name': course.name,
-                'assessment_type': atype,  
-                'assessment_type_label': label,
-                'display_name': label 
-            })
+    # Create a set of (assessment_id, assessment_type, assessment_index) tuples for quick lookup
+    linked_set = set()
+    for rel in linked_relations:
+        linked_set.add((rel.assessment.id, rel.assessment_type, rel.assessment_index))
+    
+    # Process each assessment
+    for assessment in assessments:
+        course = assessment.course
+        for atype in assessment_types:
+            count = getattr(assessment, atype, 0)
+            if count > 0:
+                label = assessment_type_labels[atype]
+                # If count > 1, create multiple entries with numbered display names
+                if count > 1:
+                    for i in range(1, count + 1):
+                        # Only add if this (assessment, type, index) is not already linked
+                        if (assessment.id, atype, i) not in linked_set:
+                            assessments_list.append({
+                                'id': assessment.id,
+                                'course_name': course.name,
+                                'assessment_type': atype,  
+                                'assessment_type_label': label,
+                                'display_name': f'{course.name} - {label} {i}',
+                                'assessment_index': i
+                            })
+                else:
+                    # Single assessment - index is always 1
+                    if (assessment.id, atype, 1) not in linked_set:
+                        assessments_list.append({
+                            'id': assessment.id,
+                            'course_name': course.name,
+                            'assessment_type': atype,  
+                            'assessment_type_label': label,
+                            'display_name': f'{course.name} - {label}',
+                            'assessment_index': 1
+                        })
     
     return JsonResponse({'assessments': assessments_list})
 
@@ -5199,6 +5300,7 @@ def faculty_head_link_assessment_to_lo(request, outcome_id):
         assessment_id = request.POST.get('assessment_id', '').strip()
         assessment_type = request.POST.get('assessment_type', '').strip()
         percentage_value = request.POST.get('percentage', '').strip()
+        assessment_index_str = request.POST.get('assessment_index', '1').strip()
         
         if not assessment_id:
             return JsonResponse({'status': 'error', 'message': 'Assessment ID is required.'}, status=400)
@@ -5220,19 +5322,59 @@ def faculty_head_link_assessment_to_lo(request, outcome_id):
         except (ValueError, TypeError):
             return JsonResponse({'status': 'error', 'message': 'Invalid percentage value.'}, status=400)
         
+        try:
+            assessment_index = int(assessment_index_str)
+            if assessment_index < 1:
+                return JsonResponse({'status': 'error', 'message': 'Assessment index must be at least 1.'}, status=400)
+        except (ValueError, TypeError):
+            assessment_index = 1  # Default to 1 if not provided or invalid
+        
         from .models import Assessment, AssessmentLORelation
+        from django.db import transaction
         assessment = get_object_or_404(Assessment, id=assessment_id)
         
-        relation, created = AssessmentLORelation.objects.get_or_create(
-            assessment=assessment,
-            learning_outcome=outcome,
-            assessment_type=assessment_type,
-            defaults={'contribution_percentage': percentage}
-        )
-        
-        if not created:
-            relation.contribution_percentage = percentage
-            relation.save()
+        with transaction.atomic():
+            # Link assessment to learning outcome
+            relation, created = AssessmentLORelation.objects.get_or_create(
+                assessment=assessment,
+                learning_outcome=outcome,
+                assessment_type=assessment_type,
+                assessment_index=assessment_index,
+                defaults={'contribution_percentage': percentage}
+            )
+            
+            if not created:
+                relation.contribution_percentage = percentage
+                relation.save()
+            
+            # If assessment's course is different from LO's course, add LO to assessment's course
+            if assessment.course.name != outcome.course_name:
+                # Check if LO with same text already exists in assessment's course
+                existing_lo = ProgramOutcome.objects.filter(
+                    text=outcome.text,
+                    course_name=assessment.course.name
+                ).first()
+                
+                if not existing_lo:
+                    # Get faculty from profile if available
+                    faculty = profile.faculty if profile else outcome.faculty
+                    
+                    # Create new LO in assessment's course
+                    new_lo = ProgramOutcome.objects.create(
+                        text=outcome.text,
+                        course_name=assessment.course.name,
+                        created_by=outcome.created_by,
+                        faculty=faculty
+                    )
+                    
+                    # Copy linked program outcomes to new LO
+                    from .models import LearningOutcomeProgramOutcome
+                    for lo_po in LearningOutcomeProgramOutcome.objects.filter(learning_outcome=outcome):
+                        LearningOutcomeProgramOutcome.objects.get_or_create(
+                            learning_outcome=new_lo,
+                            program_outcome=lo_po.program_outcome,
+                            defaults={'percentage': lo_po.percentage}
+                        )
         
         return JsonResponse({
             'status': 'success',
@@ -5240,8 +5382,56 @@ def faculty_head_link_assessment_to_lo(request, outcome_id):
             'relation_id': relation.id,
             'course_name': assessment.course.name,
             'assessment_type': assessment_type,
+            'assessment_index': assessment_index,
             'percentage': percentage
         })
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+
+@faculty_head_required
+def faculty_head_update_assessment_lo_percentage(request, outcome_id, relation_id):
+    from django.http import JsonResponse
+    profile = getattr(request.user, 'profile', None)
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name__isnull=False)
+    
+    if request.method == 'POST':
+        percentage_value = request.POST.get('percentage', '').strip()
+        
+        if not percentage_value:
+            return JsonResponse({'status': 'error', 'message': 'Contribution percentage is required.'}, status=400)
+        
+        try:
+            percentage = int(percentage_value)
+            if percentage < 0 or percentage > 100:
+                return JsonResponse({'status': 'error', 'message': 'Percentage must be between 0 and 100.'}, status=400)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid percentage value.'}, status=400)
+        
+        from .models import AssessmentLORelation
+        relation = get_object_or_404(AssessmentLORelation, id=relation_id, learning_outcome=outcome)
+        
+        relation.contribution_percentage = percentage
+        relation.save()
+        
+        return JsonResponse({'status': 'success', 'message': 'Percentage updated successfully.', 'percentage': percentage})
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+
+@faculty_head_required
+def faculty_head_unlink_assessment_from_lo(request, outcome_id, relation_id):
+    """Unlink an assessment from a learning outcome (for faculty head)"""
+    from django.http import JsonResponse
+    profile = getattr(request.user, 'profile', None)
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name__isnull=False)
+    
+    if request.method == 'POST':
+        from .models import AssessmentLORelation
+        relation = get_object_or_404(AssessmentLORelation, id=relation_id, learning_outcome=outcome)
+        relation.delete()
+        
+        return JsonResponse({'status': 'success', 'message': 'Assessment unlinked successfully.'})
     
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
 
@@ -6753,14 +6943,51 @@ def faculty_head_department_graph(request):
     
     # Get learning outcomes for all courses in the department
     learning_outcomes_list = []
+    assessments_list = []
+    assessment_type_labels = {
+        'midterm': 'Midterm',
+        'final': 'Final',
+        'project': 'Project',
+        'assignment': 'Assignment',
+        'absence': 'Absence',
+        'quiz': 'Quiz'
+    }
+    
     if course_names:
+        from .models import AssessmentLORelation
         learning_outcomes_qs = ProgramOutcome.objects.filter(
             course_name__in=course_names
-        ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('course_name', 'created_at')
+        ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('text', 'course_name', 'created_at')
         
+        # Group learning outcomes by text (same LO in different courses)
+        lo_groups = {}
         for lo in learning_outcomes_qs:
-            # Get linked program outcomes with percentages
-            linked_pos = []
+            lo_text = lo.text.strip()
+            if lo_text not in lo_groups:
+                lo_groups[lo_text] = {
+                    'ids': [],
+                    'courses': [],
+                    'linked_pos_dict': {},  # po_id -> {percentage, text}
+                    'linked_assessments': []
+                }
+            
+            lo_groups[lo_text]['ids'].append(lo.id)
+            if lo.course_name and lo.course_name not in lo_groups[lo_text]['courses']:
+                lo_groups[lo_text]['courses'].append(lo.course_name)
+        
+        all_lo_ids = [lo_id for group in lo_groups.values() for lo_id in group['ids']]
+        assessment_relations_for_all_los = AssessmentLORelation.objects.filter(
+            learning_outcome_id__in=all_lo_ids
+        ).select_related('assessment', 'assessment__course', 'learning_outcome')
+        
+        for rel in assessment_relations_for_all_los:
+            lo_text = rel.learning_outcome.text.strip()
+            assessment_course = rel.assessment.course.name
+            
+            if lo_text in lo_groups and assessment_course in course_names:
+                if assessment_course not in lo_groups[lo_text]['courses']:
+                    lo_groups[lo_text]['courses'].append(assessment_course)
+            
             related_pos = lo.related_program_outcomes.all()
             for po in related_pos:
                 try:
@@ -6772,17 +6999,85 @@ def faculty_head_department_graph(request):
                 except LearningOutcomeProgramOutcome.DoesNotExist:
                     percentage = 0
                 
-                linked_pos.append({
-                    'id': po.id,
-                    'text': po.text,
-                    'percentage': percentage
+                # Use maximum percentage if same PO is linked with different percentages
+                if po.id not in lo_groups[lo_text]['linked_pos_dict']:
+                    lo_groups[lo_text]['linked_pos_dict'][po.id] = {
+                        'id': po.id,
+                        'text': po.text,
+                        'percentage': percentage
+                    }
+                else:
+                    # Keep maximum percentage
+                    lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'] = max(
+                        lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'],
+                        percentage
+                    )
+            
+            # Get linked assessments (merge from all instances)
+            assessment_relations = AssessmentLORelation.objects.filter(
+                learning_outcome=lo
+            ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
+            
+            for rel in assessment_relations:
+                assessment = rel.assessment
+                course_obj = assessment.course
+                assessment_type_key = rel.assessment_type
+                assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
+                
+                # Create display name with index if needed
+                if rel.assessment_index > 1:
+                    display_name = f"{assessment_type_label} {rel.assessment_index}"
+                else:
+                    display_name = assessment_type_label
+                
+                # Use the first LO ID from the group for linking
+                group_lo_id = lo_groups[lo_text]['ids'][0]
+                
+                lo_groups[lo_text]['linked_assessments'].append({
+                    'id': assessment.id,
+                    'course_name': course_obj.name,
+                    'assessment_type': display_name,
+                    'assessment_type_key': assessment_type_key,
+                    'contribution_percentage': rel.contribution_percentage,
+                    'relation_id': rel.id,
+                    'lo_id': group_lo_id
                 })
+                
+                # Add to global assessments list if not already there
+                assessment_exists = any(
+                    a['id'] == assessment.id and 
+                    a['course_name'] == course_obj.name and 
+                    a['assessment_type'] == display_name and
+                    a['lo_id'] == group_lo_id
+                    for a in assessments_list
+                )
+                if not assessment_exists:
+                    assessments_list.append({
+                        'id': assessment.id,
+                        'course_name': course_obj.name,
+                        'assessment_type': display_name,
+                        'contribution_percentage': rel.contribution_percentage,
+                        'lo_id': group_lo_id
+                    })
+        
+        # Convert grouped data to list format
+        for lo_text, group_data in lo_groups.items():
+            # Sort courses alphabetically
+            sorted_courses = sorted(group_data['courses'])
+            # Join course names with " - "
+            course_display = " - ".join(sorted_courses)
+            
+            # Convert linked_pos_dict to list
+            linked_pos_list = list(group_data['linked_pos_dict'].values())
             
             learning_outcomes_list.append({
-                'id': lo.id,
-                'text': lo.text,
-                'course': lo.course_name,
-                'linked_pos': linked_pos
+                'id': group_data['ids'][0],  # Use first ID as primary
+                'ids': group_data['ids'],  # Keep all IDs for reference
+                'text': lo_text,
+                'course': course_display,  # Combined course names
+                'courses': sorted_courses,  # Individual course names
+                'linked_pos': linked_pos_list,
+                'linked_assessments': group_data['linked_assessments']
             })
     
     # Get program outcomes for the faculty
@@ -6820,6 +7115,9 @@ def faculty_head_department_graph(request):
         'data': [c['students'] for c in course_data],
     }
     
+    # Prepare JSON data for learning outcomes (to avoid template syntax in JavaScript)
+    learning_outcomes_json = json.dumps(learning_outcomes_list)
+    
     return render(request, 'faculty/department_graph.html', {
         'department': faculty_head_department,
         'total_courses': total_courses,
@@ -6828,5 +7126,7 @@ def faculty_head_department_graph(request):
         'chart_data': chart_data,
         'chart_data_json': json.dumps(chart_data),
         'learning_outcomes': learning_outcomes_list,
+        'learning_outcomes_json': learning_outcomes_json,
         'program_outcomes': program_outcomes_list,
+        'assessments_data': assessments_list,
     })

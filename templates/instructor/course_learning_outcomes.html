@@ -225,7 +225,6 @@
                     const inputField = percentageInput.querySelector('input');
                     if (inputField) {
                         inputField.value = '';
-                        // Small delay to ensure the input is visible before focusing
                         setTimeout(function() {
                             inputField.focus();
                         }, 50);
@@ -256,7 +255,6 @@
             const hasSelectedProgramOutcome = document.querySelectorAll('.program-outcome-checkbox:checked').length > 0;
             
             if (hasProgramOutcomes && hasSelectedProgramOutcome) {
-                // Check if all selected PO's have percentage entered
                 const checkedBoxes = document.querySelectorAll('.program-outcome-checkbox:checked');
                 let allPercentagesEntered = true;
                 for (let checkbox of checkedBoxes) {
@@ -278,7 +276,6 @@
                     saveBtn.style.cursor = 'not-allowed';
                 }
             } else {
-                // LO can be created without PO - enable save button
                 saveBtn.disabled = false;
                 saveBtn.style.background = '#3b82f6';
                 saveBtn.style.cursor = 'pointer';
@@ -304,7 +301,6 @@
                 const cancelFormBtn = document.getElementById("cancel-form-btn");
                 const createForm = document.getElementById("create-outcome-form");
 
-                // Hide form container by default if no error message
                 if (createFormContainer && createFormContainer.getAttribute('data-has-error') === 'false') {
                     createFormContainer.style.display = 'none';
                 }
@@ -327,7 +323,6 @@
                     });
                 }
 
-                // Select From Existing button handler
                 const selectExistingBtn = document.getElementById("select-existing-btn");
                 console.log('Select existing button found:', selectExistingBtn);
                 if (selectExistingBtn) {
@@ -384,7 +379,6 @@
                     errorDiv.style.display = 'none';
                     listDiv.innerHTML = '';
 
-                    // Get CSRF token
                     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
                     const csrfValue = csrfToken ? csrfToken.value : '';
 
@@ -418,7 +412,6 @@
                             return;
                         }
 
-                        // Display learning outcomes
                         listDiv.style.display = 'block';
                         data.learning_outcomes.forEach(function(outcome) {
                             const outcomeItem = document.createElement('div');
@@ -441,18 +434,39 @@
                                 this.style.boxShadow = 'none';
                             });
                             outcomeItem.addEventListener('click', function() {
-                                // Populate the form with selected learning outcome
                                 const outcomeTextArea = document.getElementById('outcome-text');
                                 if (outcomeTextArea) {
                                     outcomeTextArea.value = outcome.text;
                                 }
-                                // Show the create form if hidden
+                                
+                                document.querySelectorAll('.program-outcome-checkbox').forEach(function(checkbox) {
+                                    checkbox.checked = false;
+                                    handlePOSelection(checkbox);
+                                });
+                                
+                                if (outcome.linked_program_outcomes && outcome.linked_program_outcomes.length > 0) {
+                                    outcome.linked_program_outcomes.forEach(function(linkedPo) {
+                                        const checkbox = document.querySelector(`.program-outcome-checkbox[data-po-id="${linkedPo.id}"]`);
+                                        if (checkbox) {
+                                            checkbox.checked = true;
+                                            handlePOSelection(checkbox);
+                                            
+                                            const percentageInput = document.querySelector(`input[name="po_percentage_${linkedPo.id}"]`);
+                                            if (percentageInput && linkedPo.percentage) {
+                                                percentageInput.value = linkedPo.percentage;
+                                            }
+                                        }
+                                    });
+                                }
+                                
                                 if (createFormContainer) {
                                     createFormContainer.style.display = 'block';
                                 }
-                                // Close modal
+                                
+                                updateSaveButtonState();
+                                
                                 existingModal.style.display = 'none';
-                                // Focus on textarea
+                                
                                 if (outcomeTextArea) {
                                     outcomeTextArea.focus();
                                 }

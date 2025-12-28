@@ -38,7 +38,6 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     faculty = models.ForeignKey(Faculty, null=True, blank=True, on_delete=models.SET_NULL)
     department = models.CharField(max_length=200, blank=True)
-    # NOTE: Secondary course relationship - see docstring above
     courses = models.ManyToManyField('Course', blank=True, related_name='user_profiles')
 
     def __str__(self):
@@ -76,13 +75,8 @@ class Course(models.Model):
     
     NOTE: Model-level uniqueness constraint is required to enforce this assumption.
     """
-    name = models.CharField(max_length=100, unique=True)  # CRITICAL: Must be unique system-wide
+    name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=20, blank=True)
-    # NOTE: Course-Instructor relationship is stored in multiple places:
-    # 1. Course.instructor (ForeignKey) - Primary source of truth
-    # 2. UserProfile.courses (ManyToMany) - Secondary relationship
-    # 3. User.instructor_courses (reverse ForeignKey) - Derived from Course.instructor
-    # This creates potential synchronization issues but is acceptable for academic purposes.
     instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='instructor_courses')
     department = models.CharField(max_length=200, blank=True)
     credits = models.IntegerField(null=True, blank=True)
@@ -497,6 +491,10 @@ class AssessmentLORelation(models.Model):
         default='midterm',
         help_text="Type of assessment (midterm, final, project, etc.)"
     )
+    assessment_index = models.IntegerField(
+        default=1,
+        help_text="Index of the assessment (1, 2, 3, etc.) - used to match with assessment_scores (e.g., midterm_1, midterm_2)"
+    )
     contribution_percentage = models.IntegerField(
         default=0, 
         validators=[MinValueValidator(0), MaxValueValidator(100)],
@@ -505,7 +503,7 @@ class AssessmentLORelation(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['assessment', 'learning_outcome', 'assessment_type'], name='unique_assessment_lo_type')
+            models.UniqueConstraint(fields=['assessment', 'learning_outcome', 'assessment_type', 'assessment_index'], name='unique_assessment_lo_type_index')
         ]
     
     def __str__(self):
