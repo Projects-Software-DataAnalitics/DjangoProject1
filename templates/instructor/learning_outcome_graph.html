@@ -10,11 +10,19 @@
         
         .graph-container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 135px;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 100px;
             height: 100%;
             position: relative;
             min-height: 500px;
+        }
+        
+        .assessment-column {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
         }
         
         .lo-column {
@@ -33,13 +41,37 @@
             position: relative;
         }
         
+        .assessment-cards-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            width: 100%;
+            max-width: 350px;
+            justify-content: center;
+        }
+        
         .po-cards-wrapper {
             display: flex;
             flex-direction: column;
             gap: 24px;
             width: 100%;
-            max-width: 400px;
+            max-width: 350px;
             justify-content: center;
+        }
+        
+        .assessment-card {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
+            color: #ffffff;
+            padding: 20px 28px;
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(245, 158, 11, 0.15), 0 8px 25px rgba(245, 158, 11, 0.1);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .assessment-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 25px 60px rgba(245, 158, 11, 0.2), 0 12px 30px rgba(245, 158, 11, 0.15);
         }
         
         .lo-card {
@@ -48,7 +80,7 @@
             padding: 28px 36px;
             border-radius: 24px;
             box-shadow: 0 25px 60px rgba(59, 130, 246, 0.15), 0 10px 30px rgba(59, 130, 246, 0.1);
-            max-width: 400px;
+            max-width: 350px;
             width: 100%;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -72,6 +104,10 @@
         .po-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 30px 70px rgba(16, 185, 129, 0.2), 0 15px 35px rgba(16, 185, 129, 0.15);
+        }
+        
+        .section-title.assessment-title {
+            color: #f59e0b;
         }
         
         .card-text {
@@ -118,13 +154,14 @@
             opacity: 0.6;
         }
         
-        @media (max-width: 768px) {
+        @media (max-width: 1200px) {
             .graph-container {
                 grid-template-columns: 1fr;
                 gap: 40px;
                 min-height: auto;
             }
             
+            .assessment-column,
             .lo-column,
             .po-column {
                 justify-content: flex-start;
@@ -178,10 +215,27 @@
         
         <!-- Graph Mode -->
         <div id="graph-mode">
-            {% if program_outcomes %}
+            {% if assessments_data or program_outcomes %}
             <div style="background: #f8fafc; padding: 48px; border-radius: 16px; min-height: 500px; position: relative;">
                 <div class="graph-container">
-                    <!-- Left Column: Learning Outcome -->
+                    <!-- Left Column: Assessment Tools -->
+                    <div class="assessment-column">
+                        <h3 class="section-title assessment-title">Assessment Tools</h3>
+                        <div class="assessment-cards-wrapper">
+                            {% if assessments_data %}
+                                {% for assessment in assessments_data %}
+                                <div class="assessment-card" data-assessment-id="{{ assessment.id }}" data-percentage="{{ assessment.contribution_percentage|default:0 }}">
+                                    <p class="card-text" style="font-size: 14px; margin-bottom: 4px; opacity: 0.9;">{{ assessment.course_name }}</p>
+                                    <p class="card-text" style="font-size: 16px; font-weight: 600;">{{ assessment.assessment_type }}</p>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p style="text-align: center; color: #64748b; font-size: 14px; padding: 20px;">No assessments linked</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Middle Column: Learning Outcome -->
                     <div class="lo-column">
                         <h3 class="section-title lo-title">Learning Outcome</h3>
                         <div id="lo-card" class="lo-card">
@@ -193,11 +247,15 @@
                     <div class="po-column">
                         <h3 class="section-title po-title">Program Outcomes</h3>
                         <div class="po-cards-wrapper">
-                            {% for po in program_outcomes %}
-                            <div class="po-card" data-po-id="{{ po.id }}" data-percentage="{{ po.percentage|default:0 }}">
-                                <p class="card-text">{{ po.text }}</p>
-                            </div>
-                            {% endfor %}
+                            {% if program_outcomes %}
+                                {% for po in program_outcomes %}
+                                <div class="po-card" data-po-id="{{ po.id }}" data-percentage="{{ po.percentage|default:0 }}">
+                                    <p class="card-text">{{ po.text }}</p>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p style="text-align: center; color: #64748b; font-size: 14px; padding: 20px;">No program outcomes linked</p>
+                            {% endif %}
                         </div>
                     </div>
                     
@@ -214,7 +272,7 @@
             {% else %}
             <div style="background: #f8fafc; padding: 40px; border-radius: 12px; text-align: center; border: 1px dashed #cbd5e1;">
                 <p style="font-size: 16px; color: #64748b; margin: 0;">
-                    This learning outcome is not linked to any program outcomes.
+                    This learning outcome is not linked to any assessments or program outcomes.
                 </p>
             </div>
             {% endif %}
@@ -233,14 +291,14 @@
             });
         }
         
-        // Draw arrows between LO and PO cards with Bezier curves
         function drawArrows() {
+            const assessmentCards = document.querySelectorAll('.assessment-card');
             const loCard = document.getElementById('lo-card');
             const poCards = document.querySelectorAll('.po-card');
             const svg = document.getElementById('arrows-svg');
             const container = document.querySelector('.graph-container');
             
-            if (!loCard || !svg || poCards.length === 0 || !container) return;
+            if (!svg || !container) return;
             
             // Clear existing arrows (keep defs)
             const defs = svg.querySelector('defs');
@@ -267,59 +325,118 @@
             }
             
             const containerRect = container.getBoundingClientRect();
-            const loRect = loCard.getBoundingClientRect();
             
-            // Calculate LO card center point (right edge, vertical center)
-            const loStartX = loRect.right - containerRect.left;
-            const loStartY = loRect.top - containerRect.top + loRect.height / 2;
+            // Draw Assessment -> LO arrows
+            if (loCard && assessmentCards.length > 0) {
+                const loRect = loCard.getBoundingClientRect();
+                const loEndX = loRect.left - containerRect.left;
+                const loEndY = loRect.top - containerRect.top + loRect.height / 2;
+                
+                assessmentCards.forEach(function(assessmentCard) {
+                    const assessmentRect = assessmentCard.getBoundingClientRect();
+                    const percentage = parseInt(assessmentCard.dataset.percentage || '0');
+                    
+                    // Calculate Assessment card center point (right edge, vertical center)
+                    const assessmentStartX = assessmentRect.right - containerRect.left;
+                    const assessmentStartY = assessmentRect.top - containerRect.top + assessmentRect.height / 2;
+                    
+                    // Calculate Bezier curve control points
+                    const distance = loEndX - assessmentStartX;
+                    const controlPointOffset = Math.max(distance * 0.35, 60);
+                    
+                    const controlPoint1X = assessmentStartX + controlPointOffset;
+                    const controlPoint1Y = assessmentStartY;
+                    const controlPoint2X = loEndX - controlPointOffset;
+                    const controlPoint2Y = loEndY;
+                    
+                    // Create Bezier curve path
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    const d = `M ${assessmentStartX} ${assessmentStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${loEndX} ${loEndY}`;
+                    path.setAttribute('d', d);
+                    path.setAttribute('class', 'arrow-path');
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', '#f59e0b');
+                    path.setAttribute('stroke-width', '2');
+                    path.setAttribute('marker-end', 'url(#arrowhead)');
+                    path.setAttribute('opacity', '0.7');
+                    
+                    svg.appendChild(path);
+                    
+                    // Add percentage text on top of the arrow
+                    if (percentage > 0) {
+                        const midX = (assessmentStartX + loEndX) / 2;
+                        const midY = (assessmentStartY + loEndY) / 2;
+                        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        text.setAttribute('x', midX.toString());
+                        text.setAttribute('y', (midY - 8).toString());
+                        text.setAttribute('text-anchor', 'middle');
+                        text.setAttribute('dominant-baseline', 'middle');
+                        text.setAttribute('font-size', '13');
+                        text.setAttribute('font-weight', '600');
+                        text.setAttribute('fill', '#92400e');
+                        text.setAttribute('class', 'percentage-text');
+                        text.style.pointerEvents = 'none';
+                        text.textContent = percentage + '%';
+                        svg.appendChild(text);
+                    }
+                });
+            }
             
-            poCards.forEach(function(poCard) {
-                const poRect = poCard.getBoundingClientRect();
-                const percentage = parseInt(poCard.dataset.percentage || '0');
+            // Draw LO -> PO arrows
+            if (loCard && poCards.length > 0) {
+                const loRect = loCard.getBoundingClientRect();
+                const loStartX = loRect.right - containerRect.left;
+                const loStartY = loRect.top - containerRect.top + loRect.height / 2;
                 
-                // Calculate PO card center point (left edge, vertical center)
-                const poEndX = poRect.left - containerRect.left;
-                const poEndY = poRect.top - containerRect.top + poRect.height / 2;
-                
-                // Calculate Bezier curve control points for smooth S-curve
-                const distance = poEndX - loStartX;
-                const controlPointOffset = Math.max(distance * 0.35, 80); // Adjusted for better curve
-                
-                const controlPoint1X = loStartX + controlPointOffset;
-                const controlPoint1Y = loStartY;
-                const controlPoint2X = poEndX - controlPointOffset;
-                const controlPoint2Y = poEndY;
-                
-                // Create Bezier curve path with C (cubic bezier) command
-                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                const d = `M ${loStartX} ${loStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${poEndX} ${poEndY}`;
-                path.setAttribute('d', d);
-                path.setAttribute('class', 'arrow-path');
-                path.setAttribute('fill', 'none');
-                path.setAttribute('stroke', '#374151');
-                path.setAttribute('stroke-width', '2');
-                path.setAttribute('marker-end', 'url(#arrowhead)');
-                
-                svg.appendChild(path);
-                
-                // Add percentage text on top of the arrow (at the midpoint)
-                if (percentage > 0) {
-                    const midX = (loStartX + poEndX) / 2;
-                    const midY = (loStartY + poEndY) / 2;
-                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    text.setAttribute('x', midX.toString());
-                    text.setAttribute('y', midY.toString());
-                    text.setAttribute('text-anchor', 'middle');
-                    text.setAttribute('dominant-baseline', 'middle');
-                    text.setAttribute('font-size', '14');
-                    text.setAttribute('font-weight', '600');
-                    text.setAttribute('fill', '#000000');
-                    text.setAttribute('class', 'percentage-text');
-                    text.style.pointerEvents = 'none';
-                    text.textContent = percentage + '%';
-                    svg.appendChild(text);
-                }
-            });
+                poCards.forEach(function(poCard) {
+                    const poRect = poCard.getBoundingClientRect();
+                    const percentage = parseInt(poCard.dataset.percentage || '0');
+                    
+                    // Calculate PO card center point (left edge, vertical center)
+                    const poEndX = poRect.left - containerRect.left;
+                    const poEndY = poRect.top - containerRect.top + poRect.height / 2;
+                    
+                    // Calculate Bezier curve control points
+                    const distance = poEndX - loStartX;
+                    const controlPointOffset = Math.max(distance * 0.35, 60);
+                    
+                    const controlPoint1X = loStartX + controlPointOffset;
+                    const controlPoint1Y = loStartY;
+                    const controlPoint2X = poEndX - controlPointOffset;
+                    const controlPoint2Y = poEndY;
+                    
+                    // Create Bezier curve path
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    const d = `M ${loStartX} ${loStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${poEndX} ${poEndY}`;
+                    path.setAttribute('d', d);
+                    path.setAttribute('class', 'arrow-path');
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', '#10b981');
+                    path.setAttribute('stroke-width', '2');
+                    path.setAttribute('marker-end', 'url(#arrowhead)');
+                    path.setAttribute('opacity', '0.7');
+                    
+                    svg.appendChild(path);
+                    
+                    // Add percentage text on top of the arrow
+                    if (percentage > 0) {
+                        const midX = (loStartX + poEndX) / 2;
+                        const midY = (loStartY + poEndY) / 2;
+                        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        text.setAttribute('x', midX.toString());
+                        text.setAttribute('y', (midY - 8).toString());
+                        text.setAttribute('text-anchor', 'middle');
+                        text.setAttribute('dominant-baseline', 'middle');
+                        text.setAttribute('font-size', '13');
+                        text.setAttribute('font-weight', '600');
+                        text.setAttribute('fill', '#047857');
+                        text.setAttribute('class', 'percentage-text');
+                        text.style.pointerEvents = 'none';
+                        text.textContent = percentage + '%';
+                        svg.appendChild(text);
+                    }
+                });
+            }
         }
         
         // Draw arrows on load and resize with debouncing

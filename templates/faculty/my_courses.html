@@ -1,18 +1,35 @@
 {% extends "faculty/base.html" %}
+{% load static %}
 
 {% block title %}My Courses{% endblock %}
 
 {% block content %}
-    <h1>My Courses</h1>
-
+    <div style="margin-left: 0; margin-top: 10px;">
+        <h1 style="font-size: 32px; margin: 0;">My Courses</h1>
+    </div>
+    
     {% if courses %}
+    <script id="course-students-data" type="application/json">{{ courses_json|safe }}</script>
+    <script>
+        // Parse course students data from JSON script tag
+        const courseStudentsDataScript = document.getElementById('course-students-data');
+        const courseStudentsDataArray = courseStudentsDataScript ? JSON.parse(courseStudentsDataScript.textContent) : [];
+        const courseStudentsData = {};
+        courseStudentsDataArray.forEach(function(course) {
+            courseStudentsData[course.id] = {
+                name: course.name,
+                students: course.students
+            };
+        });
+    </script>
     <table class="courses-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
         <thead>
             <tr style="background-color: #0b5fff; color: white;">
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Instructor</th>
-                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Credit</th>
                 <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Learning Outcomes</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Credit</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Students Taking the Class</th>
             </tr>
         </thead>
         <tbody>
@@ -20,11 +37,17 @@
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.name }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">{{ course.instructor }}</td>
-                <td style="padding: 12px; border: 1px solid #ddd;">{{ course.credits|default:"-" }}</td>
                 <td style="padding: 12px; border: 1px solid #ddd;">
                     <a href="{% url 'faculty_head_course_learning_outcomes' course.name|slugify %}" style="display: inline-block; padding: 8px 16px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#1d4ed8';" onmouseout="this.style.background='#2563eb';">
                         View
                     </a>
+                </td>
+                <td style="padding: 12px; border: 1px solid #ddd;">{{ course.credits|default:"-" }}</td>
+                <td style="padding: 12px; border: 1px solid #ddd;">
+                    <button class="view-students-btn" data-course-id="{{ course.id }}"
+                        style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                        View
+                    </button>
                 </td>
             </tr>
             {% endfor %}
@@ -49,7 +72,7 @@
             <tbody id="assignments-tbody">
                 {% if all_assignments %}
                     {% for assignment in all_assignments %}
-                    <tr style="border-bottom: 1px solid #ddd; cursor: pointer;" class="assignment-row" data-assignment-id="{{ assignment.id }}" data-assignment-title="{{ assignment.title }}" data-assignment-details="{{ assignment.details }}" data-assignment-deadline="{{ assignment.deadline }}" data-assignment-deadline-datetime="{{ assignment.deadline_datetime }}" data-assignment-deadline-date="{{ assignment.deadline_date|default:'' }}" data-assignment-deadline-time="{{ assignment.deadline_time|default:'' }}" data-assignment-course="{{ assignment.course_name }}" data-assignment-file-url="{{ assignment.file_url|default:'' }}" data-assignment-file-name="{{ assignment.file_name|default:'' }}" data-created-by-id="{{ assignment.created_by_id }}" data-current-user-id="{{ user.id }}" data-submissions='{{ assignment.submissions|safe }}'>
+                    <tr style="border-bottom: 1px solid #ddd; cursor: pointer;" class="assignment-row" data-assignment-id="{{ assignment.id }}" data-assignment-title="{{ assignment.title }}" data-assignment-details="{{ assignment.details }}" data-assignment-deadline="{{ assignment.deadline }}" data-assignment-deadline-datetime="{{ assignment.deadline_datetime }}" data-assignment-deadline-date="{{ assignment.deadline_date|default:'' }}" data-assignment-deadline-time="{{ assignment.deadline_time|default:'' }}" data-assignment-course="{{ assignment.course_name }}" data-assignment-file-url="{{ assignment.file_url|default:'' }}" data-assignment-file-name="{{ assignment.file_name|default:'' }}" data-created-by-id="{{ assignment.created_by_id }}" data-current-user-id="{{ request.user.id }}" data-submissions='{{ assignment.submissions|safe }}'>
                         <td style="padding: 12px; border: 1px solid #ddd;">{{ assignment.course_name }}</td>
                         <td style="padding: 12px; border: 1px solid #ddd;">
                             <div>
@@ -136,6 +159,17 @@
         </div>
     </div>
 
+    <!-- Student List Popup Modal -->
+    <div id="student-list-popup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative;">
+            <button class="close-popup-btn" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            <h3 id="popup-course-name" style="font-size: 22px; color: #0f172a; margin-bottom: 20px; text-align: center; margin-top: 0;"></h3>
+            <div id="popup-student-list" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                <!-- Student list will be injected here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Edit Assignment Modal -->
     <div id="edit-assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; justify-content: center; align-items: center;">
         <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
@@ -174,7 +208,8 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        // Assignment modal functionality
+        (function() {
             // Assignment detail modal functionality
             const assignmentRows = document.querySelectorAll('.assignment-row');
             const assignmentDetailModal = document.getElementById('assignment-detail-modal');
@@ -183,106 +218,67 @@
             const assignmentDetailContent = document.getElementById('assignment-detail-content');
 
             assignmentRows.forEach(row => {
-                row.addEventListener('click', function(e) {
-                    if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') return;
+                row.addEventListener('click', function() {
+                    const assignmentId = this.getAttribute('data-assignment-id');
+                    const title = this.getAttribute('data-assignment-title');
+                    const details = this.getAttribute('data-assignment-details');
+                    const deadline = this.getAttribute('data-assignment-deadline');
+                    const course = this.getAttribute('data-assignment-course');
+                    const fileUrl = this.getAttribute('data-assignment-file-url');
+                    const fileName = this.getAttribute('data-assignment-file-name');
+                    const createdById = this.getAttribute('data-created-by-id');
+                    const currentUserId = this.getAttribute('data-current-user-id');
+                    const submissions = JSON.parse(this.getAttribute('data-submissions') || '[]');
                     
-                    const assignmentId = this.dataset.assignmentId;
-                    const title = this.dataset.assignmentTitle;
-                    const details = this.dataset.assignmentDetails;
-                    const deadline = this.dataset.assignmentDeadline;
-                    const deadlineDate = this.dataset.assignmentDeadlineDate;
-                    const deadlineTime = this.dataset.assignmentDeadlineTime;
-                    const course = this.dataset.assignmentCourse;
-                    const fileUrl = this.dataset.assignmentFileUrl;
-                    const fileName = this.dataset.assignmentFileName;
-                    const createdById = parseInt(this.dataset.createdById);
-                    const currentUserId = parseInt(this.dataset.currentUserId);
-                    const submissionsJson = this.dataset.submissions;
-                    let submissions = [];
-                    try {
-                        submissions = JSON.parse(submissionsJson || '[]');
-                    } catch (e) {
-                        submissions = [];
-                    }
-
-                    assignmentDetailTitle.textContent = title;
-                    let content = `
-                        <div style="margin-bottom: 16px;">
-                            <p style="margin: 0; font-weight: 600; color: #0f172a;">Course:</p>
-                            <p style="margin: 4px 0 0 0; color: #64748b;">${course}</p>
-                        </div>
-                        <div style="margin-bottom: 16px;">
-                            <p style="margin: 0; font-weight: 600; color: #0f172a;">Details:</p>
-                            <p style="margin: 4px 0 0 0; color: #64748b; white-space: pre-wrap;">${details}</p>
-                        </div>
-                        <div style="margin-bottom: 16px;">
-                            <p style="margin: 0; font-weight: 600; color: #0f172a;">Deadline:</p>
-                            <p style="margin: 4px 0 0 0; color: #ef4444; font-weight: bold; font-size: 16px;">${deadline}</p>
-                        </div>
-                    `;
+                    document.getElementById('assignment-detail-title').textContent = title;
+                    let content = `<p><strong>Course:</strong> ${course}</p>`;
+                    content += `<p><strong>Details:</strong> ${details}</p>`;
+                    content += `<p><strong>Deadline:</strong> ${deadline}</p>`;
                     if (fileUrl) {
-                        content += `
-                            <div style="margin-bottom: 16px;">
-                                <p style="margin: 0; font-weight: 600; color: #0f172a;">Assignment File:</p>
-                                <a href="${fileUrl}" target="_blank" style="color: #3b82f6; text-decoration: none; font-size: 14px; margin-top: 4px; display: inline-block;">📄 ${fileName}</a>
-                            </div>
-                        `;
+                        content += `<p><strong>File:</strong> <a href="${fileUrl}" target="_blank">${fileName}</a></p>`;
                     }
-                    assignmentDetailContent.innerHTML = content;
-
-                    // Show edit button if faculty head created this assignment
+                    document.getElementById('assignment-detail-content').innerHTML = content;
+                    
+                    // Show edit button if user is the creator
                     const editSection = document.getElementById('assignment-edit-section');
                     if (createdById === currentUserId) {
                         editSection.style.display = 'block';
-                        document.getElementById('edit-assignment-btn').dataset.assignmentId = assignmentId;
-                        document.getElementById('edit-assignment-btn').dataset.assignmentTitle = title;
-                        document.getElementById('edit-assignment-btn').dataset.assignmentDetails = details;
-                        document.getElementById('edit-assignment-btn').dataset.deadlineDate = deadlineDate;
-                        document.getElementById('edit-assignment-btn').dataset.deadlineTime = deadlineTime;
+                        document.getElementById('edit-assignment-btn').onclick = function() {
+                            assignmentDetailModal.style.display = 'none';
+                            const editModal = document.getElementById('edit-assignment-modal');
+                            editModal.style.display = 'flex';
+                            document.getElementById('edit-assignment-id').value = assignmentId;
+                            document.getElementById('edit-assignment-title').value = title;
+                            document.getElementById('edit-assignment-details').value = details;
+                            const deadlineDate = deadline.split(' ')[0];
+                            const deadlineTime = deadline.split(' ')[1] || '23:59';
+                            document.getElementById('edit-deadline-date').value = deadlineDate;
+                            document.getElementById('edit-deadline-time').value = deadlineTime;
+                        };
                     } else {
                         editSection.style.display = 'none';
                     }
-
-                    // Show submissions
+                    
+                    // Populate submissions
                     const submissionsList = document.getElementById('submissions-list');
                     if (submissions.length > 0) {
-                        let submissionsHtml = '<table style="width: 100%; border-collapse: collapse;">';
-                        submissionsHtml += '<thead><tr style="background-color: #f1f5f9;"><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Student</th><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">File</th><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Submitted</th><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Action</th></tr></thead><tbody>';
+                        let submissionsHtml = '<table style="width: 100%; border-collapse: collapse;"><thead><tr><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Student</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Submitted At</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">File</th></tr></thead><tbody>';
                         submissions.forEach(sub => {
-                            submissionsHtml += `
-                                <tr style="border-bottom: 1px solid #ddd;">
-                                    <td style="padding: 8px; border: 1px solid #ddd;">${sub.student_name} (${sub.student_id})</td>
-                                    <td style="padding: 8px; border: 1px solid #ddd;">
-                                        ${sub.file_url ? `<a href="${sub.file_url}" target="_blank" style="color: #3b82f6; text-decoration: none;">📄 ${sub.file_name}</a>` : 'No file'}
-                                    </td>
-                                    <td style="padding: 8px; border: 1px solid #ddd;">${sub.submitted_at}</td>
-                                    <td style="padding: 8px; border: 1px solid #ddd;">
-                                        <button class="delete-submission-btn" data-submission-id="${sub.id}" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">Delete</button>
-                                    </td>
-                                </tr>
-                            `;
+                            submissionsHtml += `<tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${sub.student_name}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${sub.submitted_at}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><a href="${sub.file_url}" target="_blank">Download</a></td></tr>`;
                         });
                         submissionsHtml += '</tbody></table>';
                         submissionsList.innerHTML = submissionsHtml;
                     } else {
-                        submissionsList.innerHTML = '<p style="color: #64748b; text-align: center;">No submissions yet.</p>';
+                        submissionsList.innerHTML = '<p style="color: #64748b;">No submissions yet.</p>';
                     }
-
-                    assignmentDetailModal.style.display = 'flex';
+                    
+                    if (assignmentDetailModal) assignmentDetailModal.style.display = 'flex';
                 });
             });
 
             if (closeAssignmentDetailModal) {
                 closeAssignmentDetailModal.addEventListener('click', function() {
-                    assignmentDetailModal.style.display = 'none';
-                });
-            }
-
-            if (assignmentDetailModal) {
-                assignmentDetailModal.addEventListener('click', function(e) {
-                    if (e.target === assignmentDetailModal) {
-                        assignmentDetailModal.style.display = 'none';
-                    }
+                    if (assignmentDetailModal) assignmentDetailModal.style.display = 'none';
                 });
             }
 
@@ -325,36 +321,20 @@
             if (assignmentForm) {
                 assignmentForm.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    
-                    const formData = new FormData();
-                    formData.append('course_id', document.getElementById('assignment-course').value);
-                    formData.append('title', document.getElementById('assignment-title').value);
-                    formData.append('details', document.getElementById('assignment-details').value);
-                    formData.append('deadline_date', document.getElementById('deadline-date').value);
-                    formData.append('deadline_time', document.getElementById('deadline-time').value);
-                    
-                    const fileInput = document.getElementById('assignment-file');
-                    if (fileInput.files.length > 0) {
-                        formData.append('file', fileInput.files[0]);
-                    }
-
-                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                    
+                    const formData = new FormData(assignmentForm);
                     fetch('{% url "faculty_head_add_assignment" %}', {
                         method: 'POST',
+                        body: formData,
                         headers: {
-                            'X-CSRFToken': csrfToken
-                        },
-                        body: formData
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        }
                     })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            assignmentModal.style.display = 'none';
-                            assignmentForm.reset();
                             location.reload();
                         } else {
-                            alert('Error: ' + (data.error || 'Failed to add assignment'));
+                            alert(data.error || 'Failed to add assignment');
                         }
                     })
                     .catch(error => {
@@ -364,149 +344,92 @@
                 });
             }
 
-            // Edit assignment functionality
-            const editAssignmentBtn = document.getElementById('edit-assignment-btn');
-            const editAssignmentModal = document.getElementById('edit-assignment-modal');
+            // Edit assignment modal
+            const editAssignmentForm = document.getElementById('edit-assignment-form');
             const closeEditAssignmentModal = document.getElementById('close-edit-assignment-modal');
             const cancelEditAssignmentBtn = document.getElementById('cancel-edit-assignment-btn');
-            const editAssignmentForm = document.getElementById('edit-assignment-form');
-            const editAssignmentStatus = document.getElementById('edit-assignment-status');
-
-            if (editAssignmentBtn) {
-                editAssignmentBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    const assignmentId = this.dataset.assignmentId;
-                    const title = this.dataset.assignmentTitle;
-                    const details = this.dataset.assignmentDetails;
-                    const deadlineDate = this.dataset.deadlineDate;
-                    const deadlineTime = this.dataset.deadlineTime;
-
-                    document.getElementById('edit-assignment-id').value = assignmentId;
-                    document.getElementById('edit-assignment-title').value = title;
-                    document.getElementById('edit-assignment-details').value = details;
-                    document.getElementById('edit-deadline-date').value = deadlineDate;
-                    document.getElementById('edit-deadline-time').value = deadlineTime;
-                    document.getElementById('edit-assignment-file').value = '';
-
-                    editAssignmentModal.style.display = 'flex';
-                });
-            }
-
-            if (closeEditAssignmentModal) {
-                closeEditAssignmentModal.addEventListener('click', function() {
-                    editAssignmentModal.style.display = 'none';
-                    editAssignmentForm.reset();
-                    editAssignmentStatus.innerHTML = '';
-                });
-            }
-
-            if (cancelEditAssignmentBtn) {
-                cancelEditAssignmentBtn.addEventListener('click', function() {
-                    editAssignmentModal.style.display = 'none';
-                    editAssignmentForm.reset();
-                    editAssignmentStatus.innerHTML = '';
-                });
-            }
-
-            if (editAssignmentModal) {
-                editAssignmentModal.addEventListener('click', function(e) {
-                    if (e.target === editAssignmentModal) {
-                        editAssignmentModal.style.display = 'none';
-                        editAssignmentForm.reset();
-                        editAssignmentStatus.innerHTML = '';
-                    }
-                });
-            }
-
+            
             if (editAssignmentForm) {
                 editAssignmentForm.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    
+                    const formData = new FormData(editAssignmentForm);
                     const assignmentId = document.getElementById('edit-assignment-id').value;
-                    const formData = new FormData();
-                    formData.append('title', document.getElementById('edit-assignment-title').value);
-                    formData.append('details', document.getElementById('edit-assignment-details').value);
-                    formData.append('deadline_date', document.getElementById('edit-deadline-date').value);
-                    formData.append('deadline_time', document.getElementById('edit-deadline-time').value);
-                    
-                    const fileInput = document.getElementById('edit-assignment-file');
-                    if (fileInput.files.length > 0) {
-                        formData.append('file', fileInput.files[0]);
-                    }
-
-                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                    const submitBtn = editAssignmentForm.querySelector('button[type="submit"]');
-                    const originalText = submitBtn.textContent;
-                    
-                    submitBtn.disabled = true;
-                    submitBtn.textContent = 'Updating...';
-                    editAssignmentStatus.innerHTML = '<p style="color: #3b82f6; margin: 0;">Updating assignment...</p>';
-
                     fetch(`/faculty-head/assignments/${assignmentId}/update/`, {
                         method: 'POST',
+                        body: formData,
                         headers: {
-                            'X-CSRFToken': csrfToken
-                        },
-                        body: formData
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        }
                     })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            editAssignmentStatus.innerHTML = '<p style="color: #10b981; margin: 0;">✓ ' + data.message + '</p>';
-                            setTimeout(() => {
-                                location.reload();
-                            }, 1500);
+                            location.reload();
                         } else {
-                            editAssignmentStatus.innerHTML = '<p style="color: #ef4444; margin: 0;">Error: ' + (data.error || 'Failed to update assignment') + '</p>';
-                            submitBtn.disabled = false;
-                            submitBtn.textContent = originalText;
+                            const statusDiv = document.getElementById('edit-assignment-status');
+                            statusDiv.innerHTML = `<p style="color: red;">${data.error || 'Failed to update assignment'}</p>`;
+                        setTimeout(() => {
+                                statusDiv.innerHTML = '';
+                            }, 3000);
                         }
                     })
                     .catch(error => {
                         console.error('Error:', error);
-                        editAssignmentStatus.innerHTML = '<p style="color: #ef4444; margin: 0;">An error occurred while updating the assignment</p>';
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = originalText;
+                        const statusDiv = document.getElementById('edit-assignment-status');
+                        statusDiv.innerHTML = '<p style="color: red;">An error occurred while updating the assignment</p>';
+                        setTimeout(() => {
+                            statusDiv.innerHTML = '';
+                        }, 3000);
                     });
                 });
             }
+            
+            if (closeEditAssignmentModal) {
+                closeEditAssignmentModal.addEventListener('click', function() {
+                    document.getElementById('edit-assignment-modal').style.display = 'none';
+                });
+            }
+            
+            if (cancelEditAssignmentBtn) {
+                cancelEditAssignmentBtn.addEventListener('click', function() {
+                    document.getElementById('edit-assignment-modal').style.display = 'none';
+                });
+            }
 
-            // Delete submission functionality
-            document.addEventListener('click', function(e) {
-                if (e.target.classList.contains('delete-submission-btn')) {
+            // Student list popup
+            const viewStudentsBtns = document.querySelectorAll('.view-students-btn');
+            const studentListPopup = document.getElementById('student-list-popup');
+            const closePopupBtns = document.querySelectorAll('.close-popup-btn');
+            
+            viewStudentsBtns.forEach(btn => {
+                btn.addEventListener('click', function(e) {
                     e.stopPropagation();
-                    if (!confirm('Are you sure you want to delete this submission?')) {
-                        return;
-                    }
-                    
-                    const submissionId = e.target.dataset.submissionId;
-                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                    
-                    fetch(`/faculty-head/submissions/${submissionId}/delete/`, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRFToken': csrfToken
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            e.target.closest('tr').remove();
-                            const tbody = e.target.closest('tbody');
-                            if (tbody && tbody.children.length === 0) {
-                                document.getElementById('submissions-list').innerHTML = '<p style="color: #64748b; text-align: center;">No submissions yet.</p>';
-                            }
+                    const courseId = this.getAttribute('data-course-id');
+                    const courseData = courseStudentsData[courseId];
+                    if (courseData) {
+                        document.getElementById('popup-course-name').textContent = courseData.name;
+                        const studentList = document.getElementById('popup-student-list');
+                        if (courseData.students && courseData.students.length > 0) {
+                            let html = '<table style="width: 100%; border-collapse: collapse;"><thead><tr><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Name</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Student ID</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Year</th></tr></thead><tbody>';
+                            courseData.students.forEach(student => {
+                                html += `<tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${student.name}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${student.student_id}</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${student.year}</td></tr>`;
+                            });
+                            html += '</tbody></table>';
+                            studentList.innerHTML = html;
                         } else {
-                            alert('Error: ' + (data.error || 'Failed to delete submission'));
+                            studentList.innerHTML = '<p style="color: #64748b; text-align: center;">No students enrolled in this course.</p>';
                         }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert('An error occurred while deleting the submission');
-                    });
-                }
+                        if (studentListPopup) studentListPopup.style.display = 'flex';
+                    }
+                });
             });
-        });
+            
+            closePopupBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (studentListPopup) studentListPopup.style.display = 'none';
+                });
+            });
+        })();
     </script>
     {% else %}
     <p style="margin-top: 20px; color: #666;">No courses assigned yet.</p>

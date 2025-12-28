@@ -3,6 +3,17 @@
 
 {% block title %}Learning Outcome Detail{% endblock %}
 
+{% block extra_css %}
+<style>
+    .hide-modal {
+        display: none;
+    }
+    .show-modal {
+        display: flex;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="max-width: 900px; margin: 0 auto; padding: 24px;">
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 24px;">
@@ -22,7 +33,7 @@
         <button id="create-toggle-btn" class="toggle-btn active" style="padding: 12px 32px; border: none; border-radius: 8px; background: #3b82f6; color: white; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(59,130,246,0.3);">
             Details
         </button>
-        <button id="graph-toggle-btn" class="toggle-btn" onclick="window.location.href='{% url 'faculty_head_learning_outcome_graph' course.id outcome.id %}'" style="padding: 12px 32px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">
+        <button id="graph-toggle-btn" class="toggle-btn" style="padding: 12px 32px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">
             Graph
         </button>
     </div>
@@ -55,16 +66,16 @@
                         </button>
                     </div>
                 </form>
-                <div id="lo-display" style="position: relative; width: 100%; padding: 16px; padding-right: 100px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 16px; line-height: 1.6; color: #1e293b;">
+                <div id="lo-display" style="position: relative; width: 100%; padding: 16px; padding-right: 100px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 16px; line-height: 1.6; color: #1e293b; min-height: 60px;">
                     {{ outcome.text }}
-                </div>
-                <div style="position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; align-items: center;">
-                    <button id="edit-lo-btn" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #3b82f6; padding: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.color='#2563eb'; this.style.transform='scale(1.1)';" onmouseout="this.style.color='#3b82f6'; this.style.transform='scale(1)';" title="Edit Learning Outcome">
-                    ✏️
-                </button>
-                    <button id="delete-lo-btn" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.color='#dc2626'; this.style.transform='scale(1.1)';" onmouseout="this.style.color='#ef4444'; this.style.transform='scale(1)';" title="Delete Learning Outcome">
-                        🗑️
-                    </button>
+                    <div style="position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; align-items: center; z-index: 10;">
+                        <button id="edit-lo-btn" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #3b82f6; padding: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.color='#2563eb'; this.style.transform='scale(1.1)';" onmouseout="this.style.color='#3b82f6'; this.style.transform='scale(1)';" title="Edit Learning Outcome">
+                            ✏️
+                        </button>
+                        <button id="delete-lo-btn" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.color='#dc2626'; this.style.transform='scale(1.1)';" onmouseout="this.style.color='#ef4444'; this.style.transform='scale(1)';" title="Delete Learning Outcome">
+                            🗑️
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -106,6 +117,51 @@
                     +
                 </button>
             </div>
+        </div>
+        
+        <!-- Assessment Methods -->
+        <div style="margin-top: 40px;">
+            <h2 style="font-size: 22px; color: #0f172a; margin-bottom: 24px;">Assessment Methods</h2>
+            
+            {% if assessments_data %}
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                {% for assessment in assessments_data %}
+                <div class="assessment-item-container" data-assessment-id="{{ assessment.id }}" data-relation-id="{{ assessment.relation_id }}" style="display: flex; align-items: center; gap: 12px; background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="flex: 1;">
+                        <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.5;">
+                            <strong>{{ assessment.course_name }}</strong> - {{ assessment.assessment_type }}
+                        </p>
+                    </div>
+                    <div class="assessment-percentage-display" style="display: flex; align-items: center; gap: 8px;">
+                        <span class="assessment-percentage-value" style="font-size: 15px; font-weight: 600; color: #10b981; min-width: 45px; text-align: right;">{{ assessment.contribution_percentage }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
+                <p style="font-size: 16px; color: #64748b; margin: 0;">This learning outcome is not linked to any assessment methods.</p>
+            </div>
+            {% endif %}
+            
+            <div style="margin-top: 16px; display: flex; justify-content: center;">
+                <button id="add-assessment-btn" type="button" style="background: #ffffff; border: 2px solid #e2e8f0; padding: 20px; border-radius: 10px; cursor: pointer; font-size: 24px; color: #10b981; width: 100%; max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; position: relative; z-index: 10;" onmouseover="this.style.borderColor='#10b981'; this.style.background='#f0fdf4';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.background='#ffffff';">
+                    +
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="add-assessment-modal" class="hide-modal" style="position: fixed; inset: 0; background: rgba(15,23,42,0.45); align-items: center; justify-content: center; z-index: 10000; display: none;">
+    <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
+        <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a;">Select Assessment to Link</h3>
+        <div id="assessments-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-bottom: 20px; max-height: 400px; overflow-y: auto;">
+        </div>
+        <div style="display: flex; justify-content: center; gap: 12px;">
+            <button id="close-add-assessment-btn" style="padding: 10px 20px; background: #6b7280; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                Close
+            </button>
         </div>
     </div>
 </div>
@@ -167,6 +223,13 @@
     }
 
     (function() {
+        const graphToggleBtn = document.getElementById('graph-toggle-btn');
+        if (graphToggleBtn) {
+            graphToggleBtn.addEventListener('click', function() {
+                window.location.href = '{% url "faculty_head_learning_outcome_graph" course.id outcome.id %}';
+            });
+        }
+        
         const editLoBtn = document.getElementById('edit-lo-btn');
         const loDisplay = document.getElementById('lo-display');
         const updateLoForm = document.getElementById('update-lo-form');
@@ -403,6 +466,175 @@
             });
         }
     })();
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        (function() {
+            const outcomeId = parseInt('{{ outcome.id }}', 10);
+            const addAssessmentBtn = document.getElementById('add-assessment-btn');
+            const addAssessmentModal = document.getElementById('add-assessment-modal');
+            const closeAddAssessmentBtn = document.getElementById('close-add-assessment-btn');
+            const assessmentsList = document.getElementById('assessments-list');
+            
+            console.log('Assessment button found:', addAssessmentBtn);
+            console.log('Assessment modal found:', addAssessmentModal);
+            
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            
+            function loadAssessments() {
+                fetch(`/faculty-head/learning-outcomes/${outcomeId}/get-assessments/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.assessments && data.assessments.length > 0) {
+                            assessmentsList.innerHTML = '';
+                            data.assessments.forEach(assessment => {
+                                const card = document.createElement('div');
+                                card.className = 'assessment-card';
+                                card.style.cssText = 'padding: 16px; border: 2px solid #e2e8f0; border-radius: 10px; background: #ffffff; cursor: pointer; transition: all 0.2s;';
+                                card.innerHTML = `
+                                    <p style="margin: 0; font-size: 14px; color: #1e293b; font-weight: 500;">${assessment.display_name}</p>
+                                    <input type="number" class="assessment-percentage-input" data-assessment-id="${assessment.id}" min="0" max="100" step="1" placeholder="%" style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center; margin-top: 8px; display: none;">
+                                    <button class="link-assessment-btn" data-assessment-id="${assessment.id}" data-course-name="${assessment.course_name}" data-assessment-type="${assessment.assessment_type}" data-assessment-type-label="${assessment.assessment_type_label || assessment.display_name}" style="display: none; margin-top: 8px; padding: 6px 12px; background: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Link</button>
+                                `;
+                                
+                                card.addEventListener('click', function(e) {
+                                    if (e.target.classList.contains('link-assessment-btn') || e.target.classList.contains('assessment-percentage-input')) {
+                                        return;
+                                    }
+                                    const percentageInput = card.querySelector('.assessment-percentage-input');
+                                    const linkBtn = card.querySelector('.link-assessment-btn');
+                                    const isOpen = percentageInput.style.display !== 'none';
+                                    
+                                    if (isOpen) {
+                                        percentageInput.style.display = 'none';
+                                        linkBtn.style.display = 'none';
+                                        card.style.borderColor = '#e2e8f0';
+                                        card.style.background = '#ffffff';
+                                        percentageInput.value = '';
+                                    } else {
+                                        percentageInput.style.display = 'block';
+                                        linkBtn.style.display = 'block';
+                                        card.style.borderColor = '#10b981';
+                                        card.style.background = '#f0fdf4';
+                                        percentageInput.focus();
+                                    }
+                                });
+                                
+                                const linkBtn = card.querySelector('.link-assessment-btn');
+                                linkBtn.addEventListener('click', function(e) {
+                                    e.stopPropagation();
+                                    const assessmentId = this.dataset.assessmentId;
+                                    const percentageInput = card.querySelector('.assessment-percentage-input');
+                                    const percentage = percentageInput.value.trim();
+                                    
+                                    if (!percentage) {
+                                        alert('Please enter a contribution percentage.');
+                                        percentageInput.focus();
+                                        return;
+                                    }
+                                    
+                                    const value = parseInt(percentage);
+                                    if (isNaN(value) || value < 0 || value > 100) {
+                                        alert('Percentage must be between 0 and 100.');
+                                        percentageInput.focus();
+                                        return;
+                                    }
+                                    
+                                    const assessmentType = this.dataset.assessmentType;
+                                    const formData = new FormData();
+                                    formData.append('assessment_id', assessmentId);
+                                    formData.append('assessment_type', assessmentType);
+                                    formData.append('percentage', value);
+                                    
+                                    fetch(`/faculty-head/learning-outcomes/${outcomeId}/link-assessment/`, {
+                                        method: 'POST',
+                                        body: formData,
+                                        headers: {
+                                            'X-CSRFToken': getCookie('csrftoken')
+                                        }
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.status === 'success') {
+                                            location.reload();
+                                        } else {
+                                            alert(data.message || 'Failed to link assessment.');
+                                        }
+                                    })
+                                    .catch(error => {
+                                        alert('Error linking assessment. Please try again.');
+                                    });
+                                });
+                                
+                                assessmentsList.appendChild(card);
+                            });
+                        } else {
+                            assessmentsList.innerHTML = '<p style="text-align: center; color: #64748b; padding: 20px;">No available assessments to link.</p>';
+                        }
+                    })
+                    .catch(error => {
+                        assessmentsList.innerHTML = '<p style="text-align: center; color: #ef4444; padding: 20px;">Error loading assessments.</p>';
+                    });
+            }
+            
+            if (addAssessmentBtn && addAssessmentModal) {
+                addAssessmentBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Add assessment button clicked');
+                    addAssessmentModal.style.display = 'flex';
+                    addAssessmentModal.classList.remove('hide-modal');
+                    addAssessmentModal.classList.add('show-modal');
+                    const sidebar = document.getElementById('sidebar');
+                    if (sidebar) {
+                        sidebar.style.display = 'none';
+                    }
+                    loadAssessments();
+                });
+            } else {
+                console.error('Add assessment button or modal not found:', { addAssessmentBtn, addAssessmentModal });
+            }
+            
+            if (closeAddAssessmentBtn) {
+                closeAddAssessmentBtn.addEventListener('click', function() {
+                    addAssessmentModal.style.display = 'none';
+                    addAssessmentModal.classList.remove('show-modal');
+                    addAssessmentModal.classList.add('hide-modal');
+                    const sidebar = document.getElementById('sidebar');
+                    if (sidebar) {
+                        sidebar.style.display = '';
+                    }
+                });
+            }
+            
+            // Close modal when clicking outside
+            if (addAssessmentModal) {
+                addAssessmentModal.addEventListener('click', function(e) {
+                    if (e.target === addAssessmentModal) {
+                        addAssessmentModal.style.display = 'none';
+                        addAssessmentModal.classList.remove('show-modal');
+                        addAssessmentModal.classList.add('hide-modal');
+                        const sidebar = document.getElementById('sidebar');
+                        if (sidebar) {
+                            sidebar.style.display = '';
+                        }
+                    }
+                });
+            }
+        })();
+    });
 </script>
 {% endblock %}
 
