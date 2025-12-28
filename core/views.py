@@ -2784,109 +2784,85 @@ def all_courses(request):
         return redirect('all_courses')
     
     faculty_courses_with_instructors = []
-    course_instructor_map = {}
     
-    # NOTE: Technical debt - Course-Instructor relationship is stored in 3 places:
-    # 1. profile.courses (ManyToMany on UserProfile)
-    # 2. user.instructor_courses (reverse ForeignKey from Course.instructor)
-    # 3. Course.instructor (ForeignKey on Course model)
-    # This creates complexity and potential synchronization issues.
-    # In a production system, this would be normalized to a single source of truth.
-    # For academic purposes, this is acceptable but should be documented.
+    # IMPORTANT: Course.instructor (ForeignKey) is the PRIMARY source of truth for course-instructor relationships
+    # We only use Course.instructor to ensure the table reflects the actual PostgreSQL database state
+    # Note: Course.instructor can be either an instructor OR a faculty_head (both are User objects)
     
-    # Instructors'ları veritabanından çek
-    instructors = User.objects.filter(profile__role='instructor').select_related('profile').prefetch_related('profile__courses', 'instructor_courses')
-    for user in instructors:
-        profile = user.profile
-        inst_department = profile.department
-        if faculty_head_department:
-            if inst_department != faculty_head_department:
-                continue
-        
-        # Courses bilgisini al (hem UserProfile'dan hem de Course modelinden)
-        courses_from_profile = [course.name for course in profile.courses.all()]
-        courses_from_instructor = [course.name for course in user.instructor_courses.all()]
-        inst_courses = list(set(courses_from_profile + courses_from_instructor))
-        
-        full_name = (user.first_name + ' ' + user.last_name).strip()
-        instructor_name = full_name if full_name else user.username
-        
-        for course_name in inst_courses:
-            if course_name not in course_instructor_map:
-                course_instructor_map[course_name] = []
-            course_instructor_map[course_name].append(instructor_name)
-    
-    # Faculty heads'leri veritabanından çek
-    faculty_heads = User.objects.filter(profile__role='faculty_head').select_related('profile').prefetch_related('profile__courses')
-    for user in faculty_heads:
-        profile = user.profile
-        fh_department = profile.department
-        if faculty_head_department and fh_department != faculty_head_department:
-            continue
-        
-        # Get courses from JSON file (source of truth) instead of profile
-        fh_data = get_faculty_head_data(user.username)
-        fh_courses = fh_data.get('courses', [])
-        
-        # If JSON courses not available, fallback to profile courses
-        if not fh_courses:
-            fh_courses = [course.name for course in profile.courses.all()]
-        
-        full_name = (user.first_name + ' ' + user.last_name).strip()
-        faculty_head_name = full_name if full_name else user.username
-        
-        for course_name in fh_courses:
-            if course_name not in course_instructor_map:
-                course_instructor_map[course_name] = []
-            course_instructor_map[course_name].append(faculty_head_name)
-    
-    all_course_names = set(course_instructor_map.keys())
+    # Get all courses from the department
     if faculty_head_department:
-        all_courses_in_dept = Course.objects.filter(department=faculty_head_department).values_list('name', flat=True).distinct()
-        all_course_names.update(all_courses_in_dept)
+        courses_qs = Course.objects.filter(department=faculty_head_department).select_related('instructor', 'instructor__profile')
+    else:
+        courses_qs = Course.objects.all().select_related('instructor', 'instructor__profile')
     
-    # NOTE: Performance - N+1 query pattern below
-    # For each course_name, we query Course and ProgramOutcome separately.
-    # This is acceptable for small datasets but will become slow with many courses.
-    # Optimization: Prefetch all courses and learning outcomes in bulk queries.
-    
-    # Optimize: Fetch all courses in one query
-    all_courses_dict = {course.name: course for course in Course.objects.filter(name__in=all_course_names).select_related('instructor')}
-    
-    # Optimize: Fetch all learning outcomes in one query (grouped by course_name)
-    # NOTE: Technical debt - ProgramOutcome uses course_name (string) instead of ForeignKey
-    # This creates data integrity risk: typos, renames break relationships, no referential integrity
-    # Better approach: Add course=ForeignKey(Course) to ProgramOutcome model
+    # Optimize: Fetch all learning outcomes in one query
+    course_names = [course.name for course in courses_qs]
     learning_outcomes_by_course = {}
-    if all_course_names:
-        outcomes = ProgramOutcome.objects.filter(course_name__in=all_course_names).order_by('course_name', '-created_at')
+    if course_names:
+        outcomes = ProgramOutcome.objects.filter(course_name__in=course_names).order_by('course_name', '-created_at')
         for outcome in outcomes:
             if outcome.course_name not in learning_outcomes_by_course:
                 learning_outcomes_by_course[outcome.course_name] = outcome
     
-    for course_name in sorted(all_course_names):
-        instructors = course_instructor_map.get(course_name, [])
-        
-        course = all_courses_dict.get(course_name)
-        if course and course.instructor:
+    # Build courses list directly from Course.instructor (the source of truth)
+    # This includes both instructors and faculty_heads who are assigned to courses
+    from django.db.models import Avg
+    from .models import Grade
+    
+    for course in courses_qs.order_by('name'):
+        # Get instructor name from Course.instructor (PostgreSQL'deki gerçek durum)
+        # Course.instructor can be either instructor or faculty_head
+        if course.instructor:
             instructor_full_name = (course.instructor.first_name + ' ' + course.instructor.last_name).strip()
             instructor_name = instructor_full_name if instructor_full_name else course.instructor.username
-            if instructor_name not in instructors:
-                instructors.append(instructor_name)
+        else:
+            instructor_name = 'Unknown'
         
-        instructor_display = ', '.join(instructors) if instructors else 'Unknown'
+        first_learning_outcome = learning_outcomes_by_course.get(course.name)
         
-        first_learning_outcome = learning_outcomes_by_course.get(course_name)
+        # Calculate average overall score for this course
+        # Get all grades for this course where overall_score is not None
+        grades_with_scores = Grade.objects.filter(course=course, overall_score__isnull=False)
+        average_score = None
+        
+        if grades_with_scores.exists():
+            # Calculate average
+            avg_result = grades_with_scores.aggregate(avg_score=Avg('overall_score'))
+            if avg_result['avg_score'] is not None:
+                average_score = round(avg_result['avg_score'], 2)
+        
+        # Get students enrolled in this course with their overall scores
+        students_list = []
+        students = course.students.all().order_by('first_name', 'last_name', 'student_id')
+        for student in students:
+            grade_obj = Grade.objects.filter(student=student, course=course).first()
+            overall_score = None
+            if grade_obj and grade_obj.overall_score is not None:
+                overall_score = round(grade_obj.overall_score, 2)
+            
+            student_name = f"{student.first_name} {student.last_name}".strip()
+            if not student_name:
+                student_name = student.username
+            
+            students_list.append({
+                'student_id': student.student_id,
+                'student_name': student_name,
+                'overall_score': overall_score,
+            })
         
         faculty_courses_with_instructors.append({
-            'course': course_name,
-            'instructor': instructor_display,
-            'course_id': course.id if course else None,
-            'credits': course.credits if course else None,
+            'course': course.name,
+            'instructor': instructor_name,
+            'course_id': course.id,
+            'credits': course.credits,
             'first_lo_id': first_learning_outcome.id if first_learning_outcome else None,
+            'instructor_username': course.instructor.username if course.instructor else None,
+            'average_score': average_score,
+            'students': students_list,
         })
     
     available_instructors_list = []
+    # Get instructors
     available_instructors_qs = User.objects.filter(profile__role='instructor').select_related('profile')
     for user in available_instructors_qs:
         profile = user.profile
@@ -2900,6 +2876,24 @@ def all_courses(request):
         available_instructors_list.append({
             'username': user.username,
             'name': instructor_name,
+            'role': 'instructor',
+        })
+    
+    # Get faculty heads
+    available_faculty_heads_qs = User.objects.filter(profile__role='faculty_head').select_related('profile')
+    for user in available_faculty_heads_qs:
+        profile = user.profile
+        fh_department = profile.department
+        if faculty_head_department:
+            if fh_department != faculty_head_department:
+                continue
+        
+        full_name = (user.first_name + ' ' + user.last_name).strip()
+        faculty_head_name = full_name if full_name else user.username
+        available_instructors_list.append({
+            'username': user.username,
+            'name': faculty_head_name,
+            'role': 'faculty_head',
         })
     
     import json as json_module
