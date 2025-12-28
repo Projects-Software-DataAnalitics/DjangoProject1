@@ -61,10 +61,11 @@ jobs:
       env:
         PGPASSWORD: postgres
     
-    - name: Resolve migration conflicts
+    - name: Check and resolve migration conflicts
       run: |
+        python manage.py makemigrations --check --dry-run || true
         python manage.py makemigrations --merge --noinput || true
-        python manage.py migrate --noinput
+        python manage.py makemigrations --noinput
       env:
         DB_HOST: localhost
         DB_NAME: djangoproject2

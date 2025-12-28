@@ -114,8 +114,11 @@
                 if (message) {
                     showMessagePopup(message);
                     
-                    // Mark as read if not already read
-                    if (!isRead) {
+                    // Mark as read if not already read (skip for assignments)
+                    if (!isRead && annId && !annId.toString().startsWith('assignment_')) {
+                        markAsRead(annId, this);
+                    } else if (!isRead && annId && annId.toString().startsWith('assignment_')) {
+                        // For assignments, just mark visually as read
                         markAsRead(annId, this);
                     }
                 }
@@ -165,6 +168,18 @@
     }
     
     function markAsRead(announcementId, messageElement) {
+        // Skip mark-as-read for assignments (they don't have this functionality)
+        if (announcementId && announcementId.toString().startsWith('assignment_')) {
+            // For assignments, just remove the unread dot visually
+            const unreadDot = messageElement.querySelector('.unread-dot');
+            if (unreadDot) {
+                unreadDot.remove();
+            }
+            messageElement.setAttribute('data-is-read', 'true');
+            updateUnreadCount();
+            return;
+        }
+        
         // Get CSRF token
         const csrftoken = getCookie('csrftoken');
         
@@ -225,6 +240,11 @@
     }
     
     function togglePin(announcementId, buttonElement) {
+        // Skip toggle-pin for assignments (they don't have this functionality)
+        if (announcementId && announcementId.toString().startsWith('assignment_')) {
+            return;
+        }
+        
         // Get CSRF token
         const csrftoken = getCookie('csrftoken');
         

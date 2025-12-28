@@ -86,11 +86,39 @@
 
 <div class="header-top">
     <div class="header-icons">
-        <a href="{% url 'instructor_announcements' %}" class="header-icon" title="Announcements">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-        </a>
+        <div style="position: relative;">
+            <a href="{% url 'instructor_announcements' %}" class="header-icon" title="Announcements" id="notification-btn-instructor" onclick="event.preventDefault(); toggleNotificationDropdown();">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {% if unread_notifications_count > 0 %}
+                <span id="notification-badge-instructor" style="position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; background: #ef4444; border-radius: 50%; border: 2px solid #ffffff;"></span>
+                {% endif %}
+            </a>
+            <div id="notification-dropdown-instructor" style="display: none; position: absolute; top: 50px; right: 0; width: 320px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001; max-height: 400px; overflow-y: auto;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Notifications</h3>
+                    <a href="{% url 'instructor_announcements' %}" style="font-size: 12px; color: #3b82f6; text-decoration: none;">View all</a>
+                </div>
+                <div id="notification-list-instructor" style="padding: 8px 0;">
+                    {% if unread_notifications_count > 0 %}
+                        {% if unread_notifications %}
+                            {% for notification in unread_notifications %}
+                                <a href="{% url 'mark_notification_read' notification.id %}" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff;" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='#f0f9ff';">
+                                    <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">{{ notification.title }}</div>
+                                    <div style="font-size: 12px; color: #6b7280;">{{ notification.message }}</div>
+                                    <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">{{ notification.created_at|date:"M d, Y H:i" }}</div>
+                                </a>
+                            {% endfor %}
+                        {% else %}
+                            <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
+                        {% endif %}
+                    {% else %}
+                        <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
         <div class="header-icon" id="profile-icon" title="Profile" style="position: relative;">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -129,6 +157,9 @@
             <a href="{% url 'instructor_my_courses' %}">My Courses</a>
         </li>
         <li>
+            <a href="{% url 'instructor_assignments' %}">Assignments</a>
+        </li>
+        <li>
             <a href="{% url 'instructor_grades' %}">Grades</a>
         </li>
         <li>
@@ -160,6 +191,37 @@
 </div>
 
 <script src="{% static 'js/instructor.js' %}"></script>
+<script>
+    function toggleNotificationDropdown() {
+        const dropdown = document.getElementById('notification-dropdown-instructor');
+        const profilePopup = document.getElementById('profile-popup');
+        if (profilePopup) profilePopup.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            // Hide badge when dropdown is opened
+            const badge = document.getElementById('notification-badge-instructor');
+            if (badge) {
+                badge.style.display = 'none';
+            }
+        }
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(event) {
+        const notificationBtn = document.getElementById('notification-btn-instructor');
+        const notificationDropdown = document.getElementById('notification-dropdown-instructor');
+        const profileIcon = document.getElementById('profile-icon');
+        const profilePopup = document.getElementById('profile-popup');
+        
+        if (notificationBtn && notificationDropdown && !notificationBtn.contains(event.target) && !notificationDropdown.contains(event.target)) {
+            notificationDropdown.style.display = 'none';
+        }
+        
+        if (profileIcon && profilePopup && !profileIcon.contains(event.target) && !profilePopup.contains(event.target)) {
+            profilePopup.style.display = 'none';
+        }
+    });
+</script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const profileIcon = document.getElementById('profile-icon');

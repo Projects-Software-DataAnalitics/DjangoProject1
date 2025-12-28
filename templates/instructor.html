@@ -71,46 +71,6 @@
         </tbody>
     </table>
 
-    <div style="margin-top: 40px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="margin: 0; font-size: 24px; color: #0f172a;">Assignments</h2>
-            <button id="add-assignment-btn" style="padding: 10px 20px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#2563eb';" onmouseout="this.style.backgroundColor='#3b82f6';">
-                Add Assignment
-            </button>
-        </div>
-        
-        <table class="assignments-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-            <thead>
-                <tr style="background-color: #0b5fff; color: white;">
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Details</th>
-                </tr>
-            </thead>
-            <tbody id="assignments-tbody">
-                {% if all_assignments %}
-                    {% for assignment in all_assignments %}
-                    <tr style="border-bottom: 1px solid #ddd; cursor: pointer;" class="assignment-row" data-assignment-id="{{ assignment.id }}" data-assignment-title="{{ assignment.title }}" data-assignment-details="{{ assignment.details }}" data-assignment-deadline="{{ assignment.deadline }}" data-assignment-deadline-datetime="{{ assignment.deadline_datetime }}" data-assignment-deadline-date="{{ assignment.deadline_date|default:'' }}" data-assignment-deadline-time="{{ assignment.deadline_time|default:'' }}" data-assignment-course="{{ assignment.course_name }}" data-assignment-file-url="{{ assignment.file_url|default:'' }}" data-assignment-file-name="{{ assignment.file_name|default:'' }}" data-created-by-id="{{ assignment.created_by_id }}" data-current-user-id="{{ request.user.id }}" data-submissions='{{ assignment.submissions|safe }}'>
-                        <td style="padding: 12px; border: 1px solid #ddd;">{{ assignment.course_name }}</td>
-                        <td style="padding: 12px; border: 1px solid #ddd;">
-                            <div>
-                                <strong>{{ assignment.title }}</strong>
-                                <p style="margin: 8px 0; color: #64748b;">{{ assignment.details|truncatewords:20 }}</p>
-                                <p style="margin: 4px 0; font-size: 12px; color: #94a3b8;">Deadline: <strong>{{ assignment.deadline }}</strong></p>
-                                {% if assignment.file_url %}
-                                <a href="{{ assignment.file_url }}" target="_blank" style="color: #3b82f6; text-decoration: none; font-size: 13px;" onclick="event.stopPropagation();">📄 {{ assignment.file_name }}</a>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="2" style="padding: 20px; text-align: center; color: #64748b;">No assignments yet.</td>
-                    </tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
 
     <!-- Add Assignment Modal -->
     <div id="add-assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">

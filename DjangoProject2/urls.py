@@ -30,6 +30,7 @@ urlpatterns = [
     path('student/', core_views.student_dashboard, name='student'),
     path('student/profile/', core_views.student_profile, name='student_profile'),
     path('student/courses/', core_views.student_courses, name='student_courses'),
+    path('student/assignments/', core_views.student_assignments, name='student_assignments'),
     path('student/assignments/<int:assignment_id>/submit/', core_views.submit_assignment, name='submit_assignment'),
     path('student/assignments/<int:assignment_id>/delete-submission/', core_views.delete_submission, name='delete_submission'),
     path('student/courses/<int:course_id>/learning-outcomes/', core_views.student_course_learning_outcomes, name='student_course_learning_outcomes'),
@@ -60,6 +61,7 @@ urlpatterns = [
     path('instructor/learning-outcomes/<int:course_id>/<int:outcome_id>/', core_views.learning_outcome_detail, name='learning_outcome_detail'),
     path('instructor/program-outcomes/', core_views.instructor_program_outcomes, name='instructor_program_outcomes'),
     path('instructor/announcements/', core_views.instructor_announcements, name='instructor_announcements'),
+    path('instructor/assignments/', core_views.instructor_assignments, name='instructor_assignments'),
 ]
 
 # Faculty Head URLs
@@ -117,6 +119,8 @@ urlpatterns += [
     path('instructor/grades/', core_views.instructor_grades, name='instructor_grades'),
     path('instructor/grades/<str:course_name>/', core_views.instructor_course_grades, name='instructor_course_grades'),
     path('instructor/program-outcomes/', core_views.instructor_program_outcomes, name='instructor_program_outcomes'),
+    path('notifications/<int:notification_id>/read/', core_views.mark_notification_read, name='mark_notification_read'),
+    path('debug/notifications/', core_views.debug_notifications, name='debug_notifications'),
 ]
 
 if settings.DEBUG:
