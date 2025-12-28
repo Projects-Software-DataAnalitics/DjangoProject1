@@ -48,6 +48,7 @@ urlpatterns = [
     path('instructor/grades/', core_views.instructor_grades, name='instructor_grades'),
     path('instructor/grades/<str:course_name>/', core_views.instructor_course_grades, name='instructor_course_grades'),
     path('instructor/grades/<str:course_name>/upload-<str:assessment_type>-<int:assessment_index>/', core_views.upload_assessment_grades, name='upload_assessment_grades'),
+    path('instructor/grades/<str:course_name>/upload-all-assessments/', core_views.upload_all_assessments, name='upload_all_assessments'),
     path('instructor/grades/<str:course_name>/delete-<str:assessment_type>-<int:assessment_index>/', core_views.delete_assessment_file, name='delete_assessment_file'),
     path('instructor/grades/<str:course_name>/update-individual-grade/', core_views.update_individual_grade, name='update_individual_grade'),
     path('instructor/grades/<str:course_name>/update-multiple-grades/', core_views.update_multiple_grades, name='update_multiple_grades'),
@@ -119,8 +120,6 @@ urlpatterns += [
     path('instructor/add-assignment/', core_views.add_assignment, name='add_assignment'),
     path('instructor/assignments/<int:assignment_id>/update/', core_views.update_assignment, name='update_assignment'),
     path('instructor/submissions/<int:submission_id>/delete/', core_views.delete_student_submission, name='delete_student_submission'),
-    path('instructor/grades/', core_views.instructor_grades, name='instructor_grades'),
-    path('instructor/grades/<str:course_name>/', core_views.instructor_course_grades, name='instructor_course_grades'),
     path('instructor/program-outcomes/', core_views.instructor_program_outcomes, name='instructor_program_outcomes'),
 ]
 

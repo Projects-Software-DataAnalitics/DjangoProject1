@@ -7,12 +7,16 @@
 <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h1 style="margin: 0; font-size: 32px; color: #0f172a; font-weight: 700;">Your Grades</h1>
-        {% if gpa is not None %}
         <div style="background: linear-gradient(135deg, #0b5fff 0%, #3b82f6 100%); padding: 16px 24px; border-radius: 12px; color: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
             <div style="font-size: 14px; opacity: 0.9; margin-bottom: 4px; font-weight: 500;">GPA</div>
-            <div style="font-size: 28px; font-weight: 700;">{{ gpa|floatformat:2 }}</div>
+            <div style="font-size: 28px; font-weight: 700;">
+                {% if gpa is not None %}
+                    {{ gpa|floatformat:2 }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
         </div>
-        {% endif %}
     </div>
     
     {% if courses_with_grades %}

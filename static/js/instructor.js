@@ -85,12 +85,27 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     
     const pageType = document.body.dataset.page || '';
+    // Check if we're on the instructor_grades_page template (which has its own content)
+    // The new template uses Django rendering, so showGrades() should NEVER run
+    const personalInfo = document.querySelector('#personal-info');
+    const coursesTable = personalInfo ? personalInfo.querySelector('#courses-table') : null;
+    const headerCells = coursesTable ? coursesTable.querySelectorAll('thead th') : [];
+    
+    const isGradesPageTemplate = window.instructorGradesPageLoaded || 
+                                 window.instructorGradesPageTemplate ||
+                                 document.querySelector('#grades-title') !== null ||
+                                 (headerCells.length > 1); // New template has 3 columns
+    
     if (pageType === 'profile') {
         showPersonalInfo();
     } else if (pageType === 'my_courses') {
         showMyCourses();
     } else if (pageType === 'grades') {
-        showGrades();
+        // NEVER call showGrades() - the new template (instructor_grades_page.html) handles everything
+        // showGrades() is only for the old system which is no longer used
+        if (!isGradesPageTemplate) {
+            console.warn('showGrades() not called - new template system in use');
+        }
     } else if (pageType === 'announcements') {
         showAnnouncements();
     }
@@ -209,7 +224,12 @@ function showMyCourses() {
 }
 
 function showGrades() {
-    const infoDiv = document.getElementById("personal-info");
+    // DEPRECATED: This function is no longer used
+    // The new template system (instructor_grades_page.html) handles course selection via Django
+    // Always return early to prevent any override
+    console.log('showGrades() blocked - new template system in use');
+    return;
+    
     const jsonPathElement = document.getElementById('instructor-json-path');
     const jsonPath = jsonPathElement ? jsonPathElement.dataset.path : '/static/json/instructors.json';
     
@@ -439,9 +459,14 @@ function logout() {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
+    // Don't clear personal-info if it's the new grades page template
     const personalInfo = document.getElementById("personal-info");
-    if (personalInfo) {
-        personalInfo.innerHTML = "";
+    if (personalInfo && !window.instructorGradesPageLoaded && !window.instructorGradesPageTemplate) {
+        // Only clear if it's not the new template
+        const coursesTable = personalInfo.querySelector('#courses-table');
+        if (!coursesTable || coursesTable.querySelectorAll('thead th').length <= 1) {
+            personalInfo.innerHTML = "";
+        }
     }
 });
 

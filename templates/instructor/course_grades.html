@@ -2,9 +2,85 @@
 {% load static %}
 
 {% block content %}
-<div style="margin-left: 50px; margin-bottom: 20px;">
-    <a href="{% url 'instructor_grades' %}" style="display: inline-flex; align-items: center; gap: 6px; color: #0b5fff; text-decoration: none; font-size: 14px; font-weight: 600; margin-bottom: 10px;">
-        <span style="font-size: 16px; color: #0b5fff;">←</span>
+{% block extra_head %}
+<style>
+    .course-grades-header {
+        margin-left: 50px;
+        margin-bottom: 20px;
+        transition: margin-left 0.3s ease;
+    }
+    
+    .course-grades-content {
+        transition: margin-left 0.3s ease;
+    }
+    
+    #grades-list-table-container {
+        transition: margin-left 0.3s ease;
+    }
+</style>
+<script>
+    // Monitor sidebar state and update margins
+    function updateContentMargins() {
+        const sidebar = document.getElementById("sidebar");
+        const header = document.querySelector('.course-grades-header');
+        const content = document.querySelector('.course-grades-content');
+        const tableContainer = document.getElementById('grades-list-table-container');
+        
+        if (!sidebar) return;
+        
+        const sidebarWidth = sidebar.style.width || getComputedStyle(sidebar).width;
+        const isOpen = sidebarWidth === "200px" || parseInt(sidebarWidth) >= 200;
+        
+        if (isOpen) {
+            if (header) header.style.marginLeft = "250px";
+            if (content) content.style.marginLeft = "200px";
+            if (tableContainer) tableContainer.style.marginLeft = "0";
+        } else {
+            if (header) header.style.marginLeft = "50px";
+            if (content) content.style.marginLeft = "0";
+            if (tableContainer) tableContainer.style.marginLeft = "0";
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Override toggleSidebar function
+        const originalToggleSidebar = window.toggleSidebar;
+        if (originalToggleSidebar) {
+            window.toggleSidebar = function() {
+                originalToggleSidebar();
+                setTimeout(updateContentMargins, 50);
+            };
+        }
+        
+        // Use MutationObserver to watch sidebar width changes
+        const sidebar = document.getElementById("sidebar");
+        if (sidebar) {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        updateContentMargins();
+                    }
+                });
+            });
+            
+            observer.observe(sidebar, {
+                attributes: true,
+                attributeFilter: ['style']
+            });
+        }
+        
+        // Check sidebar state periodically as fallback
+        setInterval(updateContentMargins, 200);
+        
+        // Initial check
+        setTimeout(updateContentMargins, 100);
+    });
+</script>
+{% endblock %}
+
+<div class="course-grades-header">
+    <a href="{% url 'instructor_grades' %}" style="display: inline-flex; align-items: center; gap: 8px; color: #0b5fff; text-decoration: none; font-size: 18px; font-weight: 600; margin-bottom: 10px;">
+        <span style="font-size: 22px; color: #0b5fff;">←</span>
         <span style="color: #0b5fff;">Go Back</span>
     </a>
     <h1 style="margin: 0;">Grades Management - {{ course.name }}</h1>
@@ -114,14 +190,38 @@
 <div style="margin: 30px 0; padding: 20px; background: #e0f2fe; border-radius: 16px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2 style="margin: 0; color: #0f172a;">Upload Grades - With CSV</h2>
-        <button type="button" id="download-template-btn" 
-                style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-            Download Student List CSV
-        </button>
-                                </div>
-    <p style="margin-bottom: 20px; color: #475569; font-size: 14px;">
-        Upload separate CSV files for each assessment. CSV format: <code>student_id, score</code>
-    </p>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" id="download-all-template-btn" 
+                    style="padding: 8px 16px; background: #0b5fff; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                Download All Assessments CSV
+            </button>
+            <button type="button" id="download-template-btn" 
+                    style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                Download Student List CSV
+            </button>
+        </div>
+    </div>
+    
+    <!-- Upload All Assessments Together Section -->
+    <div style="margin-bottom: 30px; padding: 20px; background: #ffffff; border-radius: 12px; border: 2px solid #0b5fff; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+        <h3 style="margin: 0 0 10px 0; color: #0f172a; font-size: 18px;">Upload All Assessments Together</h3>
+        <p style="margin-bottom: 15px; color: #475569; font-size: 14px;">
+            Upload a single CSV file containing all assessment scores.
+        </p>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="file" 
+                   id="upload-all-assessments-file" 
+                   accept=".csv" 
+                   style="display: none;">
+            <button type="button" 
+                    id="upload-all-assessments-btn"
+                    style="padding: 10px 20px; background: #0b5fff; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                Upload All
+            </button>
+            <span id="upload-all-file-name" style="font-size: 14px; color: #64748b;"></span>
+        </div>
+        <div id="upload-all-status" style="margin-top: 15px; padding: 12px; border-radius: 10px; display: none; font-size: 13px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);"></div>
+    </div>
     
     <div id="grade-upload-boxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
         <!-- Upload boxes will be dynamically generated here -->
@@ -605,6 +705,69 @@ function getCsrfToken() {
         }
     });
     
+    // Download All Assessments Template CSV
+    const downloadAllTemplateBtn = document.getElementById('download-all-template-btn');
+    if (downloadAllTemplateBtn) {
+        downloadAllTemplateBtn.addEventListener('click', function() {
+            try {
+                const studentsData = JSON.parse('{{ students_json|escapejs }}');
+                if (!studentsData || studentsData.length === 0) {
+                    alert('No students enrolled in this course.');
+                    return;
+                }
+                
+                // Get assessment counts
+                const assessmentTypes = [
+                    { key: 'midterm', label: 'Midterm', count: parseInt(document.getElementById('midterm')?.value || '{{ assessment.midterm }}') || 0 },
+                    { key: 'final', label: 'Final', count: parseInt(document.getElementById('final')?.value || '{{ assessment.final }}') || 0 },
+                    { key: 'project', label: 'Project', count: parseInt(document.getElementById('project')?.value || '{{ assessment.project }}') || 0 },
+                    { key: 'assignment', label: 'Assignment', count: parseInt(document.getElementById('assignment')?.value || '{{ assessment.assignment }}') || 0 },
+                    { key: 'absence', label: 'Absence', count: parseInt(document.getElementById('absence')?.value || '{{ assessment.absence }}') || 0 },
+                    { key: 'quiz', label: 'Quiz', count: parseInt(document.getElementById('quiz')?.value || '{{ assessment.quiz }}') || 0 }
+                ];
+                
+                // Build header row
+                let headerRow = 'student_id';
+                assessmentTypes.forEach(type => {
+                    if (type.count > 0) {
+                        for (let i = 1; i <= type.count; i++) {
+                            headerRow += `,${type.key}_${i}`;
+                        }
+                    }
+                });
+                
+                // Create CSV content
+                let csvContent = headerRow + '\n';
+                studentsData.forEach(student => {
+                    let row = student.student_id;
+                    assessmentTypes.forEach(type => {
+                        if (type.count > 0) {
+                            for (let i = 1; i <= type.count; i++) {
+                                row += ',';
+                            }
+                        }
+                    });
+                    csvContent += row + '\n';
+                });
+                
+                // Create blob and download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                const courseNameForFile = courseName.replace(/[^a-z0-9]/gi, '_');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `all_assessments_template_${courseNameForFile}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error('Error downloading template:', error);
+                alert('Error downloading template. Please try again.');
+            }
+        });
+    }
+    
     // Download Student List CSV
     const downloadTemplateBtn = document.getElementById('download-template-btn');
     if (downloadTemplateBtn) {
@@ -636,6 +799,162 @@ function getCsrfToken() {
             } catch (error) {
                 console.error('Error downloading template:', error);
                 alert('Error downloading template. Please try again.');
+            }
+        });
+    }
+    
+    // Upload All Assessments Together
+    const uploadAllAssessmentsBtn = document.getElementById('upload-all-assessments-btn');
+    const uploadAllAssessmentsFile = document.getElementById('upload-all-assessments-file');
+    const uploadAllFileName = document.getElementById('upload-all-file-name');
+    const uploadAllStatus = document.getElementById('upload-all-status');
+    
+    if (uploadAllAssessmentsBtn && uploadAllAssessmentsFile) {
+        // When button is clicked, trigger file input
+        uploadAllAssessmentsBtn.addEventListener('click', function() {
+            uploadAllAssessmentsFile.click();
+        });
+        
+        // When file is selected, update button text and enable upload
+        uploadAllAssessmentsFile.addEventListener('change', function(e) {
+            if (e.target.files && e.target.files.length > 0) {
+                const fileName = e.target.files[0].name;
+                uploadAllFileName.textContent = fileName;
+                uploadAllFileName.style.color = '#059669';
+                uploadAllFileName.style.fontWeight = '500';
+            } else {
+                uploadAllFileName.textContent = '';
+            }
+        });
+        
+        // Upload button click handler
+        uploadAllAssessmentsBtn.addEventListener('click', function(e) {
+            // If file is already selected, upload it
+            if (uploadAllAssessmentsFile.files && uploadAllAssessmentsFile.files.length > 0) {
+                e.preventDefault();
+                uploadAllAssessments();
+            }
+        });
+    }
+    
+    function uploadAllAssessments() {
+        const file = uploadAllAssessmentsFile.files[0];
+        if (!file) {
+            uploadAllStatus.style.display = 'block';
+            uploadAllStatus.style.background = '#fee2e2';
+            uploadAllStatus.style.color = '#dc2626';
+            uploadAllStatus.style.border = '1px solid #fca5a5';
+            uploadAllStatus.textContent = 'Please select a CSV file';
+            return;
+        }
+        
+        // Check file type
+        const fileName = file.name.toLowerCase();
+        if (!fileName.endsWith('.csv')) {
+            uploadAllStatus.style.display = 'block';
+            uploadAllStatus.style.background = '#fee2e2';
+            uploadAllStatus.style.color = '#dc2626';
+            uploadAllStatus.style.border = '1px solid #fca5a5';
+            uploadAllStatus.textContent = 'Please select a CSV file (.csv extension required)';
+            return;
+        }
+        
+        // Show uploading status
+        uploadAllStatus.style.display = 'block';
+        uploadAllStatus.style.background = '#dbeafe';
+        uploadAllStatus.style.color = '#1e40af';
+        uploadAllStatus.style.border = '1px solid #93c5fd';
+        uploadAllStatus.textContent = `Uploading ${file.name}...`;
+        
+        const formData = new FormData();
+        formData.append('csv_file', file);
+        
+        fetch(`/instructor/grades/${courseName}/upload-all-assessments/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: formData
+        })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json().then(data => {
+                    if (!response.ok) {
+                        const error = new Error(data.error || `Server error: ${response.status}`);
+                        error.responseData = data;
+                        throw error;
+                    }
+                    return data;
+                });
+            }
+            if (!response.ok) {
+                return response.text().then(text => {
+                    try {
+                        const jsonData = JSON.parse(text);
+                        const error = new Error(jsonData.error || `Server error: ${response.status}`);
+                        error.responseData = jsonData;
+                        throw error;
+                    } catch (e) {
+                        if (e instanceof Error && e.responseData) {
+                            throw e;
+                        }
+                        throw new Error(`Server error: ${response.status} - ${text.substring(0, 100)}`);
+                    }
+                });
+            }
+            return response.text().then(text => {
+                throw new Error('Server returned non-JSON response: ' + text.substring(0, 100));
+            });
+        })
+        .then(data => {
+            if (data.status === 'ok') {
+                uploadAllStatus.style.background = '#d1fae5';
+                uploadAllStatus.style.color = '#065f46';
+                uploadAllStatus.style.border = '1px solid #6ee7b7';
+                uploadAllStatus.textContent = `Successfully uploaded all assessments. Updated ${data.updated_count} students.`;
+                
+                // Clear file input
+                uploadAllAssessmentsFile.value = '';
+                uploadAllFileName.textContent = '';
+                
+                // Reload page to update grades list table
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                uploadAllStatus.style.background = '#fee2e2';
+                uploadAllStatus.style.color = '#dc2626';
+                uploadAllStatus.style.border = '1px solid #fca5a5';
+                let errorMessage = data.error || 'Upload failed';
+                if (data.details && data.details.length > 0) {
+                    errorMessage += '\n\nDetails:\n' + data.details.slice(0, 5).join('\n');
+                    if (data.details.length > 5) {
+                        errorMessage += `\n... and ${data.details.length - 5} more errors`;
+                    }
+                }
+                uploadAllStatus.textContent = errorMessage;
+                uploadAllStatus.style.whiteSpace = 'pre-line';
+            }
+        })
+        .catch(error => {
+            console.error('Upload error:', error);
+            uploadAllStatus.style.background = '#fee2e2';
+            uploadAllStatus.style.color = '#dc2626';
+            uploadAllStatus.style.border = '1px solid #fca5a5';
+            
+            if (error.responseData) {
+                let errorMessage = error.responseData.error || error.message || 'Upload failed';
+                if (error.responseData.details && error.responseData.details.length > 0) {
+                    errorMessage += '\n\nDetails:\n' + error.responseData.details.slice(0, 5).join('\n');
+                    if (error.responseData.details.length > 5) {
+                        errorMessage += `\n... and ${error.responseData.details.length - 5} more errors`;
+                    }
+                }
+                uploadAllStatus.textContent = errorMessage;
+                uploadAllStatus.style.whiteSpace = 'pre-line';
+            } else {
+                uploadAllStatus.textContent = 'Upload error: ' + (error.message || error.toString());
             }
         });
     }

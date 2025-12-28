@@ -1,0 +1,384 @@
+{% extends "instructor.html" %}
+{% load static %}
+
+{% block extra_head %}
+<script>
+    // Set flag IMMEDIATELY to prevent showGrades() from running
+    // This must run before instructor.js loads
+    (function() {
+        window.instructorGradesPageLoaded = true;
+        window.instructorGradesPageTemplate = true;
+        // Override showGrades function immediately when it's defined
+        Object.defineProperty(window, 'showGrades', {
+            value: function() {
+                console.log('showGrades() blocked: new template in use');
+                return;
+            },
+            writable: false,
+            configurable: false
+        });
+    })();
+</script>
+{% endblock %}
+
+{% block content %}
+<style>
+    #personal-info {
+        margin-left: 60px;
+    }
+    .grades-content-box {
+        background-color: white;
+        border-radius: 16px;
+        padding: 30px;
+        margin: 30px auto;
+        max-width: 900px;
+        width: calc(100% - 40px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        transition: width 0.3s ease, max-width 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    @media (max-width: 1200px) {
+        .grades-content-box {
+            max-width: 800px;
+            padding: 25px;
+        }
+    }
+    @media (max-width: 992px) {
+        .grades-content-box {
+            max-width: 700px;
+            padding: 20px;
+        }
+    }
+    @media (max-width: 768px) {
+        .grades-content-box {
+            max-width: 100%;
+            padding: 15px;
+            margin: 20px 10px;
+        }
+    }
+    #grades-title {
+        margin-top: 0;
+        margin-left: 0;
+        position: relative;
+        z-index: 1;
+        font-size: 36px;
+        font-weight: bold;
+        text-align: center;
+    }
+    .courses-container {
+        margin-top: 24px;
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+    #courses-table {
+        width: 100%;
+        max-width: 700px;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-top: 20px;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: max-width 0.3s ease;
+    }
+    @media (max-width: 1200px) {
+        #courses-table {
+            max-width: 600px;
+        }
+    }
+    @media (max-width: 992px) {
+        #courses-table {
+            max-width: 500px;
+        }
+    }
+    @media (max-width: 768px) {
+        #courses-table {
+            max-width: 100%;
+            font-size: 14px;
+        }
+        #courses-table thead th,
+        #courses-table tbody td {
+            padding: 8px;
+        }
+    }
+    #courses-table thead tr {
+        background-color: #0b5fff;
+        color: white;
+    }
+    #courses-table thead th {
+        padding: 12px;
+        text-align: left;
+        border: none;
+    }
+    #courses-table thead th:first-child {
+        border-top-left-radius: 20px;
+    }
+    #courses-table thead th:last-child {
+        border-top-right-radius: 20px;
+    }
+    #courses-table tbody td {
+        text-align: left;
+    }
+    #courses-table tbody td:nth-child(2),
+    #courses-table tbody td:nth-child(3) {
+        text-align: center;
+    }
+    .course-row {
+        cursor: pointer;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .course-row.even-row {
+        background-color: #f8fafc;
+    }
+    .course-row.odd-row {
+        background-color: white;
+    }
+    .course-row.last-row {
+        border-bottom: none;
+    }
+    .course-row td {
+        padding: 12px;
+        border: none;
+    }
+    .course-row.last-row td:first-child {
+        border-bottom-left-radius: 20px;
+    }
+    .course-row.last-row td:last-child {
+        border-bottom-right-radius: 20px;
+    }
+    .no-courses-row {
+        background-color: white;
+    }
+    .no-courses-row td {
+        padding: 12px;
+        text-align: center;
+        color: #666;
+        border: none;
+    }
+    .no-courses-row td:first-child {
+        border-bottom-left-radius: 20px;
+    }
+    .no-courses-row td:last-child {
+        border-bottom-right-radius: 20px;
+    }
+    #file-upload-section {
+        margin-top: 24px;
+        display: none;
+    }
+    #upload-status {
+        margin-top: 16px;
+    }
+</style>
+
+<div id="personal-info">
+    <div class="grades-content-box">
+        <h2 id="grades-title">Grades</h2>
+        <p id="grades-subtitle" style="margin-top: 12px; margin-left: 0; color: #64748b; font-size: 14px; font-weight: 500; text-align: center;">Select a course to manage grades and assessments</p>
+        <div class="courses-container">
+            <table id="courses-table">
+                <thead>
+                    <tr>
+                        <th>Course Name</th>
+                        <th>Course Credit</th>
+                        <th>Total Student</th>
+                    </tr>
+                </thead>
+                <tbody id="courses-table-body">
+                    {% if instructor_courses %}
+                        {% for course in instructor_courses %}
+                        <tr class="course-row {% if forloop.counter0|divisibleby:2 %}even-row{% else %}odd-row{% endif %} {% if forloop.last %}last-row{% endif %}" data-course="{{ course.name }}">
+                            <td>{{ course.name }}</td>
+                            <td>{{ course.credits }}</td>
+                            <td>{{ course.student_count }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr class="no-courses-row">
+                            <td colspan="3">No courses available</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="file-upload-section"></div>
+    <div id="upload-status" class="upload-status"></div>
+</div>
+<script>
+    // Prevent showGrades() from running by setting a flag
+    window.instructorGradesPageLoaded = true;
+    
+    // Function to update margins based on sidebar state
+    function updateGradesPageMargins() {
+        const sidebar = document.getElementById("sidebar");
+        const infoDiv = document.getElementById("personal-info");
+        const titleDiv = document.getElementById("grades-title");
+        if (!sidebar || !infoDiv) return;
+        
+        const sidebarWidth = sidebar.style.width || getComputedStyle(sidebar).width;
+        const isOpen = sidebarWidth === "200px" || parseInt(sidebarWidth) >= 200;
+        
+        const subtitleDiv = document.getElementById("grades-subtitle");
+        const contentBox = document.querySelector('.grades-content-box');
+        const coursesTable = document.getElementById('courses-table');
+        
+        if (isOpen) {
+            infoDiv.style.marginLeft = "200px";
+            if (contentBox) {
+                // Sidebar açıkken de aynı genişliği koru, ortada tut
+                contentBox.style.maxWidth = "900px";
+                contentBox.style.marginLeft = "auto";
+                contentBox.style.marginRight = "auto";
+                if (coursesTable) {
+                    coursesTable.style.maxWidth = "700px";
+                }
+            }
+        } else {
+            infoDiv.style.marginLeft = "60px";
+            if (contentBox) {
+                // Sidebar kapalıyken normal boyut, ortada tut
+                contentBox.style.maxWidth = "900px";
+                contentBox.style.marginLeft = "auto";
+                contentBox.style.marginRight = "auto";
+                if (coursesTable) {
+                    coursesTable.style.maxWidth = "700px";
+                }
+            }
+        }
+    }
+    
+    // Ensure toggleSidebar function exists - define it if instructor.js hasn't loaded yet
+    if (typeof window.toggleSidebar !== 'function') {
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById("sidebar");
+            const content = document.getElementById("content");
+            if (sidebar && content) {
+                if (sidebar.style.width === "200px") {
+                    sidebar.style.width = "0";
+                    content.style.marginLeft = "0";
+                } else {
+                    sidebar.style.width = "200px";
+                    content.style.marginLeft = "200px";
+                }
+                updateGradesPageMargins();
+            }
+        };
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ensure menu button works
+        const menuBtn = document.getElementById("menu-btn");
+        if (menuBtn) {
+            // Remove all existing click listeners by cloning
+            const newBtn = menuBtn.cloneNode(true);
+            menuBtn.parentNode.replaceChild(newBtn, menuBtn);
+            
+            // Add our click listener
+            newBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Call toggleSidebar if it exists
+                if (typeof window.toggleSidebar === 'function') {
+                    window.toggleSidebar();
+                } else {
+                    // Fallback: manual toggle
+                    const sidebar = document.getElementById("sidebar");
+                    const content = document.getElementById("content");
+                    if (sidebar && content) {
+                        if (sidebar.style.width === "200px") {
+                            sidebar.style.width = "0";
+                            content.style.marginLeft = "0";
+                        } else {
+                            sidebar.style.width = "200px";
+                            content.style.marginLeft = "200px";
+                        }
+                        updateGradesPageMargins();
+                    }
+                }
+            }, true); // Use capture phase to ensure it runs
+        }
+        
+        // Add click event listeners to course rows
+        const courseRows = document.querySelectorAll('.course-row');
+        courseRows.forEach(function(row, index) {
+            const originalBg = index % 2 === 0 ? '#f8fafc' : 'white';
+            row.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#e0f2fe';
+            });
+            row.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = originalBg;
+            });
+            row.addEventListener('click', function() {
+                const courseName = this.dataset.course;
+                if (courseName) {
+                    window.location.href = '/instructor/grades/' + encodeURIComponent(courseName) + '/';
+                }
+            });
+        });
+        
+        // Use MutationObserver to watch sidebar width changes
+        const sidebar = document.getElementById("sidebar");
+        if (sidebar) {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        updateGradesPageMargins();
+                    }
+                });
+            });
+            
+            observer.observe(sidebar, {
+                attributes: true,
+                attributeFilter: ['style']
+            });
+        }
+        
+        // Check sidebar state periodically as fallback
+        setInterval(updateGradesPageMargins, 200);
+        
+        // Initial check
+        setTimeout(updateGradesPageMargins, 100);
+    });
+</script>
+<script src="{% static 'js/instructor.js' %}"></script>
+<script>
+    // Ensure menu button works after instructor.js loads
+    window.addEventListener('load', function() {
+        const menuBtn = document.getElementById("menu-btn");
+        if (menuBtn) {
+            // Clone to remove all listeners
+            const newBtn = menuBtn.cloneNode(true);
+            menuBtn.parentNode.replaceChild(newBtn, menuBtn);
+            
+            // Add click listener
+            newBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (typeof window.toggleSidebar === 'function') {
+                    window.toggleSidebar();
+                } else {
+                    // Fallback
+                    const sidebar = document.getElementById("sidebar");
+                    const content = document.getElementById("content");
+                    if (sidebar && content) {
+                        if (sidebar.style.width === "200px") {
+                            sidebar.style.width = "0";
+                            content.style.marginLeft = "0";
+                        } else {
+                            sidebar.style.width = "200px";
+                            content.style.marginLeft = "200px";
+                        }
+                        updateGradesPageMargins();
+                    }
+                }
+            }, true);
+        }
+    });
+</script>
+{% endblock %}
+
