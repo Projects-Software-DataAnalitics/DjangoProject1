@@ -1,6 +1,17 @@
 {% extends "faculty/base.html" %}
 {% load static %}
 
+{% block extra_head %}
+<style>
+    .course-row-even {
+        background-color: #f8fafc;
+    }
+    .course-row-odd {
+        background-color: white;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 {% if show_course_selection %}
     <h1 style="font-size: 32px; margin: 0 0 24px 0;">Grades</h1>
@@ -15,7 +26,7 @@
             </thead>
             <tbody>
             {% for course in faculty_head_courses %}
-                <tr class="course-row" data-course="{{ course }}" style="cursor: pointer; border-bottom: 1px solid #ddd; {% if forloop.counter0|divisibleby:2 %}background-color: #f8fafc;{% else %}background-color: white;{% endif %}">
+                <tr class="course-row {% if forloop.counter0|divisibleby:2 %}course-row-even{% else %}course-row-odd{% endif %}" data-course="{{ course }}" style="cursor: pointer; border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px; border: 1px solid #e2e8f0;">{{ course }}</td>
                 </tr>
             {% endfor %}
@@ -136,48 +147,6 @@
     <div>
         <h3 style="margin-top: 0; margin-bottom: 15px; color: #0f172a; font-size: 18px;">Assessment Percentages</h3>
         <form id="assessment-percentages-form" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
-            <div style="flex: 0 0 auto;">
-                <label for="midterm_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Midterm %</label>
-                <input type="number" id="midterm_percentage" name="midterm_percentage" value="{{ assessment.midterm_percentage }}" 
-                       min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-            </div>
-            
-            <div style="flex: 0 0 auto;">
-                <label for="final_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Final %</label>
-                <input type="number" id="final_percentage" name="final_percentage" value="{{ assessment.final_percentage }}" 
-                       min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-            </div>
-            
-            <div style="flex: 0 0 auto;">
-                <label for="project_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Project %</label>
-                <input type="number" id="project_percentage" name="project_percentage" value="{{ assessment.project_percentage }}" 
-                       min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-            </div>
-            
-            <div style="flex: 0 0 auto;">
-                <label for="assignment_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Assignment %</label>
-                <input type="number" id="assignment_percentage" name="assignment_percentage" value="{{ assessment.assignment_percentage }}" 
-                       min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-            </div>
-            
-            <div style="flex: 0 0 auto;">
-                <label for="absence_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Absence %</label>
-                <input type="number" id="absence_percentage" name="absence_percentage" value="{{ assessment.absence_percentage }}" 
-                       min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-            </div>
-            
-            <div style="flex: 0 0 auto;">
-                <label for="quiz_percentage" style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Quiz %</label>
-                <input type="number" id="quiz_percentage" name="quiz_percentage" value="{{ assessment.quiz_percentage }}" 
-                       min="0" max="100" step="1" required
-                       style="width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-            </div>
-            
             <div style="flex: 0 0 auto; margin-left: 20px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;">Total %</label>
                 <div id="percentage-count-display" style="width: 100px; padding: 8px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 16px; font-weight: bold; color: #0f172a; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
@@ -186,6 +155,17 @@
             </div>
         </form>
     </div>
+    
+    <script type="application/json" id="assessment-data">
+    {
+        "midterm_percentage": {{ assessment.midterm_percentage|default:0 }},
+        "final_percentage": {{ assessment.final_percentage|default:0 }},
+        "project_percentage": {{ assessment.project_percentage|default:0 }},
+        "assignment_percentage": {{ assessment.assignment_percentage|default:0 }},
+        "absence_percentage": {{ assessment.absence_percentage|default:0 }},
+        "quiz_percentage": {{ assessment.quiz_percentage|default:0 }}
+    }
+    </script>
     
     <!-- Combined Save Button -->
     <button type="button" id="save-all-btn" 
@@ -275,15 +255,47 @@ function getCsrfToken() {
             quiz: parseInt(document.getElementById('quiz').value)
         };
         
-        // Assessment Percentage verilerini al
-        const percentageData = {
-            midterm_percentage: parseInt(document.getElementById('midterm_percentage').value),
-            final_percentage: parseInt(document.getElementById('final_percentage').value),
-            project_percentage: parseInt(document.getElementById('project_percentage').value),
-            assignment_percentage: parseInt(document.getElementById('assignment_percentage').value),
-            absence_percentage: parseInt(document.getElementById('absence_percentage').value),
-            quiz_percentage: parseInt(document.getElementById('quiz_percentage').value)
-        };
+        const percentageData = {};
+        const percentageInputs = document.querySelectorAll('#assessment-percentages-form input[type="number"]');
+        percentageInputs.forEach(input => {
+            const name = input.name;
+            const value = parseInt(input.value) || 0;
+            
+            const match = name.match(/^(\w+)_percentage_(\d+)$/);
+            if (match) {
+                const assessmentType = match[1];
+                const index = parseInt(match[2]);
+                
+                if (!percentageData[assessmentType]) {
+                    percentageData[assessmentType] = [];
+                }
+                percentageData[assessmentType][index] = value;
+            } else {
+                percentageData[name] = value;
+            }
+        });
+        
+        const percentageDataForBackend = {};
+        const allAssessmentTypes = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz'];
+        
+        allAssessmentTypes.forEach(type => {
+            const count = countData[type] || 0;
+            const key = `${type}_percentage`;
+            
+            if (count > 0) {
+                if (percentageData[type]) {
+                    if (Array.isArray(percentageData[type])) {
+                        percentageDataForBackend[key] = percentageData[type].reduce((sum, val) => sum + (val || 0), 0);
+                    } else {
+                        percentageDataForBackend[key] = percentageData[type] || 0;
+                    }
+                } else {
+                    percentageDataForBackend[key] = 0;
+                }
+            } else {
+                percentageDataForBackend[key] = 0;
+            }
+        });
         
         // Validation: Assessment Count - Integer kontrolü ve 10'dan küçük olması
         let countErrors = [];
@@ -300,7 +312,7 @@ function getCsrfToken() {
         
         // Validation: Assessment Percentage - Integer kontrolü
         let percentageErrors = [];
-        for (const [key, value] of Object.entries(percentageData)) {
+        for (const [key, value] of Object.entries(percentageDataForBackend)) {
             if (isNaN(value) || !Number.isInteger(value)) {
                 percentageErrors.push(`${key.replace('_', ' ')} must be an integer.`);
             } else if (value < 0) {
@@ -308,6 +320,23 @@ function getCsrfToken() {
                 break; // İlk negatif değerde dur
             } else if (value > 100) {
                 percentageErrors.push(`${key.replace('_', ' ')} cannot be greater than 100.`);
+            }
+        }
+        
+        // Validate individual percentages (each should be 0-100)
+        for (const [key, values] of Object.entries(percentageData)) {
+            if (Array.isArray(values)) {
+                values.forEach((val, index) => {
+                    if (isNaN(val) || !Number.isInteger(val)) {
+                        const assessmentType = key.charAt(0).toUpperCase() + key.slice(1);
+                        percentageErrors.push(`${assessmentType} ${index + 1} must be an integer.`);
+                    } else if (val < 0) {
+                        percentageErrors.push(`You have to write a positive number.`);
+                    } else if (val > 100) {
+                        const assessmentType = key.charAt(0).toUpperCase() + key.slice(1);
+                        percentageErrors.push(`${assessmentType} ${index + 1} cannot be greater than 100.`);
+                    }
+                });
             }
         }
         
@@ -322,10 +351,10 @@ function getCsrfToken() {
             'quiz_percentage': { count: 'quiz', name: 'Quiz' }
         };
         
-        for (const [percentageKey, percentageValue] of Object.entries(percentageData)) {
+        for (const [percentageKey, percentageValue] of Object.entries(percentageDataForBackend)) {
             if (percentageValue > 0) {
                 const mapping = assessmentMapping[percentageKey];
-                if (countData[mapping.count] === 0) {
+                if (mapping && countData[mapping.count] === 0) {
                     missingAssessments.push(`You haven't assigned a ${mapping.name} yet.`);
                 }
             }
@@ -353,7 +382,8 @@ function getCsrfToken() {
         for (const [countKey, countValue] of Object.entries(countData)) {
             if (countValue > 0) {
                 const percentageKey = countToPercentageMapping[countKey];
-                const percentageValue = percentageData[percentageKey] || 0;
+                // Check percentageDataForBackend instead of percentageData (which has arrays)
+                const percentageValue = percentageDataForBackend[percentageKey] || 0;
                 if (percentageValue === 0) {
                     const name = countToNameMapping[countKey];
                     importantWarnings.push(`You haven't assigned a percentage for ${name}.`);
@@ -362,7 +392,7 @@ function getCsrfToken() {
         }
         
         // Toplam 100 kontrolü
-        const totalPercentage = Object.values(percentageData).reduce((sum, val) => sum + val, 0);
+        const totalPercentage = Object.values(percentageDataForBackend).reduce((sum, val) => sum + val, 0);
         if (totalPercentage !== 100) {
             percentageErrors.push(`Total percentage must be exactly 100. Current total: ${totalPercentage}`);
         }
@@ -395,7 +425,7 @@ function getCsrfToken() {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCsrfToken()
             },
-            body: JSON.stringify(percentageData)
+            body: JSON.stringify(percentageDataForBackend)
         }).then(response => response.json());
         
         Promise.all([countPromise, percentagePromise])
@@ -436,19 +466,122 @@ function getCsrfToken() {
     const percentagesForm = document.getElementById('assessment-percentages-form');
     const percentageCountDisplay = document.getElementById('percentage-count-display');
     
-    // Percentage input değişikliklerinde toplamı güncelle
-    const percentageInputs = percentagesForm ? percentagesForm.querySelectorAll('input[type="number"]') : [];
-    percentageInputs.forEach(input => {
-        input.addEventListener('input', function() {
-            updatePercentageTotal();
-        });
-    });
+    const assessmentTypes = [
+        { key: 'midterm', label: 'Midterm' },
+        { key: 'final', label: 'Final' },
+        { key: 'project', label: 'Project' },
+        { key: 'assignment', label: 'Assignment' },
+        { key: 'absence', label: 'Absence' },
+        { key: 'quiz', label: 'Quiz' }
+    ];
     
-    function updatePercentageTotal() {
-        if (!percentageCountDisplay) return;
+    const assessmentDataElement = document.getElementById('assessment-data');
+    const assessmentData = assessmentDataElement ? JSON.parse(assessmentDataElement.textContent) : {};
+    const currentPercentages = {
+        midterm: assessmentData.midterm_percentage || 0,
+        final: assessmentData.final_percentage || 0,
+        project: assessmentData.project_percentage || 0,
+        assignment: assessmentData.assignment_percentage || 0,
+        absence: assessmentData.absence_percentage || 0,
+        quiz: assessmentData.quiz_percentage || 0
+    };
+    
+    function createPercentageInput(assessmentType, index, count, defaultValue) {
+        const div = document.createElement('div');
+        div.style.cssText = 'flex: 0 0 auto;';
         
-        // Input'ları tekrar al (güncel değerler için)
-        const currentInputs = percentagesForm ? percentagesForm.querySelectorAll('input[type="number"]') : [];
+        const label = document.createElement('label');
+        const labelText = count > 1 ? `${assessmentType.label} ${index + 1} %` : `${assessmentType.label} %`;
+        label.textContent = labelText;
+        label.style.cssText = 'display: block; margin-bottom: 5px; font-weight: 600; color: #0f172a; font-size: 14px;';
+        label.setAttribute('for', `${assessmentType.key}_percentage_${index}`);
+        
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.id = `${assessmentType.key}_percentage_${index}`;
+        input.name = `${assessmentType.key}_percentage_${index}`;
+        input.value = defaultValue || 0;
+        input.min = 0;
+        input.max = 100;
+        input.step = 1;
+        input.required = true;
+        input.style.cssText = 'width: 80px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);';
+        input.addEventListener('input', updatePercentageTotal);
+        
+        div.appendChild(label);
+        div.appendChild(input);
+        
+        return div;
+    }
+    
+    // Function to rebuild percentage inputs based on counts
+    function rebuildPercentageInputs() {
+        if (!percentagesForm) return;
+        
+        // Get Total % div reference before clearing
+        const totalDiv = percentagesForm.querySelector('[id*="percentage-count"]')?.parentElement;
+        
+        // Remove all input divs (but keep Total % div)
+        const allChildren = Array.from(percentagesForm.children);
+        allChildren.forEach(child => {
+            if (!child.querySelector('#percentage-count-display')) {
+                child.remove();
+            }
+        });
+        
+        // Get current count values
+        const counts = {
+            midterm: parseInt(document.getElementById('midterm').value) || 0,
+            final: parseInt(document.getElementById('final').value) || 0,
+            project: parseInt(document.getElementById('project').value) || 0,
+            assignment: parseInt(document.getElementById('assignment').value) || 0,
+            absence: parseInt(document.getElementById('absence').value) || 0,
+            quiz: parseInt(document.getElementById('quiz').value) || 0
+        };
+        
+        // Create inputs for each assessment type
+        assessmentTypes.forEach(assessmentType => {
+            const count = counts[assessmentType.key];
+            
+            if (count > 1) {
+                // Create separate input for each item
+                for (let i = 0; i < count; i++) {
+                    // Try to get existing value, otherwise distribute evenly
+                    let defaultValue = 0;
+                    if (currentPercentages[assessmentType.key] > 0) {
+                        // Distribute existing percentage evenly
+                        defaultValue = Math.floor(currentPercentages[assessmentType.key] / count);
+                    }
+                    const inputDiv = createPercentageInput(assessmentType, i, count, defaultValue);
+                    // Insert before Total % div
+                    if (totalDiv) {
+                        percentagesForm.insertBefore(inputDiv, totalDiv);
+                    } else {
+                        percentagesForm.appendChild(inputDiv);
+                    }
+                }
+            } else if (count === 1) {
+                // Single input
+                const defaultValue = currentPercentages[assessmentType.key] || 0;
+                const inputDiv = createPercentageInput(assessmentType, 0, count, defaultValue);
+                // Insert before Total % div
+                if (totalDiv) {
+                    percentagesForm.insertBefore(inputDiv, totalDiv);
+                } else {
+                    percentagesForm.appendChild(inputDiv);
+                }
+            }
+        });
+        
+        // Update total
+        updatePercentageTotal();
+    }
+    
+    // Function to update percentage total
+    function updatePercentageTotal() {
+        if (!percentageCountDisplay || !percentagesForm) return;
+        
+        const currentInputs = percentagesForm.querySelectorAll('input[type="number"]');
         let total = 0;
         currentInputs.forEach(input => {
             const value = parseInt(input.value) || 0;
@@ -457,13 +590,24 @@ function getCsrfToken() {
         percentageCountDisplay.textContent = total;
     }
     
-    // Sayfa yüklendiğinde percentage toplamını güncelle (DOM tamamen yüklendikten sonra)
+    // Listen to count input changes
+    const countInputs = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz'];
+    countInputs.forEach(key => {
+        const input = document.getElementById(key);
+        if (input) {
+            input.addEventListener('input', function() {
+                rebuildPercentageInputs();
+            });
+        }
+    });
+    
+    // Initial build on page load
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(updatePercentageTotal, 100);
+            setTimeout(rebuildPercentageInputs, 100);
         });
     } else {
-        setTimeout(updatePercentageTotal, 100);
+        setTimeout(rebuildPercentageInputs, 100);
     }
     
     // Toggle Assessment Management content

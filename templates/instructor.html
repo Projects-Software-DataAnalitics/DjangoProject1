@@ -5,6 +5,35 @@
     <title>Instructor Dashboard</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .header-top {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 60px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-icons {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .content-wrapper {
+            margin-top: 60px;
+        }
+        body .sidebar {
+            top: 60px;
+            height: calc(100% - 60px);
+        }
+    </style>
 </head>
 <body data-page="{% if page %}{{ page }}{% endif %}">
 <div class="sidebar" id="sidebar">
@@ -17,11 +46,13 @@
     </ul>
     </div>
 
+<div class="content-wrapper">
 <div class="content" id="content">
     <button class="menu-btn" id="menu-btn">☰</button>
     
     <!-- Header with Profile and Notifications -->
-    <div style="position: fixed; top: 0; right: 0; padding: 12px 24px; display: flex; align-items: center; gap: 12px; z-index: 1000; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-bottom: 1px solid #e5e7eb;">
+    <div class="header-top">
+        <div class="header-icons">
         <!-- Notifications Bell with Dropdown -->
         <div style="position: relative;">
             <button id="notification-btn" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: transparent; border: none; cursor: pointer; transition: all 0.2s; color: #64748b;" 
@@ -87,6 +118,8 @@
                 </a>
             </div>
         </div>
+    </div>
+    </div>
     </div>
     
     {% block content %}
@@ -839,6 +872,7 @@
     {% endif %}
     {% endblock %}
     </div>
+</div>
 
 <form id="csrf-form" style="display:none;">
     {% csrf_token %}

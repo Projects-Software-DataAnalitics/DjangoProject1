@@ -459,6 +459,7 @@
                 }
             }
             
+            // Clear editing state - the value is now in cell.textContent
             currentEditingCell = null;
             currentEditingInput = null;
             currentEditingOriginalValue = null;
@@ -476,12 +477,27 @@
             const cellId = `${studentId}_${assessmentKey}`;
             const originalValue = originalCellValues.get(cellId);
             
-            const cellText = cell.textContent.trim();
+            // Check if cell is currently being edited (has input)
+            const input = cell.querySelector('input');
             let currentValue = null;
-            if (cellText !== '-' && cellText !== '') {
-                const parsed = parseFloat(cellText);
-                if (!isNaN(parsed)) {
-                    currentValue = parsed;
+            
+            if (input) {
+                // Cell is being edited, get value from input
+                const inputValue = input.value.trim();
+                if (inputValue !== '') {
+                    const parsed = parseFloat(inputValue);
+                    if (!isNaN(parsed)) {
+                        currentValue = parsed;
+                    }
+                }
+            } else {
+                // Cell is not being edited, get value from textContent
+                const cellText = cell.textContent.trim();
+                if (cellText !== '-' && cellText !== '') {
+                    const parsed = parseFloat(cellText);
+                    if (!isNaN(parsed)) {
+                        currentValue = parsed;
+                    }
                 }
             }
             
@@ -510,6 +526,7 @@
         }
         
         console.log('Saving', changesArray.length, 'changes:', changesArray.map(c => `${c.studentId}_${c.assessmentKey}: ${c.originalValue} -> ${c.newValue}`));
+        console.log('Changes array:', JSON.stringify(changesArray, null, 2));
         
         // Prepare changes for batch update
         const changes = changesArray.map(change => ({
@@ -517,6 +534,8 @@
             assessment_key: change.assessmentKey,
             score: change.newValue
         }));
+        
+        console.log('Sending to backend:', JSON.stringify(changes, null, 2));
         
         // Use batch update endpoint
         fetch(`/faculty-head/grades/${courseName}/update-multiple-grades/`, {
@@ -527,8 +546,12 @@
             },
             body: JSON.stringify({ changes: changes })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('Response data:', data);
             if (data.status === 'ok') {
                 // Update cells with saved values
                 data.results.forEach(result => {
