@@ -30,6 +30,7 @@ urlpatterns = [
     path('student/', core_views.student_dashboard, name='student'),
     path('student/profile/', core_views.student_profile, name='student_profile'),
     path('student/courses/', core_views.student_courses, name='student_courses'),
+    path('student/assignments/', core_views.student_assignments, name='student_assignments'),
     path('student/assignments/<int:assignment_id>/submit/', core_views.submit_assignment, name='submit_assignment'),
     path('student/assignments/<int:assignment_id>/delete-submission/', core_views.delete_submission, name='delete_submission'),
     path('student/courses/<int:course_id>/learning-outcomes/', core_views.student_course_learning_outcomes, name='student_course_learning_outcomes'),
@@ -39,6 +40,7 @@ urlpatterns = [
     path('student/announcements/', core_views.student_announcements, name='student_announcements'),
     path('student/announcements/<int:announcement_id>/mark-read/', core_views.mark_announcement_as_read, name='mark_announcement_read'),
     path('student/announcements/<int:announcement_id>/toggle-pin/', core_views.toggle_announcement_pin, name='toggle_announcement_pin'),
+    path('student/mark-all-notifications-read/', core_views.mark_all_notifications_read, name='mark_all_notifications_read'),
     path('student/program-outcomes/', core_views.student_program_outcomes, name='student_program_outcomes'),
     path('student/advisor/<str:username>/', core_views.advisor_profile, name='advisor_profile'),
     path('student/logout/', core_views.logout_view, name='logout'),
@@ -61,6 +63,7 @@ urlpatterns = [
     path('instructor/learning-outcomes/<int:course_id>/<int:outcome_id>/', core_views.learning_outcome_detail, name='learning_outcome_detail'),
     path('instructor/program-outcomes/', core_views.instructor_program_outcomes, name='instructor_program_outcomes'),
     path('instructor/announcements/', core_views.instructor_announcements, name='instructor_announcements'),
+    path('instructor/assignments/', core_views.instructor_assignments, name='instructor_assignments'),
 ]
 
 # Faculty Head URLs
@@ -94,6 +97,7 @@ urlpatterns += [
     path('faculty-head/all-courses/', core_views.all_courses, name='all_courses'),
     path('faculty-head/department-graph/', core_views.faculty_head_department_graph, name='faculty_head_department_graph'),
     path('faculty-head/my-courses/', core_views.my_courses, name='my_courses'),
+    path('faculty-head/assignments/', core_views.faculty_head_assignments, name='faculty_head_assignments'),
     path('faculty-head/add-assignment/', core_views.faculty_head_add_assignment, name='faculty_head_add_assignment'),
     path('faculty-head/assignments/<int:assignment_id>/update/', core_views.faculty_head_update_assignment, name='faculty_head_update_assignment'),
     path('faculty-head/submissions/<int:submission_id>/delete/', core_views.delete_student_submission, name='faculty_head_delete_student_submission'),
@@ -121,6 +125,8 @@ urlpatterns += [
     path('instructor/assignments/<int:assignment_id>/update/', core_views.update_assignment, name='update_assignment'),
     path('instructor/submissions/<int:submission_id>/delete/', core_views.delete_student_submission, name='delete_student_submission'),
     path('instructor/program-outcomes/', core_views.instructor_program_outcomes, name='instructor_program_outcomes'),
+    path('notifications/<int:notification_id>/read/', core_views.mark_notification_read, name='mark_notification_read'),
+    path('debug/notifications/', core_views.debug_notifications, name='debug_notifications'),
 ]
 
 if settings.DEBUG:

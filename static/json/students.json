@@ -19,7 +19,7 @@
     "department": "Computer Engineering",
     "faculty": "Engineering",
     "year": 4,
-    "courses": ["Data Systems", "Computer Architecture", "Algorithms","Software","AI" ]
+    "courses": ["Data Systems", "Computer Architecture", "Algorithms","Software"]
   },
   {
     "firstName": "Pinar",

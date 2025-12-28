@@ -174,43 +174,43 @@
         </tbody>
     </table>
 
+    <!-- Course Schedule Table -->
     <div style="margin-top: 40px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="margin: 0; font-size: 24px; color: #0f172a;">Assignments</h2>
-            <button id="add-assignment-btn" style="padding: 10px 20px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#2563eb';" onmouseout="this.style.backgroundColor='#3b82f6';">
-                Add Assignment
-            </button>
-        </div>
-        
-        <table class="assignments-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <h2 style="font-size: 24px; color: #0f172a; margin-bottom: 20px;">Course Schedule</h2>
+        <table class="schedule-table" style="width: 100%; border-collapse: collapse; margin-top: 20px; background: #ffffff;">
             <thead>
                 <tr style="background-color: #0b5fff; color: white;">
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course Name</th>
-                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Details</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 100px;">Time / Day</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Monday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Tuesday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Wednesday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Thursday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Friday</th>
                 </tr>
             </thead>
-            <tbody id="assignments-tbody">
-                {% if all_assignments %}
-                    {% for assignment in all_assignments %}
-                    <tr style="border-bottom: 1px solid #ddd; cursor: pointer;" class="assignment-row" data-assignment-id="{{ assignment.id }}" data-assignment-title="{{ assignment.title }}" data-assignment-details="{{ assignment.details }}" data-assignment-deadline="{{ assignment.deadline }}" data-assignment-deadline-datetime="{{ assignment.deadline_datetime }}" data-assignment-deadline-date="{{ assignment.deadline_date|default:'' }}" data-assignment-deadline-time="{{ assignment.deadline_time|default:'' }}" data-assignment-course="{{ assignment.course_name }}" data-assignment-file-url="{{ assignment.file_url|default:'' }}" data-assignment-file-name="{{ assignment.file_name|default:'' }}" data-created-by-id="{{ assignment.created_by_id }}" data-current-user-id="{{ request.user.id }}" data-submissions='{{ assignment.submissions|safe }}'>
-                        <td style="padding: 12px; border: 1px solid #ddd;">{{ assignment.course_name }}</td>
-                        <td style="padding: 12px; border: 1px solid #ddd;">
-                            <div>
-                                <strong>{{ assignment.title }}</strong>
-                                <p style="margin: 8px 0; color: #64748b;">{{ assignment.details|truncatewords:20 }}</p>
-                                <p style="margin: 4px 0; font-size: 12px; color: #94a3b8;">Deadline: <strong>{{ assignment.deadline }}</strong></p>
-                                {% if assignment.file_url %}
-                                <a href="{{ assignment.file_url }}" target="_blank" style="color: #3b82f6; text-decoration: none; font-size: 13px;" onclick="event.stopPropagation();">📄 {{ assignment.file_name }}</a>
+            <tbody>
+                {% for time_slot in time_slots %}
+                <tr>
+                    <td style="padding: 12px; text-align: center; border: 1px solid #ddd; font-weight: 600; background: #f8fafc;">{{ time_slot }}</td>
+                    {% for day in days %}
+                    <td style="padding: 8px; text-align: center; border: 1px solid #ddd; vertical-align: top; min-height: 80px;">
+                        {% for course in courses %}
+                            {% if course.day and course.time and course.day == day and course.time == time_slot %}
+                            <div style="background: #e0f2fe; padding: 8px; border-radius: 6px; border-left: 4px solid #0b5fff; margin-bottom: 4px;">
+                                <div style="font-weight: 600; font-size: 13px; color: #0f172a; margin-bottom: 2px;">{{ course.name }}</div>
+                                {% if course.code %}
+                                <div style="font-size: 11px; color: #64748b; margin-bottom: 2px;">{{ course.code }}</div>
+                                {% endif %}
+                                {% if course.room %}
+                                <div style="font-size: 10px; color: #94a3b8;">{{ course.room }}</div>
                                 {% endif %}
                             </div>
-                        </td>
-                    </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </td>
                     {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="2" style="padding: 20px; text-align: center; color: #64748b;">No assignments yet.</td>
-                    </tr>
-                {% endif %}
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>

@@ -12,6 +12,152 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <style>
+        .login-body {
+            background: url('{% static "images/university-background.jpg" %}') center center no-repeat fixed;
+            background-size: cover;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+            -ms-interpolation-mode: nearest-neighbor;
+            background-attachment: fixed;
+            background-position: center center;
+            -webkit-background-size: cover;
+            -moz-background-size: cover;
+            -o-background-size: cover;
+            will-change: transform;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+        }
+        
+        .login-body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #F4F7FF;
+            z-index: 0;
+        }
+        
+        .login-wrapper {
+            position: relative;
+            z-index: 1;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .login-hero {
+            margin-bottom: 48px;
+        }
+        
+        .app-title {
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+            color: #0b2a6f;
+            font-size: 48px;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+        
+        .app-subtitle {
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+            color: #1e293b;
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .app-description {
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            color: #475569;
+            font-size: 14px;
+            margin-top: 8px;
+            line-height: 1.6;
+        }
+        
+        .role-btn {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 28px 40px !important;
+            text-align: center !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+        }
+        
+        .role-btn:hover {
+            transform: translateY(-5px) scale(1.02) !important;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2) !important;
+        }
+        
+        .role-text {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: center;
+        }
+        
+        .role-text strong {
+            font-size: 20px;
+            display: block;
+            margin-bottom: 2px;
+        }
+        
+        .role-text small {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 400;
+            opacity: 0.9;
+        }
+        
+        .login-footer {
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .login-footer p {
+            margin: 0;
+            color: #64748b;
+            font-size: 13px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .app-title {
+                font-size: 36px;
+            }
+            
+            .app-subtitle {
+                font-size: 16px;
+            }
+            
+            .role-btn {
+                padding: 16px 24px !important;
+            }
+            
+            .role-text strong {
+                font-size: 18px;
+            }
+            
+            .role-text small {
+                font-size: 11px;
+            }
+        }
+    </style>
 
 </head>
 
@@ -21,19 +167,36 @@
 
         <section class="login-hero">
             <h1 class="app-title">Smart School System</h1>
-            <p class="app-subtitle">Access your courses, grades and announcements!</p>
+            <p class="app-description">Access your courses, grades, assignments, and announcements in one place</p>
         </section>
 
         <!-- Role Selection -->
         <section class="role-selection">
             <div class="role-buttons">
-                <a href="{% url 'student-login' %}" class="role-btn">Student</a>
-                <a href="{% url 'instructor-login' %}" class="role-btn">Instructor</a>
-                <a href="{% url 'faculty-head-login' %}" class="role-btn">Faculty Head</a>
+                <a href="{% url 'student-login' %}" class="role-btn">
+                    <span class="role-text">
+                        <strong>Student</strong>
+                        <small>View courses, grades & assignments</small>
+                    </span>
+                </a>
+                <a href="{% url 'instructor-login' %}" class="role-btn">
+                    <span class="role-text">
+                        <strong>Instructor</strong>
+                        <small>Manage courses & students</small>
+                    </span>
+                </a>
+                <a href="{% url 'faculty-head-login' %}" class="role-btn">
+                    <span class="role-text">
+                        <strong>Faculty Head</strong>
+                        <small>Oversee academic programs</small>
+                    </span>
+                </a>
             </div>
         </section>
 
-        <footer class="login-footer">© {{ now|date:'Y' }} Smart School</footer>
+        <footer class="login-footer">
+            <p>© {{ now|date:'Y' }} Smart School System. All rights reserved.</p>
+        </footer>
 
     </main>
 

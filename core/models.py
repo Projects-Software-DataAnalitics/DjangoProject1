@@ -86,6 +86,11 @@ class Course(models.Model):
     instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='instructor_courses')
     department = models.CharField(max_length=200, blank=True)
     credits = models.IntegerField(null=True, blank=True)
+    
+    # Schedule fields
+    day = models.CharField(max_length=20, blank=True, null=True)  # Monday, Tuesday, etc.
+    time = models.CharField(max_length=50, blank=True, null=True)  # "09:00-10:30"
+    room = models.CharField(max_length=50, blank=True, null=True)  # "A101", "LAB101", etc.
 
     def __str__(self):
         if self.code:
@@ -419,3 +424,25 @@ class AssignmentSubmission(models.Model):
     
     def __str__(self):
         return f"{self.student.username} - {self.assignment.title}"
+
+class Notification(models.Model):
+    NOTIFICATION_TYPES = [
+        ('assignment_created', 'Assignment Created'),
+        ('assignment_deadline', 'Assignment Deadline Reminder'),
+        ('announcement_created', 'Announcement Created'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    announcement = models.ForeignKey('Announcement', on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.title}"

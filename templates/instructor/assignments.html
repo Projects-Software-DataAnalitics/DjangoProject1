@@ -1,0 +1,496 @@
+{% extends "instructor_base.html" %}
+{% load static %}
+
+{% block title %}Assignments{% endblock %}
+
+{% block content %}
+<h1>Assignments</h1>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; margin-top: 20px;">
+    <h2 style="margin: 0; font-size: 24px; color: #0f172a;">All Assignments</h2>
+    <button id="add-assignment-btn" style="padding: 10px 20px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#2563eb';" onmouseout="this.style.backgroundColor='#3b82f6';">
+        Add Assignment
+    </button>
+</div>
+
+{% if assignments %}
+<table class="assignments-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <thead>
+        <tr style="background-color: #0b5fff; color: white;">
+            <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Course</th>
+            <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Assignment</th>
+            <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Deadline</th>
+            <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Submissions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for assignment in assignments %}
+        <tr style="border-bottom: 1px solid #ddd; cursor: pointer;" class="assignment-row" data-assignment-id="{{ assignment.id }}" data-assignment-title="{{ assignment.title }}" data-assignment-details="{{ assignment.details }}" data-assignment-deadline="{{ assignment.deadline }}" data-assignment-deadline-datetime="{{ assignment.deadline_datetime }}" data-assignment-deadline-date="{{ assignment.deadline_date|default:'' }}" data-assignment-deadline-time="{{ assignment.deadline_time|default:'' }}" data-assignment-course="{{ assignment.course_name }}" data-assignment-file-url="{{ assignment.file_url|default:'' }}" data-assignment-file-name="{{ assignment.file_name|default:'' }}" data-created-by-id="{{ assignment.created_by_id }}" data-current-user-id="{{ user.id }}" data-submissions='{{ assignment.submissions|safe }}'>
+            <td style="padding: 12px; border: 1px solid #ddd;">
+                <div>
+                    <strong>{{ assignment.course_name }}</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">{{ assignment.course_code }}</p>
+                </div>
+            </td>
+            <td style="padding: 12px; border: 1px solid #ddd;">
+                <div>
+                    <strong>{{ assignment.title }}</strong>
+                    <p style="margin: 8px 0; color: #64748b;">{{ assignment.details|truncatewords:20 }}</p>
+                    {% if assignment.file_url %}
+                    <a href="{{ assignment.file_url }}" target="_blank" style="color: #3b82f6; text-decoration: none; font-size: 13px;" onclick="event.stopPropagation();">📄 {{ assignment.file_name }}</a>
+                    {% endif %}
+                </div>
+            </td>
+            <td style="padding: 12px; border: 1px solid #ddd;">
+                <strong style="color: #f59e0b;">{{ assignment.deadline }}</strong>
+            </td>
+            <td style="padding: 12px; border: 1px solid #ddd;">
+                <span style="color: #3b82f6; font-weight: 600;">{{ assignment.submissions_count }}</span>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="margin-top: 20px; color: #666;">No assignments yet.</p>
+{% endif %}
+
+<!-- Add Assignment Modal -->
+<div id="add-assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+    <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+        <button id="close-assignment-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+        <h3 style="font-size: 22px; color: #0f172a; margin-bottom: 20px; margin-top: 0;">Add Assignment</h3>
+        <form id="assignment-form">
+            {% csrf_token %}
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Course</label>
+                <select id="assignment-course" name="course_id" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                    <option value="">-- Select Course --</option>
+                    {% for course in courses %}
+                    <option value="{{ course.id }}">{{ course.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Title</label>
+                <input type="text" id="assignment-title" name="title" required placeholder="Enter assignment title..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Details</label>
+                <textarea id="assignment-details" name="details" required rows="4" placeholder="Enter assignment details..." style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Date</label>
+                <input type="date" id="deadline-date" name="deadline_date" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Time</label>
+                <input type="time" id="deadline-time" name="deadline_time" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">File (PDF only)</label>
+                <input type="file" id="assignment-file" name="file" accept=".pdf" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" id="cancel-assignment-btn" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Cancel</button>
+                <button type="submit" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Add Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Assignment Detail Modal -->
+<div id="assignment-detail-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+    <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+        <button id="close-assignment-detail-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+        <h3 id="assignment-detail-title" style="font-size: 22px; color: #0f172a; margin-bottom: 20px; margin-top: 0;"></h3>
+        <div id="assignment-detail-content" style="color: #0f172a;">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+        <div id="assignment-edit-section" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0; display: none;">
+            <button id="edit-assignment-btn" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px;">Edit Assignment</button>
+        </div>
+        <div id="assignment-submissions-section" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+            <h4 style="font-size: 18px; color: #0f172a; margin-bottom: 16px;">Student Submissions</h4>
+            <div id="submissions-list">
+                <!-- Submissions will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Assignment Modal -->
+<div id="edit-assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; justify-content: center; align-items: center;">
+    <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+        <button id="close-edit-assignment-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+        <h3 style="font-size: 22px; color: #0f172a; margin-bottom: 20px; margin-top: 0;">Edit Assignment</h3>
+        <form id="edit-assignment-form">
+            {% csrf_token %}
+            <input type="hidden" id="edit-assignment-id" name="assignment_id">
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Title</label>
+                <input type="text" id="edit-assignment-title" name="title" required placeholder="Enter assignment title..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Assignment Details</label>
+                <textarea id="edit-assignment-details" name="details" required rows="4" placeholder="Enter assignment details..." style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Date</label>
+                <input type="date" id="edit-deadline-date" name="deadline_date" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">Deadline Time</label>
+                <input type="time" id="edit-deadline-time" name="deadline_time" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">File (PDF only) - Leave empty to keep current file</label>
+                <input type="file" id="edit-assignment-file" name="file" accept=".pdf" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div id="edit-assignment-status" style="margin-bottom: 16px;"></div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" id="cancel-edit-assignment-btn" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Cancel</button>
+                <button type="submit" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Update Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Assignment detail modal functionality
+        const assignmentRows = document.querySelectorAll('.assignment-row');
+        const assignmentDetailModal = document.getElementById('assignment-detail-modal');
+        const closeAssignmentDetailModal = document.getElementById('close-assignment-detail-modal');
+        const assignmentDetailTitle = document.getElementById('assignment-detail-title');
+        const assignmentDetailContent = document.getElementById('assignment-detail-content');
+
+        assignmentRows.forEach(row => {
+            row.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') return;
+                
+                const assignmentId = this.dataset.assignmentId;
+                const title = this.dataset.assignmentTitle;
+                const details = this.dataset.assignmentDetails;
+                const deadline = this.dataset.assignmentDeadline;
+                const deadlineDate = this.dataset.assignmentDeadlineDate;
+                const deadlineTime = this.dataset.assignmentDeadlineTime;
+                const course = this.dataset.assignmentCourse;
+                const fileUrl = this.dataset.assignmentFileUrl;
+                const fileName = this.dataset.assignmentFileName;
+                const createdById = parseInt(this.dataset.createdById);
+                const currentUserId = parseInt(this.dataset.currentUserId);
+                const submissionsJson = this.dataset.submissions;
+                let submissions = [];
+                try {
+                    submissions = JSON.parse(submissionsJson || '[]');
+                } catch (e) {
+                    submissions = [];
+                }
+
+                assignmentDetailTitle.textContent = title;
+                let content = `
+                    <div style="margin-bottom: 16px;">
+                        <p style="margin: 0; font-weight: 600; color: #0f172a;">Course:</p>
+                        <p style="margin: 4px 0 0 0; color: #64748b;">${course}</p>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <p style="margin: 0; font-weight: 600; color: #0f172a;">Details:</p>
+                        <p style="margin: 4px 0 0 0; color: #64748b; white-space: pre-wrap;">${details}</p>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <p style="margin: 0; font-weight: 600; color: #0f172a;">Deadline:</p>
+                        <p style="margin: 4px 0 0 0; color: #ef4444; font-weight: bold; font-size: 16px;">${deadline}</p>
+                    </div>
+                `;
+                if (fileUrl) {
+                    content += `
+                        <div style="margin-bottom: 16px;">
+                            <p style="margin: 0; font-weight: 600; color: #0f172a;">Assignment File:</p>
+                            <a href="${fileUrl}" target="_blank" style="color: #3b82f6; text-decoration: none; font-size: 14px; margin-top: 4px; display: inline-block;">📄 ${fileName}</a>
+                        </div>
+                    `;
+                }
+                assignmentDetailContent.innerHTML = content;
+
+                // Show edit button if instructor created this assignment
+                const editSection = document.getElementById('assignment-edit-section');
+                if (createdById === currentUserId) {
+                    editSection.style.display = 'block';
+                    document.getElementById('edit-assignment-btn').dataset.assignmentId = assignmentId;
+                    document.getElementById('edit-assignment-btn').dataset.assignmentTitle = title;
+                    document.getElementById('edit-assignment-btn').dataset.assignmentDetails = details;
+                    document.getElementById('edit-assignment-btn').dataset.deadlineDate = deadlineDate;
+                    document.getElementById('edit-assignment-btn').dataset.deadlineTime = deadlineTime;
+                } else {
+                    editSection.style.display = 'none';
+                }
+
+                // Show submissions
+                const submissionsList = document.getElementById('submissions-list');
+                if (submissions.length > 0) {
+                    let submissionsHtml = '<table style="width: 100%; border-collapse: collapse;">';
+                    submissionsHtml += '<thead><tr style="background-color: #f1f5f9;"><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Student</th><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">File</th><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Submitted</th><th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Action</th></tr></thead><tbody>';
+                    submissions.forEach(sub => {
+                        submissionsHtml += `
+                            <tr style="border-bottom: 1px solid #ddd;">
+                                <td style="padding: 8px; border: 1px solid #ddd;">${sub.student_name} (${sub.student_id})</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">
+                                    ${sub.file_url ? `<a href="${sub.file_url}" target="_blank" style="color: #3b82f6; text-decoration: none;">📄 ${sub.file_name}</a>` : 'No file'}
+                                </td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${sub.submitted_at}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">
+                                    <button class="delete-submission-btn" data-submission-id="${sub.id}" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">Delete</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    submissionsHtml += '</tbody></table>';
+                    submissionsList.innerHTML = submissionsHtml;
+                } else {
+                    submissionsList.innerHTML = '<p style="color: #64748b; text-align: center;">No submissions yet.</p>';
+                }
+
+                assignmentDetailModal.style.display = 'flex';
+            });
+        });
+
+        if (closeAssignmentDetailModal) {
+            closeAssignmentDetailModal.addEventListener('click', function() {
+                assignmentDetailModal.style.display = 'none';
+            });
+        }
+
+        if (assignmentDetailModal) {
+            assignmentDetailModal.addEventListener('click', function(e) {
+                if (e.target === assignmentDetailModal) {
+                    assignmentDetailModal.style.display = 'none';
+                }
+            });
+        }
+
+        // Assignment modal functionality
+        const addAssignmentBtn = document.getElementById('add-assignment-btn');
+        const assignmentModal = document.getElementById('add-assignment-modal');
+        const closeAssignmentModal = document.getElementById('close-assignment-modal');
+        const cancelAssignmentBtn = document.getElementById('cancel-assignment-btn');
+        const assignmentForm = document.getElementById('assignment-form');
+
+        if (addAssignmentBtn && assignmentModal) {
+            addAssignmentBtn.addEventListener('click', function() {
+                assignmentModal.style.display = 'flex';
+            });
+        }
+
+        if (closeAssignmentModal) {
+            closeAssignmentModal.addEventListener('click', function() {
+                assignmentModal.style.display = 'none';
+                assignmentForm.reset();
+            });
+        }
+
+        if (cancelAssignmentBtn) {
+            cancelAssignmentBtn.addEventListener('click', function() {
+                assignmentModal.style.display = 'none';
+                assignmentForm.reset();
+            });
+        }
+
+        if (assignmentModal) {
+            assignmentModal.addEventListener('click', function(e) {
+                if (e.target === assignmentModal) {
+                    assignmentModal.style.display = 'none';
+                    assignmentForm.reset();
+                }
+            });
+        }
+
+        if (assignmentForm) {
+            assignmentForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData();
+                formData.append('course_id', document.getElementById('assignment-course').value);
+                formData.append('title', document.getElementById('assignment-title').value);
+                formData.append('details', document.getElementById('assignment-details').value);
+                formData.append('deadline_date', document.getElementById('deadline-date').value);
+                formData.append('deadline_time', document.getElementById('deadline-time').value);
+                
+                const fileInput = document.getElementById('assignment-file');
+                if (fileInput.files.length > 0) {
+                    formData.append('file', fileInput.files[0]);
+                }
+
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                fetch('{% url "add_assignment" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        assignmentModal.style.display = 'none';
+                        assignmentForm.reset();
+                        location.reload();
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to add assignment'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while adding the assignment');
+                });
+            });
+        }
+
+        // Edit assignment functionality
+        const editAssignmentBtn = document.getElementById('edit-assignment-btn');
+        const editAssignmentModal = document.getElementById('edit-assignment-modal');
+        const closeEditAssignmentModal = document.getElementById('close-edit-assignment-modal');
+        const cancelEditAssignmentBtn = document.getElementById('cancel-edit-assignment-btn');
+        const editAssignmentForm = document.getElementById('edit-assignment-form');
+        const editAssignmentStatus = document.getElementById('edit-assignment-status');
+
+        if (editAssignmentBtn) {
+            editAssignmentBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const assignmentId = this.dataset.assignmentId;
+                const title = this.dataset.assignmentTitle;
+                const details = this.dataset.assignmentDetails;
+                const deadlineDate = this.dataset.deadlineDate;
+                const deadlineTime = this.dataset.deadlineTime;
+
+                document.getElementById('edit-assignment-id').value = assignmentId;
+                document.getElementById('edit-assignment-title').value = title;
+                document.getElementById('edit-assignment-details').value = details;
+                document.getElementById('edit-deadline-date').value = deadlineDate;
+                document.getElementById('edit-deadline-time').value = deadlineTime;
+                document.getElementById('edit-assignment-file').value = '';
+
+                editAssignmentModal.style.display = 'flex';
+            });
+        }
+
+        if (closeEditAssignmentModal) {
+            closeEditAssignmentModal.addEventListener('click', function() {
+                editAssignmentModal.style.display = 'none';
+                editAssignmentForm.reset();
+                editAssignmentStatus.innerHTML = '';
+            });
+        }
+
+        if (cancelEditAssignmentBtn) {
+            cancelEditAssignmentBtn.addEventListener('click', function() {
+                editAssignmentModal.style.display = 'none';
+                editAssignmentForm.reset();
+                editAssignmentStatus.innerHTML = '';
+            });
+        }
+
+        if (editAssignmentModal) {
+            editAssignmentModal.addEventListener('click', function(e) {
+                if (e.target === editAssignmentModal) {
+                    editAssignmentModal.style.display = 'none';
+                    editAssignmentForm.reset();
+                    editAssignmentStatus.innerHTML = '';
+                }
+            });
+        }
+
+        if (editAssignmentForm) {
+            editAssignmentForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const assignmentId = document.getElementById('edit-assignment-id').value;
+                const formData = new FormData();
+                formData.append('title', document.getElementById('edit-assignment-title').value);
+                formData.append('details', document.getElementById('edit-assignment-details').value);
+                formData.append('deadline_date', document.getElementById('edit-deadline-date').value);
+                formData.append('deadline_time', document.getElementById('edit-deadline-time').value);
+                
+                const fileInput = document.getElementById('edit-assignment-file');
+                if (fileInput.files.length > 0) {
+                    formData.append('file', fileInput.files[0]);
+                }
+
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const submitBtn = editAssignmentForm.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Updating...';
+                editAssignmentStatus.innerHTML = '<p style="color: #3b82f6; margin: 0;">Updating assignment...</p>';
+
+                fetch(`/instructor/assignments/${assignmentId}/update/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        editAssignmentStatus.innerHTML = '<p style="color: #10b981; margin: 0;">✓ ' + data.message + '</p>';
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1500);
+                    } else {
+                        editAssignmentStatus.innerHTML = '<p style="color: #ef4444; margin: 0;">Error: ' + (data.error || 'Failed to update assignment') + '</p>';
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    editAssignmentStatus.innerHTML = '<p style="color: #ef4444; margin: 0;">An error occurred while updating the assignment</p>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                });
+            });
+        }
+
+        // Delete submission functionality (delegated event listener)
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('delete-submission-btn')) {
+                e.stopPropagation();
+                if (!confirm('Are you sure you want to delete this submission?')) {
+                    return;
+                }
+                
+                const submissionId = e.target.dataset.submissionId;
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                fetch(`/instructor/submissions/${submissionId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        e.target.closest('tr').remove();
+                        // Check if table is empty
+                        const tbody = e.target.closest('tbody');
+                        if (tbody && tbody.children.length === 0) {
+                            document.getElementById('submissions-list').innerHTML = '<p style="color: #64748b; text-align: center;">No submissions yet.</p>';
+                        }
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to delete submission'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while deleting the submission');
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}
+
