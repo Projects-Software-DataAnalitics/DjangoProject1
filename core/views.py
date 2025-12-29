@@ -889,6 +889,8 @@ def instructor_profile(request):
 @instructor_required
 def instructor_my_courses(request):
     from .models import Assignment
+    # Get course schedule from JSON
+    course_schedule_map = get_course_schedule_from_json()
     from django.utils import timezone
     
     instructor_user = request.instructor_user
@@ -952,6 +954,9 @@ def instructor_my_courses(request):
                 assignments_list.append(assignment_data)
                 all_assignments.append(assignment_data)
             
+            # Get schedule from JSON first, fallback to database
+            schedule_info = course_schedule_map.get(course.name, {})
+            
             courses_data.append({
                 'id': course.id,
                 'name': course.name,
@@ -962,9 +967,9 @@ def instructor_my_courses(request):
                 'students': students_list,
                 'students_json': json.dumps(students_list),
                 'assignments': assignments_list,
-                'day': course.day,
-                'time': course.time,
-                'room': course.room,
+                'day': schedule_info.get('day') or course.day,
+                'time': schedule_info.get('time') or course.time,
+                'room': schedule_info.get('room') or course.room,
             })
     
     # Prepare JSON data for template
@@ -7008,6 +7013,9 @@ def student_courses(request):
         student = Student.objects.get(user=request.user)
         courses = student.courses.all().select_related('instructor').prefetch_related('assignments')
         
+        # Get course schedule from JSON
+        course_schedule_map = get_course_schedule_from_json()
+        
         courses_data = []
         all_assignments = []
         
@@ -7038,6 +7046,9 @@ def student_courses(request):
                 assignments_list.append(assignment_data)
                 all_assignments.append(assignment_data)
             
+            # Get schedule from JSON first, fallback to database
+            schedule_info = course_schedule_map.get(course.name, {})
+            
             courses_data.append({
                 'id': course.id,
                 'name': course.name,
@@ -7046,9 +7057,9 @@ def student_courses(request):
                 'department': course.department,
                 'credits': course.credits,
                 'assignments': assignments_list,
-                'day': course.day,
-                'time': course.time,
-                'room': course.room,
+                'day': schedule_info.get('day') or course.day,
+                'time': schedule_info.get('time') or course.time,
+                'room': schedule_info.get('room') or course.room,
             })
     except Student.DoesNotExist:
         courses_data = []
