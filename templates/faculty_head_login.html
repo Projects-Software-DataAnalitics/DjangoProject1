@@ -34,6 +34,9 @@
                 <button type="submit" class="primary-btn">Login</button>
             </form>
             {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="{% url 'forgot-password' %}" style="color: #666; text-decoration: none; font-size: 14px;">Forgot Password?</a>
+            </div>
         </section>
 
         <footer class="login-footer">© {{ now|date:'Y' }} Smart School</footer>

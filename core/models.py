@@ -52,6 +52,8 @@ class Student(models.Model):
     last_name = models.CharField(max_length=100, blank=True)
     department = models.CharField(max_length=200, blank=True)
     year = models.IntegerField(null=True, blank=True)
+    email = models.EmailField(max_length=255, blank=True, null=True, help_text="Student email address for notifications")
+    phone_number = models.CharField(max_length=20, blank=True, null=True, help_text="Student phone number for SMS notifications")
     user = models.OneToOneField(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='student_profile')
     advisor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='advised_students', limit_choices_to={'profile__role__in': ['instructor', 'faculty_head']})
     courses = models.ManyToManyField('Course', blank=True, related_name='students')

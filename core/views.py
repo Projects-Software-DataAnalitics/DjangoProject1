@@ -2,6 +2,8 @@ import csv
 import io
 import json
 import os
+import secrets
+import string
 
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login as auth_login, logout, get_user_model
@@ -381,20 +383,200 @@ def index(request):
     return render(request, 'index.html')
 
 
+def generate_random_password(length=10):
+    """
+    Generate a random secure password
+    """
+    alphabet = string.ascii_letters + string.digits
+    password = ''.join(secrets.choice(alphabet) for i in range(length))
+    return password
+
+
+def update_password_in_json(username, new_password, user_type):
+    """
+    Update password in the appropriate JSON file
+    """
+    try:
+        json_file = None
+        if user_type == 'student':
+            json_file = os.path.join(settings.BASE_DIR, 'static', 'json', 'students.json')
+        elif user_type == 'instructor':
+            json_file = os.path.join(settings.BASE_DIR, 'static', 'json', 'instructors.json')
+        elif user_type == 'faculty_head':
+            json_file = os.path.join(settings.BASE_DIR, 'static', 'json', 'faculty_heads.json')
+        
+        if not json_file or not os.path.exists(json_file):
+            print(f"JSON file not found: {json_file}")
+            return False
+        
+        # Read JSON file
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Find and update user
+        updated = False
+        for item in data:
+            if item.get('username') == username:
+                item['password'] = new_password
+                updated = True
+                break
+        
+        if updated:
+            # Write back to JSON file
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            print(f"Password updated in JSON file for {username}")
+            return True
+        else:
+            print(f"User {username} not found in JSON file")
+            return False
+            
+    except Exception as e:
+        print(f"Error updating JSON file: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def forgot_password(request):
+    """
+    Forgot password page - user enters email/username
+    """
+    if request.method == 'POST':
+        identifier = request.POST.get('identifier', '').strip()  # Can be username or email
+        
+        if not identifier:
+            return render(request, 'forgot_password.html', {
+                'error': 'Please enter your username or email address.'
+            })
+        
+        user = None
+        user_type = None
+        email_address = None
+        
+        # Try to find user by username
+        try:
+            user = User.objects.get(username=identifier)
+            # Check user type
+            try:
+                student = Student.objects.get(user=user)
+                user_type = 'student'
+                email_address = student.email
+            except Student.DoesNotExist:
+                try:
+                    profile = user.profile
+                    if profile.role == 'instructor':
+                        user_type = 'instructor'
+                    elif profile.role == 'faculty_head':
+                        user_type = 'faculty_head'
+                    # For instructors/faculty heads, try to get email from user model
+                    email_address = user.email if hasattr(user, 'email') and user.email else None
+                except AttributeError:
+                    pass
+        except User.DoesNotExist:
+            # Try to find by email (for students)
+            try:
+                student = Student.objects.get(email=identifier)
+                user = student.user
+                if user:
+                    user_type = 'student'
+                    email_address = student.email
+            except Student.DoesNotExist:
+                pass
+        
+        if not user or not email_address:
+            # Don't reveal if user exists or not (security)
+            return render(request, 'password_reset_sent.html', {
+                'message': 'If an account with that email/username exists, a password reset email has been sent.'
+            })
+        
+        # Generate new password
+        new_password = generate_random_password(10)
+        
+        # Generate new password ONCE and use the SAME password everywhere
+        new_password = generate_random_password(10)
+        print(f"Generated new password for {user.username}: {new_password}")
+        
+        # Step 1: Update password in database
+        user.set_password(new_password)
+        user.save()
+        print(f"Password updated in database for {user.username}")
+        
+        # Step 2: Update password in JSON file (CRITICAL - must match database)
+        json_updated = update_password_in_json(user.username, new_password, user_type)
+        if not json_updated:
+            print(f"ERROR: Failed to update JSON file for {user.username}")
+            # Try to rollback database password? No, better to show error to user
+            return render(request, 'password_reset_sent.html', {
+                'message': 'Password was reset in database but failed to update JSON file. Please contact administrator.',
+                'success': False
+            })
+        print(f"Password updated in JSON file for {user.username}")
+        
+        # Step 3: Verify password works before sending email
+        from django.contrib.auth import authenticate as auth_check
+        verify_user = auth_check(username=user.username, password=new_password)
+        if not verify_user:
+            print(f"ERROR: Password verification failed after reset for {user.username}")
+            print(f"Generated password: {new_password}")
+            return render(request, 'password_reset_sent.html', {
+                'message': 'Password reset failed verification. Please try again or contact administrator.',
+                'success': False
+            })
+        print(f"Password verification successful for {user.username}")
+        
+        # Step 4: Send email with the SAME password
+        from core.services.email_service import send_password_reset_email
+        email_sent = send_password_reset_email(user, new_password, user_type)
+        
+        if not email_sent:
+            print(f"WARNING: Email sending failed for {user.username}, but password was reset")
+        
+        if email_sent:
+            return render(request, 'password_reset_sent.html', {
+                'message': f'Password reset email has been sent to your email address ({email_address}). Please check your inbox.',
+                'success': True
+            })
+        else:
+            return render(request, 'password_reset_sent.html', {
+                'message': 'There was an error sending the password reset email. Please contact the administrator.',
+                'success': False
+            })
+    
+    return render(request, 'forgot_password.html')
+
+
 def student_login(request):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
         
+        # Debug logging
+        print(f"Login attempt for username: {username}")
+        print(f"Password length: {len(password)}")
+        
+        if not username or not password:
+            return JsonResponse({'status': 'error', 'message': 'Username and password are required'}, status=400)
+        
         user = authenticate(request, username=username, password=password)
         if user:
+            print(f"Authentication successful for {username}")
             try:
                 student = Student.objects.get(user=user)
                 auth_login(request, user)
+                print(f"Login successful for {username}")
                 return JsonResponse({'status': 'success', 'username': username})
             except Student.DoesNotExist:
+                print(f"User {username} is not a student")
                 return JsonResponse({'status': 'error', 'message': 'User is not a student'}, status=403)
         else:
+            print(f"Authentication failed for {username}")
+            # Check if user exists
+            try:
+                User.objects.get(username=username)
+                print(f"User exists but password is wrong")
+            except User.DoesNotExist:
+                print(f"User {username} does not exist")
             return JsonResponse({'status': 'error', 'message': 'Invalid username or password'}, status=401)
     
     return render(request, 'student_login.html')
@@ -1139,7 +1321,15 @@ def add_assignment(request):
                         title=f'New Assignment: {assignment.title}',
                         message=f'A new assignment "{assignment.title}" has been added to {course.name}.',
                         assignment=assignment
-            )
+                    )
+            
+            # Send email notifications to students
+            from django.conf import settings
+            from core.services.email_service import send_bulk_emails
+            
+            if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                email_result = send_bulk_emails(students, 'assignment', assignment=assignment)
+                print(f"Assignment emails sent: {email_result['sent']}, failed: {email_result['failed']}")
             
             return JsonResponse({
                 'success': True,
@@ -1218,7 +1408,15 @@ def faculty_head_add_assignment(request):
                         title=f'New Assignment: {assignment.title}',
                         message=f'A new assignment "{assignment.title}" has been added to {course.name}.',
                         assignment=assignment
-            )
+                    )
+            
+            # Send email notifications to students
+            from django.conf import settings
+            from core.services.email_service import send_bulk_emails
+            
+            if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                email_result = send_bulk_emails(students, 'assignment', assignment=assignment)
+                print(f"Assignment emails sent: {email_result['sent']}, failed: {email_result['failed']}")
             
             return JsonResponse({
                 'success': True,
@@ -3124,6 +3322,14 @@ def send_announcements(sender, message, subject, receivers_list):
                                     assignment=None,
                                     announcement=announcement
                                 )
+                                
+                                # Send email notifications
+                                from django.conf import settings
+                                from core.services.email_service import send_announcement_email
+                                
+                                if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                    send_announcement_email(student, announcement)
+                                
                                 count += 1
                 except Course.DoesNotExist:
                     pass
@@ -3153,7 +3359,24 @@ def send_announcements(sender, message, subject, receivers_list):
                             message=message[:100] + ('...' if len(message) > 100 else ''),
                             assignment=None,
                             announcement=announcement
-                    )
+                        )
+                        
+                        # Send email and SMS notifications
+                        try:
+                            student = Student.objects.get(user=receiver)
+                            from django.conf import settings
+                            from core.services.email_service import send_announcement_email
+                            from core.services.sms_service import send_announcement_sms
+                            
+                            if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                send_announcement_email(student, announcement)
+                            
+                            # Send SMS only if sender is instructor or faculty head
+                            if getattr(settings, 'ENABLE_SMS_NOTIFICATIONS', True):
+                                send_announcement_sms(student, announcement)
+                        except Student.DoesNotExist:
+                            pass
+                    
                     count += 1
                 except User.DoesNotExist:
                     pass
@@ -8366,6 +8589,18 @@ def faculty_head_announcements(request):
                                             assignment=None,
                                             announcement=announcement
                                         )
+                                        
+                                        # Send email and SMS notifications
+                                        from django.conf import settings
+                                        from core.services.email_service import send_announcement_email
+                                        from core.services.sms_service import send_announcement_sms
+                                        
+                                        if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                            send_announcement_email(student, announcement)
+                                        
+                                        # Send SMS only if sender is instructor or faculty head
+                                        if getattr(settings, 'ENABLE_SMS_NOTIFICATIONS', True):
+                                            send_announcement_sms(student, announcement)
                         except Course.DoesNotExist:
                             pass
                     else:
@@ -8393,7 +8628,18 @@ def faculty_head_announcements(request):
                                     message=message[:100] + ('...' if len(message) > 100 else ''),
                                     assignment=None,
                                     announcement=announcement
-                            )
+                                )
+                                
+                                # Send email notifications
+                                try:
+                                    student = Student.objects.get(user=receiver)
+                                    from django.conf import settings
+                                    from core.services.email_service import send_announcement_email
+                                    
+                                    if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                        send_announcement_email(student, announcement)
+                                except Student.DoesNotExist:
+                                    pass
                         except User.DoesNotExist:
                             pass
             
