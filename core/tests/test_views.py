@@ -2,7 +2,6 @@
 Tests for Django views.
 """
 from django.test import TestCase
-from django.urls import reverse
 
 
 class ViewTests(TestCase):

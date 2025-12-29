@@ -2,7 +2,6 @@
 Tests for URL routing.
 """
 from django.test import TestCase
-from django.urls import reverse
 
 
 class URLTests(TestCase):
