@@ -1,0 +1,42 @@
+{% extends "student_base.html" %}
+{% load static %}
+
+{% block title %}Academic Calendar{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 20px auto; padding: 20px;">
+    <h1 style="margin: 0 0 24px 0; color: #1e293b;">
+        {% if calendar %}{{ calendar.academic_year }} {{ calendar.semester }}{% else %}Academic Calendar{% endif %}
+    </h1>
+    
+    {% if events %}
+    <div style="background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px; overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+            <thead>
+                <tr style="background-color: #0b5fff; color: white;">
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd; font-weight: 600;">Event Name</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd; font-weight: 600;">Start Date</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd; font-weight: 600;">End Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr style="{% if forloop.counter|divisibleby:2 %}background-color: #f8fafc;{% endif %}">
+                    <td style="padding: 12px; border: 1px solid #ddd; color: #1e293b;">{{ event.event_name }}</td>
+                    <td style="padding: 12px; border: 1px solid #ddd; color: #475569;">{{ event.start_date|date:"d.m.Y H:i" }}</td>
+                    <td style="padding: 12px; border: 1px solid #ddd; color: #475569;">
+                        {% if event.end_date %}{{ event.end_date|date:"d.m.Y H:i" }}{% else %}-{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px; text-align: center;">
+        <p style="color: #64748b; font-size: 16px; margin: 0;">No academic calendar available.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

@@ -425,6 +425,32 @@ class AssignmentSubmission(models.Model):
     def __str__(self):
         return f"{self.student.username} - {self.assignment.title}"
 
+class AcademicCalendar(models.Model):
+    academic_year = models.CharField(max_length=20)  # e.g., "2025-2026"
+    semester = models.CharField(max_length=20)  # e.g., "Güz", "Bahar"
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='uploaded_calendars')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    file = models.FileField(upload_to='academic_calendars/', null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+        get_latest_by = 'uploaded_at'
+    
+    def __str__(self):
+        return f"{self.academic_year} {self.semester}"
+
+class AcademicCalendarEvent(models.Model):
+    calendar = models.ForeignKey(AcademicCalendar, on_delete=models.CASCADE, related_name='events')
+    event_name = models.CharField(max_length=200)  # "Ders Kayıt", "Ara Sınav Not Giriş", etc.
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['start_date']
+    
+    def __str__(self):
+        return f"{self.event_name} ({self.start_date})"
+
 class Notification(models.Model):
     NOTIFICATION_TYPES = [
         ('assignment_created', 'Assignment Created'),

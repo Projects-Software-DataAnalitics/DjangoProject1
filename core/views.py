@@ -3322,8 +3322,9 @@ def set_instructor_session(request):
 @faculty_head_required
 def faculty_head_dashboard(request):
     from datetime import datetime
-    from .models import Announcement
+    from .models import Announcement, Assignment
     from django.db.models import Q
+    from django.utils import timezone
     
     faculty_head_user = request.user
     profile = getattr(faculty_head_user, 'profile', None)
@@ -3352,8 +3353,11 @@ def faculty_head_dashboard(request):
     total_instructors_set = set()
     chart_data = {'labels': [], 'data': []}
     
+    # Get assignments from faculty head's department courses
+    upcoming_assignments = []
+    
     if faculty_head_department:
-        courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='').select_related('instructor').prefetch_related('students')
+        courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='').exclude(name__in=['Electronics', 'Embedded Systems']).select_related('instructor').prefetch_related('students')
         for course in courses:
             students = course.students.all()
             student_count = students.count()
@@ -3379,14 +3383,89 @@ def faculty_head_dashboard(request):
             
             chart_data['labels'].append(course.name)
             chart_data['data'].append(student_count)
+        
+        # Get assignments with deadlines, ordered by deadline (soonest first)
+        # Show both future and past assignments, but prioritize future ones
+        now = timezone.now()
+        all_assignments_qs = Assignment.objects.filter(
+            course__in=courses
+        ).select_related('course', 'created_by')
+        
+        # Convert to list to sort
+        all_assignments_list = list(all_assignments_qs)
+        
+        # Separate future and past assignments
+        future_assignments = [a for a in all_assignments_list if a.deadline >= now]
+        past_assignments = [a for a in all_assignments_list if a.deadline < now]
+        
+        # Sort each group by deadline
+        future_assignments.sort(key=lambda x: x.deadline)
+        past_assignments.sort(key=lambda x: x.deadline, reverse=True)  # Most recent past first
+        
+        # Show future assignments first, then past ones (limit to 10 total)
+        assignments = (future_assignments + past_assignments)[:10]
+        
+        instructors_map = get_instructors_map()
+        faculty_heads_map = get_faculty_heads_map()
+        
+        for assignment in assignments:
+            creator_name = instructors_map.get(assignment.created_by.username) or faculty_heads_map.get(assignment.created_by.username) or assignment.created_by.get_full_name() or assignment.created_by.username
+            
+            # Check if deadline is approaching (within 7 days)
+            time_diff = assignment.deadline - now
+            days_until_deadline = time_diff.days
+            # If less than 24 hours, count as 0 days
+            if time_diff.total_seconds() < 86400 and time_diff.total_seconds() >= 0:
+                days_until_deadline = 0
+            elif time_diff.total_seconds() < 0:
+                # Past deadline
+                days_until_deadline = -1
+            is_urgent = days_until_deadline <= 3 and days_until_deadline >= 0
+            
+            upcoming_assignments.append({
+                'id': assignment.id,
+                'title': assignment.title,
+                'course_name': assignment.course.name,
+                'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                'deadline_datetime': assignment.deadline.isoformat(),
+                'days_until': days_until_deadline,
+                'is_urgent': is_urgent,
+            })
     
     total_courses = len(courses_list)
     total_students = len(total_students_set)
     total_instructors = len(total_instructors_set)
     
-    latest_announcements = Announcement.objects.filter(
+    # Get department course names for filtering announcements
+    department_course_names = set()
+    if faculty_head_department:
+        department_course_names = set(courses.values_list('name', flat=True))
+    
+    # Filter announcements: only show those related to faculty head's department courses
+    all_announcements = Announcement.objects.filter(
         Q(receiver=faculty_head_user)
-    ).exclude(sender=faculty_head_user).select_related('sender', 'receiver').order_by('-created_at')[:5]
+    ).exclude(sender=faculty_head_user).select_related('sender', 'receiver').order_by('-created_at')
+    
+    # Filter announcements by department courses
+    filtered_announcements = []
+    for ann in all_announcements:
+        # Check if announcement is related to a course in faculty head's department
+        if ann.subject and ann.subject.startswith('__COURSE:'):
+            # Extract course name from subject
+            end_marker = ann.subject.find('__', 9)
+            if end_marker != -1:
+                course_name = ann.subject[9:end_marker]
+                # Only include if course is in faculty head's department
+                if course_name in department_course_names:
+                    filtered_announcements.append(ann)
+        else:
+            # Announcements without course marker - only show if receiver is faculty head
+            # (general announcements sent directly to faculty head)
+            if ann.receiver == faculty_head_user:
+                filtered_announcements.append(ann)
+    
+    # Take top 5
+    latest_announcements = filtered_announcements[:5]
     
     announcements_list = []
     for ann in latest_announcements:
@@ -3410,6 +3489,7 @@ def faculty_head_dashboard(request):
         'chart_data': chart_data,
         'chart_data_json': chart_data_json,
         'latest_announcements': announcements_list,
+        'upcoming_assignments': upcoming_assignments,
     })
 
 @faculty_head_required
@@ -3433,6 +3513,147 @@ def faculty_head_profile(request):
         'show_welcome': False,
         'page': 'profile',
         'profile': profile_data
+    })
+
+@faculty_head_required
+def upload_academic_calendar(request):
+    from .models import AcademicCalendar, AcademicCalendarEvent
+    import csv
+    import io
+    from django.http import JsonResponse
+    from django.shortcuts import render
+    
+    if request.method == 'POST':
+        try:
+            file = request.FILES.get('calendar_file')
+            academic_year = request.POST.get('academic_year', '')
+            semester = request.POST.get('semester', '')
+            
+            if not file:
+                return JsonResponse({'error': 'No file uploaded'}, status=400)
+            
+            # Check file extension
+            file_ext = file.name.split('.')[-1].lower()
+            if file_ext not in ['pdf', 'csv']:
+                return JsonResponse({'error': 'Only PDF and CSV files are allowed'}, status=400)
+            
+            # Create calendar record
+            calendar = AcademicCalendar.objects.create(
+                academic_year=academic_year,
+                semester=semester,
+                uploaded_by=request.user
+            )
+            
+            # Parse CSV if CSV file
+            if file_ext == 'csv':
+                # Save file
+                calendar.file = file
+                calendar.save()
+                
+                # Parse CSV
+                file.seek(0)
+                try:
+                    content = file.read().decode('utf-8')
+                except UnicodeDecodeError:
+                    content = file.read().decode('utf-8-sig')  # Handle BOM
+                
+                csv_reader = csv.DictReader(io.StringIO(content))
+                events_created = 0
+                errors = []
+                
+                for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 (header is row 1)
+                    try:
+                        # Try multiple column name variations
+                        event_name = (row.get('Event Name', '') or 
+                                     row.get('Calendar Name', '') or 
+                                     row.get('Takvim Adı', '') or 
+                                     row.get('event_name', '') or
+                                     row.get('calendar_name', ''))
+                        if not event_name or not event_name.strip():
+                            continue
+                            
+                        start_str = (row.get('Start Date', '') or 
+                                   row.get('Başlangıç Tarihi', '') or 
+                                   row.get('start_date', ''))
+                        end_str = (row.get('End Date', '') or 
+                                 row.get('Bitiş Tarihi', '') or 
+                                 row.get('end_date', ''))
+                        
+                        if not start_str or not start_str.strip():
+                            continue
+                        
+                        # Parse dates (format: DD.MM.YYYY HH:MM)
+                        from datetime import datetime
+                        from django.utils import timezone
+                        naive_start = datetime.strptime(start_str.strip(), '%d.%m.%Y %H:%M')
+                        start_date = timezone.make_aware(naive_start)
+                        end_date = None
+                        if end_str and end_str.strip():
+                            naive_end = datetime.strptime(end_str.strip(), '%d.%m.%Y %H:%M')
+                            end_date = timezone.make_aware(naive_end)
+                        
+                        AcademicCalendarEvent.objects.create(
+                            calendar=calendar,
+                            event_name=event_name.strip(),
+                            start_date=start_date,
+                            end_date=end_date
+                        )
+                        events_created += 1
+                    except Exception as e:
+                        error_msg = f"Row {row_num}: {str(e)}"
+                        errors.append(error_msg)
+                        print(f"Error parsing row {row_num}: {e}")
+                        continue
+                
+                if events_created == 0 and errors:
+                    return JsonResponse({'error': f'No events created. Errors: {"; ".join(errors[:5])}'}, status=400)
+                elif events_created == 0:
+                    return JsonResponse({'error': 'No events found in CSV file. Please check the format.'}, status=400)
+            
+            return JsonResponse({'success': True, 'message': 'Academic calendar uploaded successfully'})
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    # GET request - show upload form
+    from .models import AcademicCalendar
+    latest_calendar = AcademicCalendar.objects.first()
+    return render(request, 'faculty/academic_calendar_upload.html', {
+        'latest_calendar': latest_calendar
+    })
+
+def view_academic_calendar(request):
+    """View academic calendar for all users"""
+    from .models import AcademicCalendar, AcademicCalendarEvent
+    from django.shortcuts import render, redirect
+    
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    latest_calendar = AcademicCalendar.objects.first()
+    events = []
+    
+    if latest_calendar:
+        events = latest_calendar.events.all()
+    
+    # Determine which template to use based on user role
+    profile = getattr(request.user, 'profile', None)
+    if profile:
+        if profile.role == 'student':
+            template_name = 'student/academic_calendar.html'
+        elif profile.role == 'instructor':
+            template_name = 'instructor/academic_calendar.html'
+        elif profile.role == 'faculty_head':
+            template_name = 'faculty/academic_calendar.html'
+        else:
+            template_name = 'student/academic_calendar.html'
+    else:
+        template_name = 'student/academic_calendar.html'
+    
+    return render(request, template_name, {
+        'calendar': latest_calendar,
+        'events': events,
+        'is_faculty_head': profile and profile.role == 'faculty_head' if profile else False
     })
 
 @faculty_head_required
@@ -3567,11 +3788,11 @@ def all_courses(request):
     # We only use Course.instructor to ensure the table reflects the actual PostgreSQL database state
     # Note: Course.instructor can be either an instructor OR a faculty_head (both are User objects)
     
-    # Get all courses from the department
+    # Get all courses from the department, excluding Electronics and Embedded Systems for Computer Engineering faculty head
     if faculty_head_department:
-        courses_qs = Course.objects.filter(department=faculty_head_department).select_related('instructor', 'instructor__profile')
+        courses_qs = Course.objects.filter(department=faculty_head_department).exclude(name__in=['Electronics', 'Embedded Systems']).select_related('instructor', 'instructor__profile')
     else:
-        courses_qs = Course.objects.all().select_related('instructor', 'instructor__profile')
+        courses_qs = Course.objects.all().exclude(name__in=['Electronics', 'Embedded Systems']).select_related('instructor', 'instructor__profile')
     
     # Optimize: Fetch all learning outcomes in one query
     course_names = [course.name for course in courses_qs]
@@ -5557,6 +5778,67 @@ def student_profile(request):
     return render(request, "student/profile.html", {'profile': profile_data})
 
 
+def student_advisor_info(request):
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        advisor_info = None
+        
+        # Only Computer Engineering students have advisor (Ahmet Bulut)
+        if student.department and student.department.lower() == 'computer engineering':
+            # Get Ahmet Bulut's information
+            try:
+                advisor_user = User.objects.get(username='ahmet.bulut')
+                advisor_profile = getattr(advisor_user, 'profile', None)
+                
+                # Get advisor's courses
+                advisor_courses = Course.objects.filter(instructor=advisor_user).select_related('instructor')
+                
+                # Prepare schedule data - get all unique time slots from advisor's courses
+                days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+                # Get all unique time slots from courses
+                all_time_slots = set()
+                for course in advisor_courses:
+                    if course.time:
+                        all_time_slots.add(course.time)
+                # Sort time slots and create list
+                time_slots = sorted(list(all_time_slots))
+                # If no time slots found, use default
+                if not time_slots:
+                    time_slots = ['08:00-09:30', '09:30-11:00', '11:00-12:30', '13:00-14:30', '14:30-16:00', '16:00-17:30']
+                
+                schedule_data = {}
+                for course in advisor_courses:
+                    if course.day and course.time:
+                        if course.day not in schedule_data:
+                            schedule_data[course.day] = {}
+                        schedule_data[course.day][course.time] = {
+                            'name': course.name,
+                            'code': course.code,
+                            'room': course.room or '',
+                        }
+                
+                advisor_info = {
+                    'name': f"{advisor_user.first_name} {advisor_user.last_name}".strip() or advisor_user.username,
+                    'username': advisor_user.username,
+                    'department': advisor_profile.department if advisor_profile else 'Computer Engineering',
+                    'email': 'ahmetbulut@gmail.com',
+                    'office': 'B block 2nd floor',
+                    'courses': [{'name': course.name, 'code': course.code} for course in advisor_courses],
+                    'courses_for_schedule': advisor_courses,  # For schedule table rendering
+                    'days': days,
+                    'time_slots': time_slots,
+                }
+            except User.DoesNotExist:
+                advisor_info = None
+    except Student.DoesNotExist:
+        advisor_info = None
+    
+    return render(request, "student/advisor_info.html", {'advisor_info': advisor_info})
+
+
 def student_courses(request):
     from .models import Assignment, AssignmentSubmission
     
@@ -6518,29 +6800,84 @@ def faculty_head_announcements(request):
             
             return redirect('faculty-head-announcements')
     
+    # Get department course names for filtering announcements
+    department_course_names = set()
+    if faculty_head_department:
+        department_courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='')
+        department_course_names = set(department_courses.values_list('name', flat=True))
+    
     # ORM ile announcements'ları çek - select_related ile JOIN optimizasyonu
-    announcements = Announcement.objects.filter(
+    all_announcements_raw = Announcement.objects.filter(
         Q(sender=faculty_head_user) | Q(receiver=faculty_head_user)
     ).select_related('sender', 'receiver').order_by('-created_at')
     
+    # Filter announcements by department courses
     all_announcements = []
-    for ann in announcements:
-        all_announcements.append({
-            'id': ann.id,
-            'subject': ann.subject,
-            'message': ann.message,
-            'sender_id': ann.sender.id,
-            'receiver_id': ann.receiver.id if ann.receiver else None,
-            'sender_username': ann.sender.username,
-            'sender_first_name': ann.sender.first_name,
-            'sender_last_name': ann.sender.last_name,
-            'receiver_username': ann.receiver.username if ann.receiver else None,
-            'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
-            'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
-            'sender_role': ann.sender_role,
-            'receiver_role': ann.receiver_role,
-            'created_at': ann.created_at,
-        })
+    for ann in all_announcements_raw:
+        # If faculty head sent it, always show it
+        if ann.sender == faculty_head_user:
+            all_announcements.append({
+                'id': ann.id,
+                'subject': ann.subject,
+                'message': ann.message,
+                'sender_id': ann.sender.id,
+                'receiver_id': ann.receiver.id if ann.receiver else None,
+                'sender_username': ann.sender.username,
+                'sender_first_name': ann.sender.first_name,
+                'sender_last_name': ann.sender.last_name,
+                'receiver_username': ann.receiver.username if ann.receiver else None,
+                'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
+                'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
+                'sender_role': ann.sender_role,
+                'receiver_role': ann.receiver_role,
+                'created_at': ann.created_at,
+            })
+        # If received, only show if related to department courses
+        elif ann.receiver == faculty_head_user:
+            # Check if announcement is related to a course in faculty head's department
+            if ann.subject and ann.subject.startswith('__COURSE:'):
+                # Extract course name from subject
+                end_marker = ann.subject.find('__', 9)
+                if end_marker != -1:
+                    course_name = ann.subject[9:end_marker]
+                    # Only include if course is in faculty head's department
+                    if course_name in department_course_names:
+                        all_announcements.append({
+                            'id': ann.id,
+                            'subject': ann.subject,
+                            'message': ann.message,
+                            'sender_id': ann.sender.id,
+                            'receiver_id': ann.receiver.id if ann.receiver else None,
+                            'sender_username': ann.sender.username,
+                            'sender_first_name': ann.sender.first_name,
+                            'sender_last_name': ann.sender.last_name,
+                            'receiver_username': ann.receiver.username if ann.receiver else None,
+                            'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
+                            'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
+                            'sender_role': ann.sender_role,
+                            'receiver_role': ann.receiver_role,
+                            'created_at': ann.created_at,
+                        })
+            else:
+                # Announcements without course marker - only show if receiver is faculty head
+                # (general announcements sent directly to faculty head)
+                all_announcements.append({
+                    'id': ann.id,
+                    'subject': ann.subject,
+                    'message': ann.message,
+                    'sender_id': ann.sender.id,
+                    'receiver_id': ann.receiver.id if ann.receiver else None,
+                    'sender_username': ann.sender.username,
+                    'sender_first_name': ann.sender.first_name,
+                    'sender_last_name': ann.sender.last_name,
+                    'receiver_username': ann.receiver.username if ann.receiver else None,
+                    'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
+                    'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
+                    'sender_role': ann.sender_role,
+                    'receiver_role': ann.receiver_role,
+                    'created_at': ann.created_at,
+                })
+    
     
     # Group announcements sent to course students
     from collections import defaultdict
