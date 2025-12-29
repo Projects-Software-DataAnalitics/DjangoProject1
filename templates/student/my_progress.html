@@ -250,8 +250,8 @@
                     
                     <svg id="arrows-svg">
                         <defs>
-                            <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-                                <path d="M 0 0 L 8 4 L 0 8 Z" fill="#374151" stroke="none" />
+                            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                                <path d="M 0 0 L 10 5 L 0 10 Z" fill="#374151" stroke="none" />
                             </marker>
                         </defs>
                     </svg>
@@ -369,6 +369,7 @@
                         
                         const assessmentStartX = assessmentRect.right - containerRect.left;
                         
+                        // Calculate Y position based on assessment distribution
                         let assessmentStartY;
                         if (totalAssessments === 1) {
                             assessmentStartY = assessmentRect.top - containerRect.top + assessmentCardHeight / 2;
@@ -379,7 +380,7 @@
                             assessmentStartY = assessmentRect.top - containerRect.top + assessmentStartOffset + (assessmentStep * index);
                         }
                         
-                        let loEndY;
+                        // Count how many assessments connect to this LO
                         let assessmentsConnectedToThisLo = 0;
                         let currentAssessmentIndex = 0;
                         learningOutcomesData.forEach(function(otherLoData) {
@@ -395,6 +396,8 @@
                             }
                         });
                         
+                        // End point Y: LO card's left edge, distributed if multiple connections
+                        let loEndY;
                         if (assessmentsConnectedToThisLo === 1) {
                             loEndY = loRect.top - containerRect.top + loCardHeight / 2;
                         } else {
@@ -414,8 +417,9 @@
                         
                         const percentage = assessmentLink.contribution_percentage || 0;
                         
+                        // Fixed control points for consistent arrow shape (not dynamic)
                         const distance = loEndX - assessmentStartX;
-                        const controlPointOffset = Math.max(distance * 0.35, 80);
+                        const controlPointOffset = distance * 0.4; // Fixed 40% of distance
                         
                         const controlPoint1X = assessmentStartX + controlPointOffset;
                         const controlPoint1Y = assessmentStartY;
@@ -425,28 +429,35 @@
                         const strokeWidth = 2;
                         const strokeColor = '#374151';
                         
+                        // Marker setup: refX should account for arrow tip size
                         const markerId = `arrowhead-${assessmentId}-${loData.id}`;
                         let marker = svg.querySelector(`#${markerId}`);
                         if (!marker) {
                             const defs = svg.querySelector('defs') || svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'defs'));
                             marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
                             marker.setAttribute('id', markerId);
-                            marker.setAttribute('markerWidth', '8');
-                            marker.setAttribute('markerHeight', '8');
-                            marker.setAttribute('refX', '7');
-                            marker.setAttribute('refY', '4');
+                            marker.setAttribute('markerWidth', '10');
+                            marker.setAttribute('markerHeight', '10');
+                            marker.setAttribute('refX', '9'); // Arrow tip extends 9px from path end
+                            marker.setAttribute('refY', '5');
                             marker.setAttribute('orient', 'auto');
-                            marker.setAttribute('markerUnits', 'strokeWidth');
+                            marker.setAttribute('markerUnits', 'userSpaceOnUse'); // Fixed size, not relative to stroke
                             const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                            markerPath.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
+                            markerPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 Z');
                             markerPath.setAttribute('fill', strokeColor);
                             markerPath.setAttribute('stroke', 'none');
                             marker.appendChild(markerPath);
                             defs.appendChild(marker);
                         }
                         
+                        // End point: LO card's left edge, adjusted for arrow marker
+                        // The marker's refX=9 means the arrow tip extends 9px from the path end
+                        // So we need to extend the path 9px into the LO card so the tip touches the edge
+                        const arrowTipOffset = 9;
+                        const adjustedLoEndX = loEndX - arrowTipOffset;
+                        
                         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                        const d = `M ${assessmentStartX} ${assessmentStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${loEndX} ${loEndY}`;
+                        const d = `M ${assessmentStartX} ${assessmentStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${adjustedLoEndX} ${loEndY}`;
                         path.setAttribute('d', d);
                         path.setAttribute('class', 'arrow-path');
                         path.setAttribute('data-assessment-id', assessmentId);
@@ -574,8 +585,9 @@
                     
                     const percentage = linkedPo.percentage || 0;
                     
+                    // Fixed control points for consistent arrow shape (not dynamic)
                     const distance = poEndX - loStartX;
-                    const controlPointOffset = Math.max(distance * 0.35, 80);
+                    const controlPointOffset = distance * 0.4; // Fixed 40% of distance
                     
                     const controlPoint1X = loStartX + controlPointOffset;
                     const controlPoint1Y = loStartY;
@@ -585,28 +597,35 @@
                     const strokeWidth = 2;
                     const strokeColor = '#374151';
                     
+                    // Marker setup: refX should account for arrow tip size
                     const markerId = `arrowhead-${loData.id}-${linkedPo.id}`;
                     let marker = svg.querySelector(`#${markerId}`);
                     if (!marker) {
                         const defs = svg.querySelector('defs') || svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'defs'));
                         marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
                         marker.setAttribute('id', markerId);
-                        marker.setAttribute('markerWidth', '8');
-                        marker.setAttribute('markerHeight', '8');
-                        marker.setAttribute('refX', '7');
-                        marker.setAttribute('refY', '4');
+                        marker.setAttribute('markerWidth', '10');
+                        marker.setAttribute('markerHeight', '10');
+                        marker.setAttribute('refX', '9'); // Arrow tip extends 9px from path end
+                        marker.setAttribute('refY', '5');
                         marker.setAttribute('orient', 'auto');
-                        marker.setAttribute('markerUnits', 'strokeWidth');
+                        marker.setAttribute('markerUnits', 'userSpaceOnUse'); // Fixed size, not relative to stroke
                         const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                        markerPath.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
+                        markerPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 Z');
                         markerPath.setAttribute('fill', strokeColor);
                         markerPath.setAttribute('stroke', 'none');
                         marker.appendChild(markerPath);
                         defs.appendChild(marker);
                     }
                     
+                    // End point: PO card's left edge, adjusted for arrow marker
+                    // The marker's refX=9 means the arrow tip extends 9px from the path end
+                    // So we need to extend the path 9px into the PO card so the tip touches the edge
+                    const arrowTipOffset = 9;
+                    const adjustedPoEndX = poEndX - arrowTipOffset;
+                    
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    const d = `M ${loStartX} ${loStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${poEndX} ${poEndY}`;
+                    const d = `M ${loStartX} ${loStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${adjustedPoEndX} ${poEndY}`;
                     path.setAttribute('d', d);
                     path.setAttribute('class', 'arrow-path');
                     path.setAttribute('data-lo-id', loData.id);
