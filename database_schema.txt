@@ -1,0 +1,814 @@
+================================================================================
+DATABASE SCHEMA - djangoproject2
+================================================================================
+
+
+================================================================================
+TABLE: auth_group
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             INTEGER(32)          NOT NULL
+  name                           CHARACTER VARYING(150) NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  auth_group_name_a6ea08ec_like
+    CREATE INDEX auth_group_name_a6ea08ec_like ON public.auth_group USING btree (name varchar_pattern_ops)
+  auth_group_name_key
+    CREATE UNIQUE INDEX auth_group_name_key ON public.auth_group USING btree (name)
+  auth_group_pkey
+    CREATE UNIQUE INDEX auth_group_pkey ON public.auth_group USING btree (id)
+
+
+================================================================================
+TABLE: auth_group_permissions
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  group_id                       INTEGER(32)          NOT NULL
+  permission_id                  INTEGER(32)          NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  auth_group_permissions_group_id_b120cbf9
+    CREATE INDEX auth_group_permissions_group_id_b120cbf9 ON public.auth_group_permissions USING btree (group_id)
+  auth_group_permissions_group_id_permission_id_0cd325b0_uniq
+    CREATE UNIQUE INDEX auth_group_permissions_group_id_permission_id_0cd325b0_uniq ON public.auth_group_permissions USING btree (group_id, permission_id)
+  auth_group_permissions_permission_id_84c5c92e
+    CREATE INDEX auth_group_permissions_permission_id_84c5c92e ON public.auth_group_permissions USING btree (permission_id)
+  auth_group_permissions_pkey
+    CREATE UNIQUE INDEX auth_group_permissions_pkey ON public.auth_group_permissions USING btree (id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  auth_group_permissio_permission_id_84c5c92e_fk_auth_perm
+    auth_group_permissions.permission_id -> auth_permission.id
+  auth_group_permissions_group_id_b120cbf9_fk_auth_group_id
+    auth_group_permissions.group_id -> auth_group.id
+
+
+================================================================================
+TABLE: auth_permission
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             INTEGER(32)          NOT NULL
+  name                           CHARACTER VARYING(255) NOT NULL
+  content_type_id                INTEGER(32)          NOT NULL
+  codename                       CHARACTER VARYING(100) NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  auth_permission_content_type_id_2f476e4b
+    CREATE INDEX auth_permission_content_type_id_2f476e4b ON public.auth_permission USING btree (content_type_id)
+  auth_permission_content_type_id_codename_01ab375a_uniq
+    CREATE UNIQUE INDEX auth_permission_content_type_id_codename_01ab375a_uniq ON public.auth_permission USING btree (content_type_id, codename)
+  auth_permission_pkey
+    CREATE UNIQUE INDEX auth_permission_pkey ON public.auth_permission USING btree (id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  auth_permission_content_type_id_2f476e4b_fk_django_co
+    auth_permission.content_type_id -> django_content_type.id
+
+
+================================================================================
+TABLE: auth_user
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             INTEGER(32)          NOT NULL
+  password                       CHARACTER VARYING(128) NOT NULL
+  last_login                     TIMESTAMP WITH TIME ZONE NULL
+  is_superuser                   BOOLEAN              NOT NULL
+  username                       CHARACTER VARYING(150) NOT NULL
+  first_name                     CHARACTER VARYING(150) NOT NULL
+  last_name                      CHARACTER VARYING(150) NOT NULL
+  email                          CHARACTER VARYING(254) NOT NULL
+  is_staff                       BOOLEAN              NOT NULL
+  is_active                      BOOLEAN              NOT NULL
+  date_joined                    TIMESTAMP WITH TIME ZONE NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  auth_user_pkey
+    CREATE UNIQUE INDEX auth_user_pkey ON public.auth_user USING btree (id)
+  auth_user_username_6821ab7c_like
+    CREATE INDEX auth_user_username_6821ab7c_like ON public.auth_user USING btree (username varchar_pattern_ops)
+  auth_user_username_key
+    CREATE UNIQUE INDEX auth_user_username_key ON public.auth_user USING btree (username)
+
+
+================================================================================
+TABLE: auth_user_groups
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  user_id                        INTEGER(32)          NOT NULL
+  group_id                       INTEGER(32)          NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  auth_user_groups_group_id_97559544
+    CREATE INDEX auth_user_groups_group_id_97559544 ON public.auth_user_groups USING btree (group_id)
+  auth_user_groups_pkey
+    CREATE UNIQUE INDEX auth_user_groups_pkey ON public.auth_user_groups USING btree (id)
+  auth_user_groups_user_id_6a12ed8b
+    CREATE INDEX auth_user_groups_user_id_6a12ed8b ON public.auth_user_groups USING btree (user_id)
+  auth_user_groups_user_id_group_id_94350c0c_uniq
+    CREATE UNIQUE INDEX auth_user_groups_user_id_group_id_94350c0c_uniq ON public.auth_user_groups USING btree (user_id, group_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  auth_user_groups_group_id_97559544_fk_auth_group_id
+    auth_user_groups.group_id -> auth_group.id
+  auth_user_groups_user_id_6a12ed8b_fk_auth_user_id
+    auth_user_groups.user_id -> auth_user.id
+
+
+================================================================================
+TABLE: auth_user_user_permissions
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  user_id                        INTEGER(32)          NOT NULL
+  permission_id                  INTEGER(32)          NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  auth_user_user_permissions_permission_id_1fbb5f2c
+    CREATE INDEX auth_user_user_permissions_permission_id_1fbb5f2c ON public.auth_user_user_permissions USING btree (permission_id)
+  auth_user_user_permissions_pkey
+    CREATE UNIQUE INDEX auth_user_user_permissions_pkey ON public.auth_user_user_permissions USING btree (id)
+  auth_user_user_permissions_user_id_a95ead1b
+    CREATE INDEX auth_user_user_permissions_user_id_a95ead1b ON public.auth_user_user_permissions USING btree (user_id)
+  auth_user_user_permissions_user_id_permission_id_14a6b632_uniq
+    CREATE UNIQUE INDEX auth_user_user_permissions_user_id_permission_id_14a6b632_uniq ON public.auth_user_user_permissions USING btree (user_id, permission_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm
+    auth_user_user_permissions.permission_id -> auth_permission.id
+  auth_user_user_permissions_user_id_a95ead1b_fk_auth_user_id
+    auth_user_user_permissions.user_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_academiccalendar
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             INTEGER(32)          NOT NULL DEFAULT nextval('core_academiccalendar_id_seq'::regclass)
+  academic_year                  CHARACTER VARYING(20) NOT NULL
+  semester                       CHARACTER VARYING(20) NOT NULL
+  uploaded_by_id                 INTEGER(32)          NULL
+  uploaded_at                    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+  file                           CHARACTER VARYING(100) NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_academiccalendar_pkey
+    CREATE UNIQUE INDEX core_academiccalendar_pkey ON public.core_academiccalendar USING btree (id)
+  core_academiccalendar_uploaded_by_id_idx
+    CREATE INDEX core_academiccalendar_uploaded_by_id_idx ON public.core_academiccalendar USING btree (uploaded_by_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_academiccalendar_uploaded_by_id_fkey
+    core_academiccalendar.uploaded_by_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_academiccalendarevent
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             INTEGER(32)          NOT NULL DEFAULT nextval('core_academiccalendarevent_id_seq'::regclass)
+  event_name                     CHARACTER VARYING(200) NOT NULL
+  start_date                     TIMESTAMP WITH TIME ZONE NOT NULL
+  end_date                       TIMESTAMP WITH TIME ZONE NULL
+  calendar_id                    INTEGER(32)          NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_academiccalendarevent_calendar_id_idx
+    CREATE INDEX core_academiccalendarevent_calendar_id_idx ON public.core_academiccalendarevent USING btree (calendar_id)
+  core_academiccalendarevent_pkey
+    CREATE UNIQUE INDEX core_academiccalendarevent_pkey ON public.core_academiccalendarevent USING btree (id)
+  core_academiccalendarevent_start_date_idx
+    CREATE INDEX core_academiccalendarevent_start_date_idx ON public.core_academiccalendarevent USING btree (start_date)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_academiccalendarevent_calendar_id_fkey
+    core_academiccalendarevent.calendar_id -> core_academiccalendar.id
+
+
+================================================================================
+TABLE: core_announcement
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  message                        TEXT                 NOT NULL
+  sender_role                    CHARACTER VARYING(20) NOT NULL
+  receiver_role                  CHARACTER VARYING(20) NULL
+  created_at                     TIMESTAMP WITH TIME ZONE NOT NULL
+  receiver_id                    INTEGER(32)          NULL
+  sender_id                      INTEGER(32)          NOT NULL
+  subject                        CHARACTER VARYING(200) NOT NULL
+  is_pinned                      BOOLEAN              NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_announcement_pkey
+    CREATE UNIQUE INDEX core_announcement_pkey ON public.core_announcement USING btree (id)
+  core_announcement_receiver_id_485b6e63
+    CREATE INDEX core_announcement_receiver_id_485b6e63 ON public.core_announcement USING btree (receiver_id)
+  core_announcement_sender_id_703a25a3
+    CREATE INDEX core_announcement_sender_id_703a25a3 ON public.core_announcement USING btree (sender_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_announcement_receiver_id_485b6e63_fk_auth_user_id
+    core_announcement.receiver_id -> auth_user.id
+  core_announcement_sender_id_703a25a3_fk_auth_user_id
+    core_announcement.sender_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_announcement_read_by
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  announcement_id                BIGINT(64)           NOT NULL
+  user_id                        INTEGER(32)          NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_announcement_read_by_announcement_id_8a86b778
+    CREATE INDEX core_announcement_read_by_announcement_id_8a86b778 ON public.core_announcement_read_by USING btree (announcement_id)
+  core_announcement_read_by_announcement_id_user_id_47698ef8_uniq
+    CREATE UNIQUE INDEX core_announcement_read_by_announcement_id_user_id_47698ef8_uniq ON public.core_announcement_read_by USING btree (announcement_id, user_id)
+  core_announcement_read_by_pkey
+    CREATE UNIQUE INDEX core_announcement_read_by_pkey ON public.core_announcement_read_by USING btree (id)
+  core_announcement_read_by_user_id_770d348e
+    CREATE INDEX core_announcement_read_by_user_id_770d348e ON public.core_announcement_read_by USING btree (user_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_announcement_re_announcement_id_8a86b778_fk_core_anno
+    core_announcement_read_by.announcement_id -> core_announcement.id
+  core_announcement_read_by_user_id_770d348e_fk_auth_user_id
+    core_announcement_read_by.user_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_assessment
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  midterm                        INTEGER(32)          NOT NULL
+  final                          INTEGER(32)          NOT NULL
+  project                        INTEGER(32)          NOT NULL
+  assignment                     INTEGER(32)          NOT NULL
+  absence                        INTEGER(32)          NOT NULL
+  assessment_count               INTEGER(32)          NOT NULL
+  course_id                      BIGINT(64)           NOT NULL
+  absence_percentage             INTEGER(32)          NOT NULL
+  final_percentage               INTEGER(32)          NOT NULL
+  homework_percentage            INTEGER(32)          NOT NULL
+  midterm_percentage             INTEGER(32)          NOT NULL
+  proje_percentage               INTEGER(32)          NOT NULL
+  quiz                           INTEGER(32)          NOT NULL
+  quiz_percentage                INTEGER(32)          NOT NULL
+  project_percentage             INTEGER(32)          NOT NULL DEFAULT 0
+  assignment_percentage          INTEGER(32)          NOT NULL DEFAULT 0
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_assessment_course_id_key
+    CREATE UNIQUE INDEX core_assessment_course_id_key ON public.core_assessment USING btree (course_id)
+  core_assessment_pkey
+    CREATE UNIQUE INDEX core_assessment_pkey ON public.core_assessment USING btree (id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_assessment_course_id_7c9d408c_fk_core_course_id
+    core_assessment.course_id -> core_course.id
+
+
+================================================================================
+TABLE: core_assessmentlorelation
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL DEFAULT nextval('core_assessmentlorelation_id_seq'::regclass)
+  assessment_id                  BIGINT(64)           NOT NULL
+  learning_outcome_id            BIGINT(64)           NOT NULL
+  assessment_type                CHARACTER VARYING(20) NOT NULL DEFAULT 'midterm'::character varying
+  assessment_index               INTEGER(32)          NOT NULL DEFAULT 1
+  contribution_percentage        INTEGER(32)          NOT NULL DEFAULT 0
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_assessmentlorelation_pkey
+    CREATE UNIQUE INDEX core_assessmentlorelation_pkey ON public.core_assessmentlorelation USING btree (id)
+  core_assessmentlorelation_unique_assessment_lo_type_index
+    CREATE UNIQUE INDEX core_assessmentlorelation_unique_assessment_lo_type_index ON public.core_assessmentlorelation USING btree (assessment_id, learning_outcome_id, assessment_type, assessment_index)
+  idx_assessmentlorelation_assessment_id
+    CREATE INDEX idx_assessmentlorelation_assessment_id ON public.core_assessmentlorelation USING btree (assessment_id)
+  idx_assessmentlorelation_assessment_type
+    CREATE INDEX idx_assessmentlorelation_assessment_type ON public.core_assessmentlorelation USING btree (assessment_type)
+  idx_assessmentlorelation_learning_outcome_id
+    CREATE INDEX idx_assessmentlorelation_learning_outcome_id ON public.core_assessmentlorelation USING btree (learning_outcome_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_assessmentlorelation_assessment_id_fk_core_assessment_id
+    core_assessmentlorelation.assessment_id -> core_assessment.id
+  core_assessmentlorelation_learning_outcome_id_fk_core_programou
+    core_assessmentlorelation.learning_outcome_id -> core_programoutcome.id
+
+
+================================================================================
+TABLE: core_assignment
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  title                          CHARACTER VARYING(200) NOT NULL
+  details                        TEXT                 NOT NULL
+  deadline                       TIMESTAMP WITH TIME ZONE NOT NULL
+  file                           CHARACTER VARYING(100) NULL
+  created_at                     TIMESTAMP WITH TIME ZONE NOT NULL
+  course_id                      BIGINT(64)           NOT NULL
+  created_by_id                  INTEGER(32)          NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_assignment_course_id_fb105644
+    CREATE INDEX core_assignment_course_id_fb105644 ON public.core_assignment USING btree (course_id)
+  core_assignment_created_by_id_09644e24
+    CREATE INDEX core_assignment_created_by_id_09644e24 ON public.core_assignment USING btree (created_by_id)
+  core_assignment_pkey
+    CREATE UNIQUE INDEX core_assignment_pkey ON public.core_assignment USING btree (id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_assignment_course_id_fb105644_fk_core_course_id
+    core_assignment.course_id -> core_course.id
+  core_assignment_created_by_id_09644e24_fk_auth_user_id
+    core_assignment.created_by_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_assignmentsubmission
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  file                           CHARACTER VARYING(100) NULL
+  submitted_at                   TIMESTAMP WITH TIME ZONE NOT NULL
+  updated_at                     TIMESTAMP WITH TIME ZONE NOT NULL
+  assignment_id                  BIGINT(64)           NOT NULL
+  student_id                     BIGINT(64)           NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_assignmentsubmissio_assignment_id_student_id_aa6ef267_uniq
+    CREATE UNIQUE INDEX core_assignmentsubmissio_assignment_id_student_id_aa6ef267_uniq ON public.core_assignmentsubmission USING btree (assignment_id, student_id)
+  core_assignmentsubmission_assignment_id_92020d43
+    CREATE INDEX core_assignmentsubmission_assignment_id_92020d43 ON public.core_assignmentsubmission USING btree (assignment_id)
+  core_assignmentsubmission_pkey
+    CREATE UNIQUE INDEX core_assignmentsubmission_pkey ON public.core_assignmentsubmission USING btree (id)
+  core_assignmentsubmission_student_id_9d6d8dc3
+    CREATE INDEX core_assignmentsubmission_student_id_9d6d8dc3 ON public.core_assignmentsubmission USING btree (student_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_assignmentsubmi_assignment_id_92020d43_fk_core_assi
+    core_assignmentsubmission.assignment_id -> core_assignment.id
+  core_assignmentsubmi_student_id_9d6d8dc3_fk_core_stud
+    core_assignmentsubmission.student_id -> core_student.id
+
+
+================================================================================
+TABLE: core_course
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  name                           CHARACTER VARYING(100) NOT NULL
+  code                           CHARACTER VARYING(20) NOT NULL
+  instructor_id                  INTEGER(32)          NOT NULL
+  department                     CHARACTER VARYING(200) NOT NULL
+  credits                        INTEGER(32)          NULL
+  day                            CHARACTER VARYING(20) NULL
+  time                           CHARACTER VARYING(50) NULL
+  room                           CHARACTER VARYING(50) NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_course_instructor_id_8dd6ea2e
+    CREATE INDEX core_course_instructor_id_8dd6ea2e ON public.core_course USING btree (instructor_id)
+  core_course_pkey
+    CREATE UNIQUE INDEX core_course_pkey ON public.core_course USING btree (id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_course_instructor_id_8dd6ea2e_fk_auth_user_id
+    core_course.instructor_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_faculty
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  name                           CHARACTER VARYING(200) NOT NULL
+  slug                           CHARACTER VARYING(200) NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_faculty_pkey
+    CREATE UNIQUE INDEX core_faculty_pkey ON public.core_faculty USING btree (id)
+  core_faculty_slug_ead6c9f2_like
+    CREATE INDEX core_faculty_slug_ead6c9f2_like ON public.core_faculty USING btree (slug varchar_pattern_ops)
+  core_faculty_slug_key
+    CREATE UNIQUE INDEX core_faculty_slug_key ON public.core_faculty USING btree (slug)
+
+
+================================================================================
+TABLE: core_grade
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  course_id                      BIGINT(64)           NOT NULL
+  student_id                     BIGINT(64)           NOT NULL
+  absence                        JSONB                NULL
+  final                          JSONB                NULL
+  assignment                     JSONB                NULL
+  midterm                        JSONB                NULL
+  project                        JSONB                NULL
+  quiz                           JSONB                NULL
+  assessment_scores              JSONB                NOT NULL
+  last_changes_at                TIMESTAMP WITH TIME ZONE NULL
+  overall_score                  DOUBLE PRECISION(53) NULL
+  letter_grade                   CHARACTER VARYING(2) NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_grade_course_id_290db5e6
+    CREATE INDEX core_grade_course_id_290db5e6 ON public.core_grade USING btree (course_id)
+  core_grade_pkey
+    CREATE UNIQUE INDEX core_grade_pkey ON public.core_grade USING btree (id)
+  core_grade_student_id_7a78bbfb
+    CREATE INDEX core_grade_student_id_7a78bbfb ON public.core_grade USING btree (student_id)
+  core_grade_student_id_course_id_90282ccb_uniq
+    CREATE UNIQUE INDEX core_grade_student_id_course_id_90282ccb_uniq ON public.core_grade USING btree (student_id, course_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_grade_course_id_290db5e6_fk_core_course_id
+    core_grade.course_id -> core_course.id
+  core_grade_student_id_7a78bbfb_fk_core_student_id
+    core_grade.student_id -> core_student.id
+
+
+================================================================================
+TABLE: core_learningoutcomeprogramoutcome
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  percentage                     INTEGER(32)          NOT NULL
+  learning_outcome_id            BIGINT(64)           NOT NULL
+  program_outcome_id             BIGINT(64)           NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_learningoutcomeprog_learning_outcome_id_prog_2355512b_uniq
+    CREATE UNIQUE INDEX core_learningoutcomeprog_learning_outcome_id_prog_2355512b_uniq ON public.core_learningoutcomeprogramoutcome USING btree (learning_outcome_id, program_outcome_id)
+  core_learningoutcomeprogramoutcome_learning_outcome_id_97ceea18
+    CREATE INDEX core_learningoutcomeprogramoutcome_learning_outcome_id_97ceea18 ON public.core_learningoutcomeprogramoutcome USING btree (learning_outcome_id)
+  core_learningoutcomeprogramoutcome_pkey
+    CREATE UNIQUE INDEX core_learningoutcomeprogramoutcome_pkey ON public.core_learningoutcomeprogramoutcome USING btree (id)
+  core_learningoutcomeprogramoutcome_program_outcome_id_1fcbf3e9
+    CREATE INDEX core_learningoutcomeprogramoutcome_program_outcome_id_1fcbf3e9 ON public.core_learningoutcomeprogramoutcome USING btree (program_outcome_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_learningoutcome_learning_outcome_id_97ceea18_fk_core_prog
+    core_learningoutcomeprogramoutcome.learning_outcome_id -> core_programoutcome.id
+  core_learningoutcome_program_outcome_id_1fcbf3e9_fk_core_prog
+    core_learningoutcomeprogramoutcome.program_outcome_id -> core_programoutcome.id
+
+
+================================================================================
+TABLE: core_notification
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  notification_type              CHARACTER VARYING(50) NOT NULL
+  title                          CHARACTER VARYING(200) NOT NULL
+  message                        TEXT                 NOT NULL
+  is_read                        BOOLEAN              NOT NULL
+  created_at                     TIMESTAMP WITH TIME ZONE NOT NULL
+  assignment_id                  BIGINT(64)           NULL
+  user_id                        INTEGER(32)          NOT NULL
+  announcement_id                INTEGER(32)          NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_notification_assignment_id_e60f2e24
+    CREATE INDEX core_notification_assignment_id_e60f2e24 ON public.core_notification USING btree (assignment_id)
+  core_notification_pkey
+    CREATE UNIQUE INDEX core_notification_pkey ON public.core_notification USING btree (id)
+  core_notification_user_id_6e341aac
+    CREATE INDEX core_notification_user_id_6e341aac ON public.core_notification USING btree (user_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_notification_announcement_id_fk
+    core_notification.announcement_id -> core_announcement.id
+  core_notification_assignment_id_e60f2e24_fk_core_assignment_id
+    core_notification.assignment_id -> core_assignment.id
+  core_notification_user_id_6e341aac_fk_auth_user_id
+    core_notification.user_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_programoutcome
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  text                           CHARACTER VARYING(255) NOT NULL
+  created_at                     TIMESTAMP WITH TIME ZONE NOT NULL
+  created_by_id                  INTEGER(32)          NOT NULL
+  course_name                    CHARACTER VARYING(255) NOT NULL
+  faculty_id                     BIGINT(64)           NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_learningoutcome_created_by_id_408df781
+    CREATE INDEX core_learningoutcome_created_by_id_408df781 ON public.core_programoutcome USING btree (created_by_id)
+  core_learningoutcome_pkey
+    CREATE UNIQUE INDEX core_learningoutcome_pkey ON public.core_programoutcome USING btree (id)
+  core_programoutcome_faculty_id_4ceb72a1
+    CREATE INDEX core_programoutcome_faculty_id_4ceb72a1 ON public.core_programoutcome USING btree (faculty_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_learningoutcome_created_by_id_408df781_fk_auth_user_id
+    core_programoutcome.created_by_id -> auth_user.id
+  core_programoutcome_faculty_id_4ceb72a1_fk
+    core_programoutcome.faculty_id -> core_faculty.id
+
+
+================================================================================
+TABLE: core_student
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  username                       CHARACTER VARYING(100) NOT NULL
+  student_id                     CHARACTER VARYING(20) NOT NULL
+  department                     CHARACTER VARYING(200) NOT NULL
+  first_name                     CHARACTER VARYING(100) NOT NULL
+  last_name                      CHARACTER VARYING(100) NOT NULL
+  user_id                        INTEGER(32)          NULL
+  year                           INTEGER(32)          NULL
+  advisor_id                     INTEGER(32)          NULL
+  email                          CHARACTER VARYING(255) NULL
+  phone_number                   CHARACTER VARYING(20) NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_student_advisor_id_cde460e7
+    CREATE INDEX core_student_advisor_id_cde460e7 ON public.core_student USING btree (advisor_id)
+  core_student_pkey
+    CREATE UNIQUE INDEX core_student_pkey ON public.core_student USING btree (id)
+  core_student_student_id_4b8cfd3a_like
+    CREATE INDEX core_student_student_id_4b8cfd3a_like ON public.core_student USING btree (student_id varchar_pattern_ops)
+  core_student_student_id_key
+    CREATE UNIQUE INDEX core_student_student_id_key ON public.core_student USING btree (student_id)
+  core_student_user_id_key
+    CREATE UNIQUE INDEX core_student_user_id_key ON public.core_student USING btree (user_id)
+  core_student_username_8c980dcc_like
+    CREATE INDEX core_student_username_8c980dcc_like ON public.core_student USING btree (username varchar_pattern_ops)
+  core_student_username_key
+    CREATE UNIQUE INDEX core_student_username_key ON public.core_student USING btree (username)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_student_advisor_id_cde460e7_fk_auth_user_id
+    core_student.advisor_id -> auth_user.id
+  core_student_user_id_666ccffd_fk_auth_user_id
+    core_student.user_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_student_courses
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  student_id                     BIGINT(64)           NOT NULL
+  course_id                      BIGINT(64)           NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_student_courses_course_id_f2fb15b1
+    CREATE INDEX core_student_courses_course_id_f2fb15b1 ON public.core_student_courses USING btree (course_id)
+  core_student_courses_pkey
+    CREATE UNIQUE INDEX core_student_courses_pkey ON public.core_student_courses USING btree (id)
+  core_student_courses_student_id_76fcd424
+    CREATE INDEX core_student_courses_student_id_76fcd424 ON public.core_student_courses USING btree (student_id)
+  core_student_courses_student_id_course_id_88152797_uniq
+    CREATE UNIQUE INDEX core_student_courses_student_id_course_id_88152797_uniq ON public.core_student_courses USING btree (student_id, course_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_student_courses_course_id_f2fb15b1_fk_core_course_id
+    core_student_courses.course_id -> core_course.id
+  core_student_courses_student_id_76fcd424_fk_core_student_id
+    core_student_courses.student_id -> core_student.id
+
+
+================================================================================
+TABLE: core_userprofile
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  role                           CHARACTER VARYING(20) NOT NULL
+  user_id                        INTEGER(32)          NOT NULL
+  faculty_id                     BIGINT(64)           NULL
+  department                     CHARACTER VARYING(200) NOT NULL
+  advisor_details                TEXT                 NOT NULL DEFAULT ''::text
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_userprofile_faculty_id_c7840379
+    CREATE INDEX core_userprofile_faculty_id_c7840379 ON public.core_userprofile USING btree (faculty_id)
+  core_userprofile_pkey
+    CREATE UNIQUE INDEX core_userprofile_pkey ON public.core_userprofile USING btree (id)
+  core_userprofile_user_id_key
+    CREATE UNIQUE INDEX core_userprofile_user_id_key ON public.core_userprofile USING btree (user_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_userprofile_faculty_id_c7840379_fk
+    core_userprofile.faculty_id -> core_faculty.id
+  core_userprofile_user_id_5141ad90_fk_auth_user_id
+    core_userprofile.user_id -> auth_user.id
+
+
+================================================================================
+TABLE: core_userprofile_courses
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  userprofile_id                 BIGINT(64)           NOT NULL
+  course_id                      BIGINT(64)           NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  core_userprofile_courses_course_id_6522b946
+    CREATE INDEX core_userprofile_courses_course_id_6522b946 ON public.core_userprofile_courses USING btree (course_id)
+  core_userprofile_courses_pkey
+    CREATE UNIQUE INDEX core_userprofile_courses_pkey ON public.core_userprofile_courses USING btree (id)
+  core_userprofile_courses_userprofile_id_1d7b08a6
+    CREATE INDEX core_userprofile_courses_userprofile_id_1d7b08a6 ON public.core_userprofile_courses USING btree (userprofile_id)
+  core_userprofile_courses_userprofile_id_course_id_5aed07a2_uniq
+    CREATE UNIQUE INDEX core_userprofile_courses_userprofile_id_course_id_5aed07a2_uniq ON public.core_userprofile_courses USING btree (userprofile_id, course_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  core_userprofile_cou_userprofile_id_1d7b08a6_fk_core_user
+    core_userprofile_courses.userprofile_id -> core_userprofile.id
+  core_userprofile_courses_course_id_6522b946_fk_core_course_id
+    core_userprofile_courses.course_id -> core_course.id
+
+
+================================================================================
+TABLE: django_admin_log
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             INTEGER(32)          NOT NULL
+  action_time                    TIMESTAMP WITH TIME ZONE NOT NULL
+  object_id                      TEXT                 NULL
+  object_repr                    CHARACTER VARYING(200) NOT NULL
+  action_flag                    SMALLINT(16)         NOT NULL
+  change_message                 TEXT                 NOT NULL
+  content_type_id                INTEGER(32)          NULL
+  user_id                        INTEGER(32)          NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  django_admin_log_content_type_id_c4bce8eb
+    CREATE INDEX django_admin_log_content_type_id_c4bce8eb ON public.django_admin_log USING btree (content_type_id)
+  django_admin_log_pkey
+    CREATE UNIQUE INDEX django_admin_log_pkey ON public.django_admin_log USING btree (id)
+  django_admin_log_user_id_c564eba6
+    CREATE INDEX django_admin_log_user_id_c564eba6 ON public.django_admin_log USING btree (user_id)
+
+Foreign Keys:
+--------------------------------------------------------------------------------
+  django_admin_log_content_type_id_c4bce8eb_fk_django_co
+    django_admin_log.content_type_id -> django_content_type.id
+  django_admin_log_user_id_c564eba6_fk_auth_user_id
+    django_admin_log.user_id -> auth_user.id
+
+
+================================================================================
+TABLE: django_content_type
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             INTEGER(32)          NOT NULL
+  app_label                      CHARACTER VARYING(100) NOT NULL
+  model                          CHARACTER VARYING(100) NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  django_content_type_app_label_model_76bd3d3b_uniq
+    CREATE UNIQUE INDEX django_content_type_app_label_model_76bd3d3b_uniq ON public.django_content_type USING btree (app_label, model)
+  django_content_type_pkey
+    CREATE UNIQUE INDEX django_content_type_pkey ON public.django_content_type USING btree (id)
+
+
+================================================================================
+TABLE: django_migrations
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  id                             BIGINT(64)           NOT NULL
+  app                            CHARACTER VARYING(255) NOT NULL
+  name                           CHARACTER VARYING(255) NOT NULL
+  applied                        TIMESTAMP WITH TIME ZONE NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  django_migrations_pkey
+    CREATE UNIQUE INDEX django_migrations_pkey ON public.django_migrations USING btree (id)
+
+
+================================================================================
+TABLE: django_session
+================================================================================
+
+Columns:
+--------------------------------------------------------------------------------
+  session_key                    CHARACTER VARYING(40) NOT NULL
+  session_data                   TEXT                 NOT NULL
+  expire_date                    TIMESTAMP WITH TIME ZONE NOT NULL
+
+Indexes:
+--------------------------------------------------------------------------------
+  django_session_expire_date_a5c62663
+    CREATE INDEX django_session_expire_date_a5c62663 ON public.django_session USING btree (expire_date)
+  django_session_pkey
+    CREATE UNIQUE INDEX django_session_pkey ON public.django_session USING btree (session_key)
+  django_session_session_key_c0390e0f_like
+    CREATE INDEX django_session_session_key_c0390e0f_like ON public.django_session USING btree (session_key varchar_pattern_ops)
