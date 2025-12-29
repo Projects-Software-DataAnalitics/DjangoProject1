@@ -36,6 +36,45 @@ def get_instructors_map():
     return instructors_map
 
 
+def get_course_schedule_from_json():
+    """
+    Get course schedule information from JSON files.
+    Returns a dict mapping course_name -> {'day': ..., 'time': ..., 'room': ...}
+    """
+    import json
+    import os
+    from django.conf import settings
+    
+    course_schedule = {}
+    
+    # Course schedule mapping - based on typical academic schedule
+    # This can be extended to read from a separate schedule.json file if needed
+    default_schedule = {
+        "Algorithms": {"day": "Monday", "time": "09:00-10:30", "room": "A101"},
+        "Computer Architecture": {"day": "Tuesday", "time": "11:00-12:30", "room": "A102"},
+        "Operating Systems": {"day": "Wednesday", "time": "14:00-15:30", "room": "A103"},
+        "Linear Algebra": {"day": "Thursday", "time": "09:00-10:30", "room": "A104"},
+        "Embedded Systems": {"day": "Friday", "time": "11:00-12:30", "room": "LAB101"},
+        "Electronics": {"day": "Monday", "time": "14:00-15:30", "room": "LAB102"},
+        "Data Systems": {"day": "Monday", "time": "14:00-15:30", "room": "A103"},
+        "Software": {"day": "Tuesday", "time": "16:00-17:30", "room": "A103"},
+    }
+    
+    # Try to read from a schedule.json file if it exists
+    schedule_path = os.path.join(settings.BASE_DIR, 'static', 'json', 'schedule.json')
+    if os.path.exists(schedule_path):
+        try:
+            with open(schedule_path, 'r', encoding='utf-8') as f:
+                schedule_data = json.load(f)
+                course_schedule.update(schedule_data)
+        except Exception:
+            pass
+    
+    # Merge with default schedule (default takes precedence if schedule.json exists)
+    course_schedule.update(default_schedule)
+    
+    return course_schedule
+
 def get_faculty_heads_map():
     """Faculty heads veritabanından username -> full_name mapping'i döndür (cache'li)"""
     cache_key = 'faculty_heads_map_db'
@@ -460,15 +499,20 @@ def student_dashboard(request):
             advisor_username = student.advisor.username
         
         courses = student.courses.all().select_related('instructor')
+        # Get course schedule from JSON
+        course_schedule_map = get_course_schedule_from_json()
+        
         courses_list = []
         for course in courses:
+            # Get schedule from JSON first, fallback to database
+            schedule_info = course_schedule_map.get(course.name, {})
             courses_list.append({
                 'name': course.name,
                 'code': course.code,
                 'credits': course.credits,
-                'day': course.day,
-                'time': course.time,
-                'room': course.room,
+                'day': schedule_info.get('day') or course.day,
+                'time': schedule_info.get('time') or course.time,
+                'room': schedule_info.get('room') or course.room,
             })
         
         # Calculate GPA (same logic as student_grades view)
@@ -705,6 +749,9 @@ def instructor_dashboard(request):
     
     if profile:
         courses = profile.courses.all().select_related('instructor').prefetch_related('students')
+        # Get course schedule from JSON
+        course_schedule_map = get_course_schedule_from_json()
+        
         for course in courses:
             students = course.students.all()
             student_count = students.count()
@@ -712,12 +759,17 @@ def instructor_dashboard(request):
             for student in students:
                 total_students_set.add(student.id)
             
+            # Get schedule from JSON first, fallback to database
+            schedule_info = course_schedule_map.get(course.name, {})
             courses_list.append({
                 'id': course.id,
                 'name': course.name,
                 'code': course.code,
                 'credits': course.credits,
                 'student_count': student_count,
+                'day': schedule_info.get('day') or course.day,
+                'time': schedule_info.get('time') or course.time,
+                'room': schedule_info.get('room') or course.room,
             })
             
             chart_data['labels'].append(course.name)
@@ -790,6 +842,10 @@ def instructor_dashboard(request):
     
     chart_data_json = json.dumps(chart_data)
     
+    # Prepare schedule data for template
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots = ['09:00-10:30', '11:00-12:30', '14:00-15:30', '16:00-17:30']
+    
     return render(request, 'instructor_main.html', {
         'instructor_info': instructor_info,
         'academic_term': academic_term,
@@ -800,6 +856,8 @@ def instructor_dashboard(request):
         'chart_data_json': chart_data_json,
         'latest_announcements': announcements_list,
         'upcoming_assignments': upcoming_assignments,
+        'days': days,
+        'time_slots': time_slots,
     })
 
 @instructor_required
@@ -3394,6 +3452,8 @@ def faculty_head_dashboard(request):
             if not instructor_name or instructor_name == ' ':
                 instructor_name = course.instructor.username if course.instructor else 'Unknown'
             
+            # Get schedule from JSON first, fallback to database
+            schedule_info = get_course_schedule_from_json().get(course.name, {})
             courses_list.append({
                 'id': course.id,
                 'name': course.name,
@@ -3401,6 +3461,9 @@ def faculty_head_dashboard(request):
                 'credits': course.credits,
                 'instructor': instructor_name,
                 'student_count': student_count,
+                'day': schedule_info.get('day') or course.day,
+                'time': schedule_info.get('time') or course.time,
+                'room': schedule_info.get('room') or course.room,
             })
             
             chart_data['labels'].append(course.name)
@@ -3501,10 +3564,16 @@ def faculty_head_dashboard(request):
     
     chart_data_json = json.dumps(chart_data)
     
+    # Prepare schedule data for template
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots = ['09:00-10:30', '11:00-12:30', '14:00-15:30', '16:00-17:30']
+    
     return render(request, 'faculty_head_main.html', {
         'faculty_head_info': faculty_head_info,
         'academic_term': academic_term,
         'courses_list': courses_list,
+        'days': days,
+        'time_slots': time_slots,
         'total_courses': total_courses,
         'total_students': total_students,
         'total_instructors': total_instructors,
