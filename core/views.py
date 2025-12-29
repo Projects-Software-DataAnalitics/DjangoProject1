@@ -241,6 +241,32 @@ def faculty_head_required(view_func):
 
     return wrapper
 
+
+def student_required(view_func):
+    """Decorator to check if user is authenticated and is a student"""
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.shortcuts import redirect
+            return redirect('student-login')
+        
+        try:
+            student = Student.objects.get(user=request.user)
+            request.student_user = student
+            return view_func(request, *args, **kwargs)
+        except Student.DoesNotExist:
+            from django.http import JsonResponse, HttpResponseForbidden
+            # Check if request expects JSON (AJAX request)
+            is_ajax = request.headers.get('Accept', '').find('application/json') != -1
+            if is_ajax:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Access denied. You are not a student.'
+                }, status=403)
+            return HttpResponseForbidden("Access denied. You are not a student.")
+    
+    return wrapper
+
+
 def upload_grades(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
@@ -450,118 +476,101 @@ def faculty_head_login(request):
     return render(request, 'faculty_head_login.html')
 
 
+@student_required
 def student_dashboard(request):
-    if not request.user.is_authenticated:
-        return redirect('student-login')
-    
     from datetime import datetime
     from .models import Announcement, Assignment
     from django.db.models import Q
     
-    try:
-        student = Student.objects.get(user=request.user)
-        student_info = {
-            'username': student.username,
-            'name': f"{student.first_name} {student.last_name}".strip() or student.username,
-            'student_id': student.student_id,
-        }
-        
-        current_month = datetime.now().month
-        current_year = datetime.now().year
-        
-        if current_month >= 9:
-            academic_term = f"{current_year}-{current_year + 1} Fall"
-        elif current_month >= 2:
-            academic_term = f"{current_year - 1}-{current_year} Spring"
+    student = request.student_user
+    student_info = {
+        'username': student.username,
+        'name': f"{student.first_name} {student.last_name}".strip() or student.username,
+        'student_id': student.student_id,
+    }
+    
+    current_month = datetime.now().month
+    current_year = datetime.now().year
+    
+    if current_month >= 9:
+        academic_term = f"{current_year}-{current_year + 1} Fall"
+    elif current_month >= 2:
+        academic_term = f"{current_year - 1}-{current_year} Spring"
+    else:
+        academic_term = f"{current_year - 1}-{current_year} Fall"
+    
+    # Format year as 1st, 2nd, 3rd, 4th Year
+    if student.year:
+        if student.year == 1:
+            year_display = "1st Year"
+        elif student.year == 2:
+            year_display = "2nd Year"
+        elif student.year == 3:
+            year_display = "3rd Year"
+        elif student.year == 4:
+            year_display = "4th Year"
         else:
-            academic_term = f"{current_year - 1}-{current_year} Fall"
-        
-        # Format year as 1st, 2nd, 3rd, 4th Year
-        if student.year:
-            if student.year == 1:
-                year_display = "1st Year"
-            elif student.year == 2:
-                year_display = "2nd Year"
-            elif student.year == 3:
-                year_display = "3rd Year"
-            elif student.year == 4:
-                year_display = "4th Year"
-            else:
-                year_display = f"{student.year}th Year"
-        else:
-            year_display = "-"
-        department_display = student.department or "-"
-        
-        advisor_name = "-"
-        advisor_username = None
-        if student.advisor:
-            advisor_name = f"{student.advisor.first_name} {student.advisor.last_name}".strip() or student.advisor.username
-            advisor_username = student.advisor.username
-        
-        courses = student.courses.all().select_related('instructor')
-        # Get course schedule from JSON
-        course_schedule_map = get_course_schedule_from_json()
-        
-        courses_list = []
-        for course in courses:
-            # Get schedule from JSON first, fallback to database
-            schedule_info = course_schedule_map.get(course.name, {})
-            courses_list.append({
-                'name': course.name,
-                'code': course.code,
-                'credits': course.credits,
-                'day': schedule_info.get('day') or course.day,
-                'time': schedule_info.get('time') or course.time,
-                'room': schedule_info.get('room') or course.room,
-            })
-        
-        # Calculate GPA (same logic as student_grades view)
-        # GPA is only calculated if ALL courses have overall_score determined
-        from .models import Assessment, Grade
-        grades_qs = Grade.objects.filter(student=student).select_related('course')
-        
-        total_weighted_score = 0
-        total_credits = 0
-        all_courses_have_scores = True
-        
-        for course in courses:
-            grade_obj = grades_qs.filter(course=course).first()
-            if grade_obj:
-                grade_obj.calculate_overall_score()
-                grade_obj.save(update_fields=['overall_score', 'letter_grade'])
-                overall_score = grade_obj.overall_score
-            else:
-                overall_score = None
-            
-            if overall_score is None:
-                # If any course doesn't have overall_score, GPA cannot be calculated
-                all_courses_have_scores = False
-                break
-            
-            credits = course.credits or 0
-            if credits > 0:
-                total_weighted_score += overall_score * credits
-                total_credits += credits
-        
-        gpa = None
-        # Only calculate GPA if all courses have overall_score and total_credits > 0
-        if all_courses_have_scores and total_credits > 0:
-            average_score = total_weighted_score / total_credits
-            gpa = average_score / 25.0
-        
-    except Student.DoesNotExist:
-        student_info = {
-            'username': request.user.username,
-            'name': request.user.get_full_name() or request.user.username,
-            'student_id': '-',
-        }
-        academic_term = "-"
+            year_display = f"{student.year}th Year"
+    else:
         year_display = "-"
-        department_display = "-"
-        advisor_name = "-"
-        advisor_username = None
-        courses_list = []
-        gpa = None
+    department_display = student.department or "-"
+    
+    advisor_name = "-"
+    advisor_username = None
+    if student.advisor:
+        advisor_name = f"{student.advisor.first_name} {student.advisor.last_name}".strip() or student.advisor.username
+        advisor_username = student.advisor.username
+    
+    courses = student.courses.all().select_related('instructor')
+    # Get course schedule from JSON
+    course_schedule_map = get_course_schedule_from_json()
+    
+    courses_list = []
+    for course in courses:
+        # Get schedule from JSON first, fallback to database
+        schedule_info = course_schedule_map.get(course.name, {})
+        courses_list.append({
+            'name': course.name,
+            'code': course.code,
+            'credits': course.credits,
+            'day': schedule_info.get('day') or course.day,
+            'time': schedule_info.get('time') or course.time,
+            'room': schedule_info.get('room') or course.room,
+        })
+    
+    # Calculate GPA (same logic as student_grades view)
+    # GPA is only calculated if ALL courses have overall_score determined
+    from .models import Assessment, Grade
+    grades_qs = Grade.objects.filter(student=student).select_related('course')
+    
+    total_weighted_score = 0
+    total_credits = 0
+    all_courses_have_scores = True
+    
+    for course in courses:
+        grade_obj = grades_qs.filter(course=course).first()
+        if grade_obj:
+            grade_obj.calculate_overall_score()
+            grade_obj.save(update_fields=['overall_score', 'letter_grade'])
+            overall_score = grade_obj.overall_score
+        else:
+            overall_score = None
+        
+        if overall_score is None:
+            # If any course doesn't have overall_score, GPA cannot be calculated
+            all_courses_have_scores = False
+            break
+        
+        credits = course.credits or 0
+        if credits > 0:
+            total_weighted_score += overall_score * credits
+            total_credits += credits
+    
+    gpa = None
+    # Only calculate GPA if all courses have overall_score and total_credits > 0
+    if all_courses_have_scores and total_credits > 0:
+        average_score = total_weighted_score / total_credits
+        gpa = average_score / 25.0
     
     # Get announcements
     latest_announcements = Announcement.objects.filter(
@@ -588,69 +597,65 @@ def student_dashboard(request):
     
     # Get assignments from student's courses
     upcoming_assignments = []
-    try:
-        student = Student.objects.get(user=request.user)
-        student_courses = student.courses.all()
-        from django.utils import timezone
-        from datetime import timedelta
+    student_courses = student.courses.all()
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # Get assignments with deadlines, ordered by deadline (soonest first)
+    # Show both future and past assignments, but prioritize future ones
+    now = timezone.now()
+    all_assignments_qs = Assignment.objects.filter(
+        course__in=student_courses
+    ).select_related('course', 'created_by')
+    
+    # Convert to list to sort
+    all_assignments_list = list(all_assignments_qs)
+    
+    # Separate future and past assignments
+    future_assignments = [a for a in all_assignments_list if a.deadline >= now]
+    past_assignments = [a for a in all_assignments_list if a.deadline < now]
+    
+    # Sort each group by deadline
+    future_assignments.sort(key=lambda x: x.deadline)
+    past_assignments.sort(key=lambda x: x.deadline, reverse=True)  # Most recent past first
+    
+    # Show future assignments first, then past ones (limit to 10 total)
+    assignments = (future_assignments + past_assignments)[:10]
+    
+    instructors_map = get_instructors_map()
+    faculty_heads_map = get_faculty_heads_map()
+    
+    for assignment in assignments:
+        creator_name = instructors_map.get(assignment.created_by.username) or faculty_heads_map.get(assignment.created_by.username) or assignment.created_by.get_full_name() or assignment.created_by.username
         
-        # Get assignments with deadlines, ordered by deadline (soonest first)
-        # Show both future and past assignments, but prioritize future ones
-        now = timezone.now()
-        all_assignments_qs = Assignment.objects.filter(
-            course__in=student_courses
-        ).select_related('course', 'created_by')
+        # Check if deadline is approaching (within 7 days)
+        time_diff = assignment.deadline - now
+        days_until_deadline = time_diff.days
+        # If less than 24 hours, count as 0 days
+        if time_diff.total_seconds() < 86400 and time_diff.total_seconds() >= 0:
+            days_until_deadline = 0
+        elif time_diff.total_seconds() < 0:
+            # Past deadline
+            days_until_deadline = -1
+        is_urgent = days_until_deadline <= 3 and days_until_deadline >= 0
         
-        # Convert to list to sort
-        all_assignments_list = list(all_assignments_qs)
+        announcements_list.append({
+            'id': f"assignment_{assignment.id}",
+            'subject': f"New Assignment: {assignment.title}",
+            'sender': creator_name,
+            'created_at': assignment.created_at.strftime('%Y-%m-%d %H:%M'),
+            'is_assignment': True,
+        })
         
-        # Separate future and past assignments
-        future_assignments = [a for a in all_assignments_list if a.deadline >= now]
-        past_assignments = [a for a in all_assignments_list if a.deadline < now]
-        
-        # Sort each group by deadline
-        future_assignments.sort(key=lambda x: x.deadline)
-        past_assignments.sort(key=lambda x: x.deadline, reverse=True)  # Most recent past first
-        
-        # Show future assignments first, then past ones (limit to 10 total)
-        assignments = (future_assignments + past_assignments)[:10]
-        
-        instructors_map = get_instructors_map()
-        faculty_heads_map = get_faculty_heads_map()
-        
-        for assignment in assignments:
-            creator_name = instructors_map.get(assignment.created_by.username) or faculty_heads_map.get(assignment.created_by.username) or assignment.created_by.get_full_name() or assignment.created_by.username
-            
-            # Check if deadline is approaching (within 7 days)
-            time_diff = assignment.deadline - now
-            days_until_deadline = time_diff.days
-            # If less than 24 hours, count as 0 days
-            if time_diff.total_seconds() < 86400 and time_diff.total_seconds() >= 0:
-                days_until_deadline = 0
-            elif time_diff.total_seconds() < 0:
-                # Past deadline
-                days_until_deadline = -1
-            is_urgent = days_until_deadline <= 3 and days_until_deadline >= 0
-            
-            announcements_list.append({
-                'id': f"assignment_{assignment.id}",
-                'subject': f"New Assignment: {assignment.title}",
-                'sender': creator_name,
-                'created_at': assignment.created_at.strftime('%Y-%m-%d %H:%M'),
-                'is_assignment': True,
-            })
-            
-            upcoming_assignments.append({
-                'id': assignment.id,
-                'title': assignment.title,
-                'course_name': assignment.course.name,
-                'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
-                'deadline_datetime': assignment.deadline.isoformat(),
-                'days_until': days_until_deadline,
-                'is_urgent': is_urgent,
-            })
-    except Student.DoesNotExist:
-        pass
+        upcoming_assignments.append({
+            'id': assignment.id,
+            'title': assignment.title,
+            'course_name': assignment.course.name,
+            'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+            'deadline_datetime': assignment.deadline.isoformat(),
+            'days_until': days_until_deadline,
+            'is_urgent': is_urgent,
+        })
     
     # Sort by created_at and take top 5
     announcements_list.sort(key=lambda x: x['created_at'], reverse=True)
@@ -674,6 +679,31 @@ def student_dashboard(request):
         'time_slots': time_slots,
         'upcoming_assignments': upcoming_assignments,
     })
+
+
+def student_required(view_func):
+    """Decorator to check if user is authenticated and is a student"""
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.shortcuts import redirect
+            return redirect('student-login')
+        
+        try:
+            student = Student.objects.get(user=request.user)
+            request.student_user = student
+            return view_func(request, *args, **kwargs)
+        except Student.DoesNotExist:
+            from django.http import JsonResponse, HttpResponseForbidden
+            # Check if request expects JSON (AJAX request)
+            is_ajax = request.headers.get('Accept', '').find('application/json') != -1
+            if is_ajax:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Access denied. You are not a student.'
+                }, status=403)
+            return HttpResponseForbidden("Access denied. You are not a student.")
+    
+    return wrapper
 
 
 def instructor_required(view_func):
@@ -6985,97 +7015,79 @@ def create_learning_outcome(request):
         }
     )
 
+@student_required
 def student_profile(request):
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    courses = student.courses.all()
+    courses_list = [course.name for course in courses]
     
-    try:
-        student = Student.objects.get(user=request.user)
-        courses = student.courses.all()
-        courses_list = [course.name for course in courses]
-        
-        profile_data = {
-            'name': f"{student.first_name} {student.last_name}".strip() or student.username,
-            'username': student.username,
-            'student_id': student.student_id,
-            'department': student.department,
-            'year': student.year,
-            'courses': courses_list,
-        }
-    except Student.DoesNotExist:
-        profile_data = {
-            'name': request.user.get_full_name() or request.user.username,
-            'username': request.user.username,
-            'student_id': '-',
-            'department': '-',
-            'year': '-',
-            'courses': [],
-        }
+    profile_data = {
+        'name': f"{student.first_name} {student.last_name}".strip() or student.username,
+        'username': student.username,
+        'student_id': student.student_id,
+        'department': student.department,
+        'year': student.year,
+        'courses': courses_list,
+    }
     
     return render(request, "student/profile.html", {'profile': profile_data})
 
 
+@student_required
 def student_courses(request):
     from .models import Assignment, AssignmentSubmission
     
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    courses = student.courses.all().select_related('instructor').prefetch_related('assignments')
     
-    try:
-        student = Student.objects.get(user=request.user)
-        courses = student.courses.all().select_related('instructor').prefetch_related('assignments')
+    # Get course schedule from JSON
+    course_schedule_map = get_course_schedule_from_json()
+    
+    courses_data = []
+    all_assignments = []
+    
+    for course in courses:
+        instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
         
-        # Get course schedule from JSON
-        course_schedule_map = get_course_schedule_from_json()
+        # Get assignments for this course
+        assignments = course.assignments.all().order_by('-created_at')
+        assignments_list = []
+        for assignment in assignments:
+            # Check if student has submitted this assignment
+            submission = AssignmentSubmission.objects.filter(assignment=assignment, student=student).first()
+            
+            assignment_data = {
+                'id': assignment.id,
+                'course_name': course.name,
+                'title': assignment.title,
+                'details': assignment.details,
+                'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                'deadline_datetime': assignment.deadline.isoformat(),
+                'file_url': assignment.file.url if assignment.file else None,
+                'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+                'has_submission': submission is not None,
+                'submission_file_url': submission.file.url if submission and submission.file else None,
+                'submission_file_name': submission.file.name.split('/')[-1] if submission and submission.file else None,
+                'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M') if submission else None,
+            }
+            assignments_list.append(assignment_data)
+            all_assignments.append(assignment_data)
         
-        courses_data = []
-        all_assignments = []
+        # Get schedule from JSON first, fallback to database
+        schedule_info = course_schedule_map.get(course.name, {})
         
-        for course in courses:
-            instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
-            
-            # Get assignments for this course
-            assignments = course.assignments.all().order_by('-created_at')
-            assignments_list = []
-            for assignment in assignments:
-                # Check if student has submitted this assignment
-                submission = AssignmentSubmission.objects.filter(assignment=assignment, student=student).first()
-                
-                assignment_data = {
-                    'id': assignment.id,
-                    'course_name': course.name,
-                    'title': assignment.title,
-                    'details': assignment.details,
-                    'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
-                    'deadline_datetime': assignment.deadline.isoformat(),
-                    'file_url': assignment.file.url if assignment.file else None,
-                    'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
-                    'has_submission': submission is not None,
-                    'submission_file_url': submission.file.url if submission and submission.file else None,
-                    'submission_file_name': submission.file.name.split('/')[-1] if submission and submission.file else None,
-                    'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M') if submission else None,
-                }
-                assignments_list.append(assignment_data)
-                all_assignments.append(assignment_data)
-            
-            # Get schedule from JSON first, fallback to database
-            schedule_info = course_schedule_map.get(course.name, {})
-            
-            courses_data.append({
-                'id': course.id,
-                'name': course.name,
-                'code': course.code,
-                'instructor': instructor_name,
-                'department': course.department,
-                'credits': course.credits,
-                'assignments': assignments_list,
-                'day': schedule_info.get('day') or course.day,
-                'time': schedule_info.get('time') or course.time,
-                'room': schedule_info.get('room') or course.room,
-            })
-    except Student.DoesNotExist:
-        courses_data = []
-        all_assignments = []
+        courses_data.append({
+            'id': course.id,
+            'name': course.name,
+            'code': course.code,
+            'instructor': instructor_name,
+            'department': course.department,
+            'credits': course.credits,
+            'assignments': assignments_list,
+            'day': schedule_info.get('day') or course.day,
+            'time': schedule_info.get('time') or course.time,
+            'room': schedule_info.get('room') or course.room,
+        })
     
     # Prepare schedule data for template
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
@@ -7088,49 +7100,43 @@ def student_courses(request):
         'time_slots': time_slots
     })
 
+@student_required
 def student_assignments(request):
     from .models import Assignment, AssignmentSubmission
     
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    courses = student.courses.all().select_related('instructor').prefetch_related('assignments')
     
-    try:
-        student = Student.objects.get(user=request.user)
-        courses = student.courses.all().select_related('instructor').prefetch_related('assignments')
-        
-        all_assignments = []
-        
-        for course in courses:
-            # Get assignments for this course
-            assignments = course.assignments.all().order_by('-created_at')
-            for assignment in assignments:
-                # Check if student has submitted this assignment
-                submission = AssignmentSubmission.objects.filter(assignment=assignment, student=student).first()
-                
-                assignment_data = {
-                    'id': assignment.id,
-                    'course_name': course.name,
-                    'course_code': course.code,
-                    'title': assignment.title,
-                    'details': assignment.details,
-                    'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
-                    'deadline_datetime': assignment.deadline.isoformat(),
-                    'file_url': assignment.file.url if assignment.file else None,
-                    'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
-                    'has_submission': submission is not None,
-                    'submission_file_url': submission.file.url if submission and submission.file else None,
-                    'submission_file_name': submission.file.name.split('/')[-1] if submission and submission.file else None,
-                    'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M') if submission else None,
-                    'created_at': assignment.created_at.strftime('%d/%m/%Y %H:%M'),
-                    'created_at_datetime': assignment.created_at,  # Keep datetime for proper sorting
-                }
-                all_assignments.append(assignment_data)
-        
-        # Sort by created_at datetime (most recent first) - use datetime, not string
-        all_assignments.sort(key=lambda x: x['created_at_datetime'], reverse=True)
-        
-    except Student.DoesNotExist:
-        all_assignments = []
+    all_assignments = []
+    
+    for course in courses:
+        # Get assignments for this course
+        assignments = course.assignments.all().order_by('-created_at')
+        for assignment in assignments:
+            # Check if student has submitted this assignment
+            submission = AssignmentSubmission.objects.filter(assignment=assignment, student=student).first()
+            
+            assignment_data = {
+                'id': assignment.id,
+                'course_name': course.name,
+                'course_code': course.code,
+                'title': assignment.title,
+                'details': assignment.details,
+                'deadline': assignment.deadline.strftime('%d/%m/%Y %H:%M'),
+                'deadline_datetime': assignment.deadline.isoformat(),
+                'file_url': assignment.file.url if assignment.file else None,
+                'file_name': assignment.file.name.split('/')[-1] if assignment.file else None,
+                'has_submission': submission is not None,
+                'submission_file_url': submission.file.url if submission and submission.file else None,
+                'submission_file_name': submission.file.name.split('/')[-1] if submission and submission.file else None,
+                'submitted_at': submission.submitted_at.strftime('%d/%m/%Y %H:%M') if submission else None,
+                'created_at': assignment.created_at.strftime('%d/%m/%Y %H:%M'),
+                'created_at_datetime': assignment.created_at,  # Keep datetime for proper sorting
+            }
+            all_assignments.append(assignment_data)
+    
+    # Sort by created_at datetime (most recent first) - use datetime, not string
+    all_assignments.sort(key=lambda x: x['created_at_datetime'], reverse=True)
     
     return render(request, "student/assignments.html", {
         'assignments': all_assignments
@@ -7495,23 +7501,17 @@ def student_grades(request):
     })
 
 
+@student_required
 def student_announcements(request):
-    if not request.user.is_authenticated:
-        return redirect('student-login')
-    
     from django.db.models import Q
     from datetime import datetime
     
-    try:
-        student = Student.objects.get(user=request.user)
-        # Get all courses the student is enrolled in
-        student_courses = student.courses.all()
-        # NOTE: Using course name (string) for matching - technical debt
-        # Ideally should use ForeignKey, but works for now. Course rename would break this.
-        student_courses_set = set(student.courses.values_list('name', flat=True))
-    except Student.DoesNotExist:
-        student_courses = []
-        student_courses_set = set()
+    student = request.student_user
+    # Get all courses the student is enrolled in
+    student_courses = student.courses.all()
+    # NOTE: Using course name (string) for matching - technical debt
+    # Ideally should use ForeignKey, but works for now. Course rename would break this.
+    student_courses_set = set(student.courses.values_list('name', flat=True))
     
     # Get all announcements for the student
     announcements = Announcement.objects.filter(
@@ -7716,24 +7716,21 @@ def instructor_program_outcomes(request):
         'department': instructor_department,
     })
 
+@student_required
 def student_program_outcomes(request):
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    student_department = student.department
     
-    try:
-        student = Student.objects.get(user=request.user)
-        student_department = student.department
-        
-        profile = getattr(request.user, 'profile', None)
-        faculty = profile.faculty if profile else None
-        
-        if faculty:
-            outcomes_qs = ProgramOutcome.objects.filter(
-                faculty=faculty, 
-                course_name=''
-            ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
-        else:
-            outcomes_qs = ProgramOutcome.objects.filter(
+    profile = getattr(request.user, 'profile', None)
+    faculty = profile.faculty if profile else None
+    
+    if faculty:
+        outcomes_qs = ProgramOutcome.objects.filter(
+            faculty=faculty, 
+            course_name=''
+        ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
+    else:
+        outcomes_qs = ProgramOutcome.objects.filter(
                 course_name=''
             ).select_related('created_by').prefetch_related('learning_outcomes__created_by').order_by('-created_at')
         
@@ -7766,48 +7763,39 @@ def student_program_outcomes(request):
                 'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
                 'linked_learning_outcomes': linked_learning_outcomes,
             })
-        
-    except Student.DoesNotExist:
-        outcomes_data = []
-        student_department = None
     
     return render(request, "student/program_outcomes.html", {
         'outcomes_data': outcomes_data,
         'department': student_department,
     })
 
+@student_required
 def student_course_learning_outcomes(request, course_id):
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    course = get_object_or_404(Course, id=course_id)
     
-    try:
-        student = Student.objects.get(user=request.user)
-        course = get_object_or_404(Course, id=course_id)
-        
-        if not student.courses.filter(id=course.id).exists():
-            return HttpResponseForbidden("You are not enrolled in this course.")
-        
-        course_name = course.name
-        
-        outcomes_qs = ProgramOutcome.objects.filter(
-            course_name=course_name
-        ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
-        
-        instructors_map = get_instructors_map()
-        
-        outcomes_data = []
-        for o in outcomes_qs:
-            creator_name = instructors_map.get(o.created_by.username) or o.created_by.get_full_name() or o.created_by.username
-            related_program_outcomes = o.related_program_outcomes.all()
-            outcomes_data.append({
-                'id': o.id,
-                'text': o.text,
-                'created_by': creator_name,
-                'created_at': o.created_at.strftime('%Y'),
-                'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
-            })
-        
-    except Student.DoesNotExist:
+    if not student.courses.filter(id=course.id).exists():
+        return HttpResponseForbidden("You are not enrolled in this course.")
+    
+    course_name = course.name
+    
+    outcomes_qs = ProgramOutcome.objects.filter(
+        course_name=course_name
+    ).select_related('created_by').prefetch_related('related_program_outcomes').order_by('-created_at')
+    
+    instructors_map = get_instructors_map()
+    
+    outcomes_data = []
+    for o in outcomes_qs:
+        creator_name = instructors_map.get(o.created_by.username) or o.created_by.get_full_name() or o.created_by.username
+        related_program_outcomes = o.related_program_outcomes.all()
+        outcomes_data.append({
+            'id': o.id,
+            'text': o.text,
+            'created_by': creator_name,
+            'created_at': o.created_at.strftime('%Y'),
+            'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
+        })
         return redirect('student-login')
     
     return render(request, "student/course_learning_outcomes.html", {
@@ -7816,96 +7804,90 @@ def student_course_learning_outcomes(request, course_id):
         'course_id': course_id,
     })
 
+@student_required
 def student_learning_outcome_detail(request, course_id, outcome_id):
     """Show detail page for a learning outcome (read-only for students)"""
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    course = get_object_or_404(Course, id=course_id)
     
-    try:
-        student = Student.objects.get(user=request.user)
-        course = get_object_or_404(Course, id=course_id)
+    if not student.courses.filter(id=course.id).exists():
+        return HttpResponseForbidden("You are not enrolled in this course.")
+    
+    # NOTE: Using course_name (string) for matching - technical debt
+    # Ideally should use ForeignKey, but works for now. Course rename would break this.
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+    
+    from .models import LearningOutcomeProgramOutcome
+    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+    # Optimize: Prefetch all relationships in one query instead of N queries
+    lo_po_map = {
+        (lo_po.learning_outcome_id, lo_po.program_outcome_id): lo_po.percentage
+        for lo_po in LearningOutcomeProgramOutcome.objects.filter(
+            learning_outcome=outcome,
+            program_outcome__in=related_program_outcomes
+        ).select_related('learning_outcome', 'program_outcome')
+    }
+    
+    program_outcomes_data = []
+    for po in related_program_outcomes:
+        percentage = lo_po_map.get((outcome.id, po.id), 0)
+        program_outcomes_data.append({
+            'id': po.id,
+            'text': po.text,
+            'percentage': percentage,
+        })
+    
+    course_name_slug = generate_course_slug(outcome.course_name)
+    
+    instructors_map = get_instructors_map()
+    creator_name = instructors_map.get(outcome.created_by.username) or outcome.created_by.get_full_name() or outcome.created_by.username
+    
+    # Get assessments linked to this learning outcome (similar to instructor/faculty_head)
+    from .models import AssessmentLORelation
+    all_lo_instances = ProgramOutcome.objects.filter(
+        text=outcome.text.strip()
+    ).values_list('id', flat=True)
+    
+    assessment_relations = AssessmentLORelation.objects.filter(
+        learning_outcome_id__in=all_lo_instances
+    ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
+    
+    assessments_data = []
+    assessment_type_labels = {
+        'midterm': 'Midterm',
+        'final': 'Final',
+        'project': 'Project',
+        'assignment': 'Assignment',
+        'absence': 'Absence',
+        'quiz': 'Quiz'
+    }
+    
+    seen_assessments = set()
+    for rel in assessment_relations:
+        assessment = rel.assessment
+        course_obj = assessment.course
+        assessment_type_key = rel.assessment_type
+        assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
         
-        if not student.courses.filter(id=course.id).exists():
-            return HttpResponseForbidden("You are not enrolled in this course.")
+        if rel.assessment_index > 1:
+            display_name = f"{assessment_type_label} {rel.assessment_index}"
+        else:
+            display_name = assessment_type_label
         
-        # NOTE: Using course_name (string) for matching - technical debt
-        # Ideally should use ForeignKey, but works for now. Course rename would break this.
-        outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+        assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
+        if assessment_key in seen_assessments:
+            continue
+        seen_assessments.add(assessment_key)
         
-        from .models import LearningOutcomeProgramOutcome
-        related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
-        # Optimize: Prefetch all relationships in one query instead of N queries
-        lo_po_map = {
-            (lo_po.learning_outcome_id, lo_po.program_outcome_id): lo_po.percentage
-            for lo_po in LearningOutcomeProgramOutcome.objects.filter(
-                learning_outcome=outcome,
-                program_outcome__in=related_program_outcomes
-            ).select_related('learning_outcome', 'program_outcome')
-        }
-        
-        program_outcomes_data = []
-        for po in related_program_outcomes:
-            percentage = lo_po_map.get((outcome.id, po.id), 0)
-            program_outcomes_data.append({
-                'id': po.id,
-                'text': po.text,
-                'percentage': percentage,
-            })
-        
-        course_name_slug = generate_course_slug(outcome.course_name)
-        
-        instructors_map = get_instructors_map()
-        creator_name = instructors_map.get(outcome.created_by.username) or outcome.created_by.get_full_name() or outcome.created_by.username
-        
-        # Get assessments linked to this learning outcome (similar to instructor/faculty_head)
-        from .models import AssessmentLORelation
-        all_lo_instances = ProgramOutcome.objects.filter(
-            text=outcome.text.strip()
-        ).values_list('id', flat=True)
-        
-        assessment_relations = AssessmentLORelation.objects.filter(
-            learning_outcome_id__in=all_lo_instances
-        ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
-        
-        assessments_data = []
-        assessment_type_labels = {
-            'midterm': 'Midterm',
-            'final': 'Final',
-            'project': 'Project',
-            'assignment': 'Assignment',
-            'absence': 'Absence',
-            'quiz': 'Quiz'
-        }
-        
-        seen_assessments = set()
-        for rel in assessment_relations:
-            assessment = rel.assessment
-            course_obj = assessment.course
-            assessment_type_key = rel.assessment_type
-            assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
-            
-            if rel.assessment_index > 1:
-                display_name = f"{assessment_type_label} {rel.assessment_index}"
-            else:
-                display_name = assessment_type_label
-            
-            assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
-            if assessment_key in seen_assessments:
-                continue
-            seen_assessments.add(assessment_key)
-            
-            assessments_data.append({
-                'id': assessment.id,
-                'course_name': course_obj.name,
-                'assessment_type': display_name,
-                'display_name': f"{course_obj.name} - {display_name}",
-                'assessment_type_key': assessment_type_key,
-                'contribution_percentage': rel.contribution_percentage,
-                'relation_id': rel.id,
-            })
-        
-    except Student.DoesNotExist:
-        return redirect('student-login')
+        assessments_data.append({
+            'id': assessment.id,
+            'course_name': course_obj.name,
+            'assessment_type': display_name,
+            'display_name': f"{course_obj.name} - {display_name}",
+            'assessment_type_key': assessment_type_key,
+            'contribution_percentage': rel.contribution_percentage,
+            'relation_id': rel.id,
+        })
     
     return render(
         request,
@@ -7921,37 +7903,34 @@ def student_learning_outcome_detail(request, course_id, outcome_id):
         }
     )
 
+@student_required
 def student_my_progress(request):
     """Show student's progress across all courses with 3-column graph"""
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    courses = student.courses.all().order_by('name')
     
-    try:
-        student = Student.objects.get(user=request.user)
-        courses = student.courses.all().order_by('name')
-        
-        from .models import Assessment, AssessmentLORelation, Grade, ProgramOutcome, LearningOutcomeProgramOutcome
-        from django.db.models import Q
-        import json
-        
-        assessments_list = []
-        learning_outcomes_list = []
-        program_outcomes_list = []
-        
-        assessment_type_labels = {
-            'midterm': 'Midterm',
-            'final': 'Final',
-            'project': 'Project',
-            'assignment': 'Assignment',
-            'absence': 'Absence',
-            'quiz': 'Quiz'
-        }
-        
-        all_assessment_relations = {}
-        all_lo_scores = {}
-        all_po_scores = {}
-        
-        for course in courses:
+    from .models import Assessment, AssessmentLORelation, Grade, ProgramOutcome, LearningOutcomeProgramOutcome
+    from django.db.models import Q
+    import json
+    
+    assessments_list = []
+    learning_outcomes_list = []
+    program_outcomes_list = []
+    
+    assessment_type_labels = {
+        'midterm': 'Midterm',
+        'final': 'Final',
+        'project': 'Project',
+        'assignment': 'Assignment',
+        'absence': 'Absence',
+        'quiz': 'Quiz'
+    }
+    
+    all_assessment_relations = {}
+    all_lo_scores = {}
+    all_po_scores = {}
+    
+    for course in courses:
             try:
                 grade = Grade.objects.get(student=student, course=course)
             except Grade.DoesNotExist:
@@ -7988,82 +7967,82 @@ def student_my_progress(request):
                                 })
                                 
                                 all_assessment_relations[assessment_id] = []
+    
+    course_names = [course.name for course in courses]
+    if course_names:
+        learning_outcomes_qs = ProgramOutcome.objects.filter(
+            course_name__in=course_names
+        ).exclude(course_name='').select_related('created_by').prefetch_related('related_program_outcomes').order_by('text', 'course_name')
         
-        course_names = [course.name for course in courses]
-        if course_names:
-            learning_outcomes_qs = ProgramOutcome.objects.filter(
-                course_name__in=course_names
-            ).exclude(course_name='').select_related('created_by').prefetch_related('related_program_outcomes').order_by('text', 'course_name')
+        lo_groups = {}
+        for lo in learning_outcomes_qs:
+            lo_text = lo.text.strip()
+            if lo_text not in lo_groups:
+                lo_groups[lo_text] = {
+                    'ids': [],
+                    'courses': [],
+                    'linked_pos_dict': {},
+                    'linked_assessments': []
+                }
             
-            lo_groups = {}
-            for lo in learning_outcomes_qs:
-                lo_text = lo.text.strip()
-                if lo_text not in lo_groups:
-                    lo_groups[lo_text] = {
-                        'ids': [],
-                        'courses': [],
-                        'linked_pos_dict': {},
-                        'linked_assessments': []
+            lo_groups[lo_text]['ids'].append(lo.id)
+            if lo.course_name and lo.course_name not in lo_groups[lo_text]['courses']:
+                lo_groups[lo_text]['courses'].append(lo.course_name)
+            
+            related_pos = lo.related_program_outcomes.all()
+            for po in related_pos:
+                try:
+                    lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=lo, program_outcome=po)
+                    percentage = lo_po.percentage
+                except LearningOutcomeProgramOutcome.DoesNotExist:
+                    percentage = 0
+                
+                if po.id not in lo_groups[lo_text]['linked_pos_dict']:
+                    lo_groups[lo_text]['linked_pos_dict'][po.id] = {
+                        'id': po.id,
+                        'text': po.text,
+                        'percentage': percentage
                     }
-                
-                lo_groups[lo_text]['ids'].append(lo.id)
-                if lo.course_name and lo.course_name not in lo_groups[lo_text]['courses']:
-                    lo_groups[lo_text]['courses'].append(lo.course_name)
-                
-                related_pos = lo.related_program_outcomes.all()
-                for po in related_pos:
-                    try:
-                        lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=lo, program_outcome=po)
-                        percentage = lo_po.percentage
-                    except LearningOutcomeProgramOutcome.DoesNotExist:
-                        percentage = 0
-                    
-                    if po.id not in lo_groups[lo_text]['linked_pos_dict']:
-                        lo_groups[lo_text]['linked_pos_dict'][po.id] = {
-                            'id': po.id,
-                            'text': po.text,
-                            'percentage': percentage
-                        }
-                    else:
-                        lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'] = max(
-                            lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'],
-                            percentage
-                        )
-                
-                assessment_relations = AssessmentLORelation.objects.filter(
-                    learning_outcome=lo
-                ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
-                
-                for rel in assessment_relations:
-                    assessment = rel.assessment
-                    course_obj = assessment.course
-                    assessment_type_key = rel.assessment_type
-                    assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
-                    
-                    if rel.assessment_index > 1:
-                        display_name = f"{assessment_type_label} {rel.assessment_index}"
-                    else:
-                        display_name = assessment_type_label
-                    
-                    assessment_id = f"{course_obj.id}_{assessment_type_key}_{rel.assessment_index}"
-                    lo_groups[lo_text]['linked_assessments'].append({
-                        'id': assessment_id,
-                        'course_name': course_obj.name,
-                        'assessment_type': display_name,
-                        'assessment_type_key': assessment_type_key,
-                        'assessment_index': rel.assessment_index,
-                        'contribution_percentage': rel.contribution_percentage,
-                        'relation_id': rel.id
-                    })
-                    
-                    if assessment_id in all_assessment_relations:
-                        all_assessment_relations[assessment_id].append({
-                            'lo_id': lo_groups[lo_text]['ids'][0],
-                            'lo_text': lo_text,
-                            'contribution_percentage': rel.contribution_percentage
-                        })
+                else:
+                    lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'] = max(
+                        lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'],
+                        percentage
+                    )
             
-            for lo_text, group_data in lo_groups.items():
+            assessment_relations = AssessmentLORelation.objects.filter(
+                learning_outcome=lo
+            ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
+            
+            for rel in assessment_relations:
+                assessment = rel.assessment
+                course_obj = assessment.course
+                assessment_type_key = rel.assessment_type
+                assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
+                
+                if rel.assessment_index > 1:
+                    display_name = f"{assessment_type_label} {rel.assessment_index}"
+                else:
+                    display_name = assessment_type_label
+                
+                assessment_id = f"{course_obj.id}_{assessment_type_key}_{rel.assessment_index}"
+                lo_groups[lo_text]['linked_assessments'].append({
+                    'id': assessment_id,
+                    'course_name': course_obj.name,
+                    'assessment_type': display_name,
+                    'assessment_type_key': assessment_type_key,
+                    'assessment_index': rel.assessment_index,
+                    'contribution_percentage': rel.contribution_percentage,
+                    'relation_id': rel.id
+                })
+                
+                if assessment_id in all_assessment_relations:
+                    all_assessment_relations[assessment_id].append({
+                        'lo_id': lo_groups[lo_text]['ids'][0],
+                        'lo_text': lo_text,
+                        'contribution_percentage': rel.contribution_percentage
+                    })
+        
+        for lo_text, group_data in lo_groups.items():
                 sorted_courses = sorted(group_data['courses'])
                 course_display = " - ".join(sorted_courses)
                 
@@ -8098,15 +8077,15 @@ def student_my_progress(request):
                     'linked_assessments': group_data['linked_assessments'],
                     'score': lo_score
                 })
-            
-            faculty = None
-            from .models import Faculty
-            
-            if student.department:
-                try:
-                    faculty = Faculty.objects.get(name=student.department)
-                except Faculty.DoesNotExist:
-                    pass
+        
+        faculty = None
+        from .models import Faculty
+        
+        if student.department:
+            try:
+                faculty = Faculty.objects.get(name=student.department)
+            except Faculty.DoesNotExist:
+                pass
             
             if not faculty and courses.exists():
                 course_departments = courses.values_list('department', flat=True).distinct()
@@ -8190,45 +8169,39 @@ def student_my_progress(request):
             'learning_outcomes_json': learning_outcomes_json,
             'program_outcomes': program_outcomes_list,
         })
-        
-    except Student.DoesNotExist:
-        return redirect('student-login')
 
+@student_required
 def student_learning_outcome_graph(request, course_id, outcome_id):
     """Show graph view for learning outcome (read-only for students)"""
-    if not request.user.is_authenticated:
-        return redirect('student-login')
+    student = request.student_user
+    course = get_object_or_404(Course, id=course_id)
     
-    try:
-        student = Student.objects.get(user=request.user)
-        course = get_object_or_404(Course, id=course_id)
-        
-        if not student.courses.filter(id=course.id).exists():
-            return HttpResponseForbidden("You are not enrolled in this course.")
-        
-        # NOTE: Using course_name (string) for matching - technical debt
-        # Ideally should use ForeignKey, but works for now. Course rename would break this.
-        outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
-        
-        from .models import LearningOutcomeProgramOutcome
-        related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
-        # Optimize: Prefetch all relationships in one query instead of N queries
-        lo_po_map = {
-            (lo_po.learning_outcome_id, lo_po.program_outcome_id): lo_po.percentage
-            for lo_po in LearningOutcomeProgramOutcome.objects.filter(
-                learning_outcome=outcome,
-                program_outcome__in=related_program_outcomes
-            ).select_related('learning_outcome', 'program_outcome')
-        }
-        
-        program_outcomes_data = []
-        for po in related_program_outcomes:
-            percentage = lo_po_map.get((outcome.id, po.id), 0)
-            program_outcomes_data.append({
-                'id': po.id,
-                'text': po.text,
-                'percentage': percentage,
-            })
+    if not student.courses.filter(id=course.id).exists():
+        return HttpResponseForbidden("You are not enrolled in this course.")
+    
+    # NOTE: Using course_name (string) for matching - technical debt
+    # Ideally should use ForeignKey, but works for now. Course rename would break this.
+    outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
+    
+    from .models import LearningOutcomeProgramOutcome
+    related_program_outcomes = outcome.related_program_outcomes.all().order_by('id')
+    # Optimize: Prefetch all relationships in one query instead of N queries
+    lo_po_map = {
+        (lo_po.learning_outcome_id, lo_po.program_outcome_id): lo_po.percentage
+        for lo_po in LearningOutcomeProgramOutcome.objects.filter(
+            learning_outcome=outcome,
+            program_outcome__in=related_program_outcomes
+        ).select_related('learning_outcome', 'program_outcome')
+    }
+    
+    program_outcomes_data = []
+    for po in related_program_outcomes:
+        percentage = lo_po_map.get((outcome.id, po.id), 0)
+        program_outcomes_data.append({
+            'id': po.id,
+            'text': po.text,
+            'percentage': percentage,
+        })
         
         course_name_slug = generate_course_slug(outcome.course_name)
         
@@ -8319,9 +8292,6 @@ def student_learning_outcome_graph(request, course_id, outcome_id):
                 'percentage': po['percentage'],
                 'score': po_score,
             })
-        
-    except Student.DoesNotExist:
-        return redirect('student-login')
     
     return render(
         request,
