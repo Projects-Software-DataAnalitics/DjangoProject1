@@ -1,0 +1,665 @@
+{% extends "student_base.html" %}
+{% load static %}
+
+{% block title %}My Progress{% endblock %}
+
+{% block content %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    body {
+        overflow-x: hidden;
+    }
+    
+    .content-wrapper {
+        overflow-x: hidden;
+    }
+    
+    .graph-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 200px;
+        position: relative;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .assessment-column {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        position: relative;
+        padding: 20px;
+    }
+    
+    .lo-column {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        position: relative;
+        padding: 20px;
+    }
+    
+    .po-column {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        position: relative;
+        padding: 20px;
+    }
+    
+    .assessment-cards-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 60px;
+        width: 100%;
+        max-width: 350px;
+    }
+    
+    .assessment-card {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
+        color: #ffffff;
+        padding: 20px 28px;
+        border-radius: 20px;
+        box-shadow: 0 20px 50px rgba(245, 158, 11, 0.15), 0 8px 25px rgba(245, 158, 11, 0.1);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        position: relative;
+    }
+    
+    .assessment-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 25px 60px rgba(245, 158, 11, 0.2), 0 12px 30px rgba(245, 158, 11, 0.15);
+    }
+    
+    .section-title {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 32px;
+        color: #1e293b;
+        font-family: 'Inter', sans-serif;
+        text-align: center;
+    }
+    
+    .section-title.assessment-title {
+        color: #f59e0b;
+    }
+    
+    .lo-cards-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 60px;
+        width: 100%;
+        max-width: 400px;
+    }
+    
+    .po-cards-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 60px;
+        width: 100%;
+        max-width: 400px;
+    }
+    
+    .lo-card {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+        color: #ffffff;
+        padding: 20px 28px;
+        border-radius: 24px;
+        box-shadow: 0 25px 60px rgba(59, 130, 246, 0.15), 0 10px 30px rgba(59, 130, 246, 0.1);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        position: relative;
+    }
+    
+    .lo-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 30px 70px rgba(59, 130, 246, 0.2), 0 15px 35px rgba(59, 130, 246, 0.15);
+    }
+    
+    .po-card {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%);
+        color: #ffffff;
+        padding: 20px 28px;
+        border-radius: 24px;
+        box-shadow: 0 25px 60px rgba(139, 92, 246, 0.15), 0 10px 30px rgba(139, 92, 246, 0.1);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        position: relative;
+    }
+    
+    .po-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 30px 70px rgba(139, 92, 246, 0.2), 0 15px 35px rgba(139, 92, 246, 0.15);
+    }
+    
+    .card-text {
+        font-size: 15px;
+        line-height: 1.6;
+        margin: 0;
+        font-weight: 500;
+    }
+    
+    .lo-card-course {
+        font-size: 12px;
+        opacity: 0.85;
+        margin-bottom: 8px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .score-display {
+        font-size: 24px;
+        font-weight: 700;
+        margin-top: 12px;
+        text-align: center;
+        padding-top: 12px;
+        border-top: 2px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .score-display.no-score {
+        font-size: 14px;
+        opacity: 0.7;
+        font-weight: 500;
+    }
+    
+    #arrows-svg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+    }
+    
+    .arrow-path {
+        fill: none;
+        stroke: #374151;
+        stroke-width: 2;
+        opacity: 0.6;
+    }
+    
+    .percentage-text {
+        font-size: 12px;
+        font-weight: 600;
+        fill: #000000;
+        pointer-events: none;
+    }
+</style>
+
+<div style="max-width: 1400px; margin: 0 auto; padding: 24px; overflow-x: hidden; box-sizing: border-box;">
+    <h1 style="font-size: 28px; font-weight: 700; margin-bottom: 32px; color: #1e293b; font-family: 'Inter', sans-serif;">
+        My Progress
+    </h1>
+    
+    <div id="graph-mode">
+        {% if learning_outcomes or program_outcomes %}
+            <div style="background: #f8fafc; padding: 48px; border-radius: 16px; position: relative; overflow-x: hidden; width: 100%; box-sizing: border-box;">
+                <div class="graph-container" style="position: relative;">
+                    <div class="assessment-column">
+                        <h3 class="section-title assessment-title">Assessment Tools</h3>
+                        <div class="assessment-cards-wrapper">
+                            {% if assessments %}
+                                {% for assessment in assessments %}
+                                <div class="assessment-card" data-assessment-id="{{ assessment.id }}" data-course-id="{{ assessment.course_id }}">
+                                    <p class="card-text" style="font-size: 14px; margin-bottom: 4px; opacity: 0.9;">{{ assessment.course_name }}</p>
+                                    <p class="card-text" style="font-size: 16px; font-weight: 600;">{{ assessment.assessment_type }}</p>
+                                    <div class="score-display">{{ assessment.score }}</div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p style="text-align: center; color: #64748b; font-size: 14px; padding: 20px;">No assessments found</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="lo-column">
+                        <h3 class="section-title lo-title">Learning Outcomes</h3>
+                        <div class="lo-cards-wrapper">
+                            {% for lo in learning_outcomes %}
+                                <div class="lo-card" data-lo-id="{{ lo.id }}" {% if lo.ids %}data-lo-ids="{{ lo.ids|join:',' }}"{% endif %} data-course="{{ lo.course }}">
+                                    <div class="lo-card-course">{{ lo.course }}</div>
+                                    <p class="card-text">{{ lo.text }}</p>
+                                    <div class="score-display {% if not lo.score %}no-score{% endif %}">
+                                        {% if lo.score %}{{ lo.score }}{% else %}No score{% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="po-column">
+                        <h3 class="section-title po-title">Program Outcomes</h3>
+                        <div class="po-cards-wrapper">
+                            {% for po in program_outcomes %}
+                                <div class="po-card" data-po-id="{{ po.id }}">
+                                    <p class="card-text">{{ po.text }}</p>
+                                    <div class="score-display {% if not po.score %}no-score{% endif %}">
+                                        {% if po.score %}{{ po.score }}{% else %}No score{% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <svg id="arrows-svg">
+                        <defs>
+                            <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                                <path d="M 0 0 L 8 4 L 0 8 Z" fill="#374151" stroke="none" />
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+            </div>
+        {% else %}
+            <div style="background: #f8fafc; padding: 40px; border-radius: 12px; text-align: center; border: 1px dashed #cbd5e1;">
+                <p style="font-size: 16px; color: #64748b; margin: 0;">
+                    No learning outcomes or program outcomes found.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if learning_outcomes_json %}
+<script id="learning-outcomes-data" type="application/json">{{ learning_outcomes_json|safe }}</script>
+{% endif %}
+
+<script type="text/javascript">
+(function() {
+    let learningOutcomesData = [];
+    const dataScript = document.getElementById('learning-outcomes-data');
+    if (dataScript) {
+        try {
+            learningOutcomesData = JSON.parse(dataScript.textContent);
+        } catch (e) {
+            console.error('Error parsing learning outcomes data:', e);
+            learningOutcomesData = [];
+        }
+    }
+    
+    function updateSVGSize() {
+        const svg = document.getElementById('arrows-svg');
+        const container = document.querySelector('.graph-container');
+        if (!svg || !container) return;
+        
+        const assessmentColumn = document.querySelector('.assessment-column');
+        const loColumn = document.querySelector('.lo-column');
+        const poColumn = document.querySelector('.po-column');
+        
+        const assessmentCards = document.querySelectorAll('.assessment-card');
+        const loCards = document.querySelectorAll('.lo-card');
+        const poCards = document.querySelectorAll('.po-card');
+        
+        const cardHeight = 100;
+        const gap = 60;
+        const padding = 40;
+        
+        const assessmentHeight = assessmentCards.length > 0 ? 
+            (assessmentCards.length * (cardHeight + gap)) - gap + padding : 0;
+        const loHeight = loCards.length > 0 ? 
+            (loCards.length * (cardHeight + gap)) - gap + padding : 0;
+        const poHeight = poCards.length > 0 ? 
+            (poCards.length * (cardHeight + gap)) - gap + padding : 0;
+        
+        const maxHeight = Math.max(assessmentHeight, loHeight, poHeight, container.offsetHeight || 500);
+        
+        svg.setAttribute('width', container.offsetWidth.toString());
+        svg.setAttribute('height', maxHeight.toString());
+        svg.style.height = maxHeight + 'px';
+    }
+    
+    function drawArrows() {
+        const svg = document.getElementById('arrows-svg');
+        if (!svg) return;
+        
+        while (svg.children.length > 1) {
+            svg.removeChild(svg.lastChild);
+        }
+        
+        const container = document.querySelector('.graph-container');
+        if (!container) return;
+        
+        const containerRect = container.getBoundingClientRect();
+        const assessmentCards = document.querySelectorAll('.assessment-card');
+        const loCards = document.querySelectorAll('.lo-card');
+        const poCards = document.querySelectorAll('.po-card');
+        
+        if (assessmentCards.length > 0 && loCards.length > 0) {
+            learningOutcomesData.forEach(function(loData) {
+                let loCard = document.querySelector(`.lo-card[data-lo-id="${loData.id}"]`);
+                if (!loCard && loData.ids) {
+                    const allLoCards = document.querySelectorAll('.lo-card[data-lo-ids]');
+                    for (let card of allLoCards) {
+                        const loIds = card.dataset.loIds;
+                        if (loIds && loData.ids.some(function(id) { return loIds.split(',').includes(id.toString()); })) {
+                            loCard = card;
+                            break;
+                        }
+                    }
+                }
+                if (!loCard) return;
+                
+                const loRect = loCard.getBoundingClientRect();
+                const loCardHeight = loRect.height;
+                const totalAssessments = loData.linked_assessments ? loData.linked_assessments.length : 0;
+                
+                const loVisible = loRect.top < containerRect.bottom && loRect.bottom > containerRect.top;
+                if (!loVisible) return;
+                
+                const loEndX = loRect.left - containerRect.left;
+                
+                if (totalAssessments > 0) {
+                    loData.linked_assessments.forEach(function(assessmentLink, index) {
+                        const assessmentId = assessmentLink.id;
+                        const assessmentCard = document.querySelector(`.assessment-card[data-assessment-id="${assessmentId}"]`);
+                        if (!assessmentCard) return;
+                        
+                        const assessmentRect = assessmentCard.getBoundingClientRect();
+                        const assessmentCardHeight = assessmentRect.height;
+                        
+                        const assessmentVisible = assessmentRect.top < containerRect.bottom && assessmentRect.bottom > containerRect.top;
+                        if (!assessmentVisible) return;
+                        
+                        const assessmentStartX = assessmentRect.right - containerRect.left;
+                        
+                        let assessmentStartY;
+                        if (totalAssessments === 1) {
+                            assessmentStartY = assessmentRect.top - containerRect.top + assessmentCardHeight / 2;
+                        } else {
+                            const assessmentDistributionRange = assessmentCardHeight * 0.8;
+                            const assessmentStartOffset = assessmentCardHeight * 0.1;
+                            const assessmentStep = assessmentDistributionRange / Math.max(1, totalAssessments - 1);
+                            assessmentStartY = assessmentRect.top - containerRect.top + assessmentStartOffset + (assessmentStep * index);
+                        }
+                        
+                        let loEndY;
+                        let assessmentsConnectedToThisLo = 0;
+                        let currentAssessmentIndex = 0;
+                        learningOutcomesData.forEach(function(otherLoData) {
+                            if (otherLoData.linked_assessments) {
+                                otherLoData.linked_assessments.forEach(function(otherAssessment) {
+                                    if (otherAssessment.id === assessmentId) {
+                                        if (otherLoData.id === loData.id) {
+                                            currentAssessmentIndex = assessmentsConnectedToThisLo;
+                                        }
+                                        assessmentsConnectedToThisLo++;
+                                    }
+                                });
+                            }
+                        });
+                        
+                        if (assessmentsConnectedToThisLo === 1) {
+                            loEndY = loRect.top - containerRect.top + loCardHeight / 2;
+                        } else {
+                            const loDistributionRange = loCardHeight * 0.8;
+                            const loStartOffset = loCardHeight * 0.1;
+                            const loStep = loDistributionRange / Math.max(1, assessmentsConnectedToThisLo - 1);
+                            loEndY = loRect.top - containerRect.top + loStartOffset + (loStep * currentAssessmentIndex);
+                        }
+                        
+                        if (isNaN(assessmentStartX) || isNaN(assessmentStartY) || isNaN(loEndX) || isNaN(loEndY)) {
+                            return;
+                        }
+                        
+                        if (Math.abs(loEndX - assessmentStartX) > 10000 || Math.abs(loEndY - assessmentStartY) > 10000) {
+                            return;
+                        }
+                        
+                        const percentage = assessmentLink.contribution_percentage || 0;
+                        
+                        const distance = loEndX - assessmentStartX;
+                        const controlPointOffset = Math.max(distance * 0.35, 80);
+                        
+                        const controlPoint1X = assessmentStartX + controlPointOffset;
+                        const controlPoint1Y = assessmentStartY;
+                        const controlPoint2X = loEndX - controlPointOffset;
+                        const controlPoint2Y = loEndY;
+                        
+                        const strokeWidth = 2;
+                        const strokeColor = '#374151';
+                        
+                        const markerId = `arrowhead-${assessmentId}-${loData.id}`;
+                        let marker = svg.querySelector(`#${markerId}`);
+                        if (!marker) {
+                            const defs = svg.querySelector('defs') || svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'defs'));
+                            marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                            marker.setAttribute('id', markerId);
+                            marker.setAttribute('markerWidth', '8');
+                            marker.setAttribute('markerHeight', '8');
+                            marker.setAttribute('refX', '7');
+                            marker.setAttribute('refY', '4');
+                            marker.setAttribute('orient', 'auto');
+                            marker.setAttribute('markerUnits', 'strokeWidth');
+                            const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                            markerPath.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
+                            markerPath.setAttribute('fill', strokeColor);
+                            markerPath.setAttribute('stroke', 'none');
+                            marker.appendChild(markerPath);
+                            defs.appendChild(marker);
+                        }
+                        
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        const d = `M ${assessmentStartX} ${assessmentStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${loEndX} ${loEndY}`;
+                        path.setAttribute('d', d);
+                        path.setAttribute('class', 'arrow-path');
+                        path.setAttribute('data-assessment-id', assessmentId);
+                        path.setAttribute('data-lo-id', loData.id);
+                        path.setAttribute('fill', 'none');
+                        path.setAttribute('stroke', strokeColor);
+                        path.setAttribute('stroke-width', strokeWidth.toString());
+                        path.setAttribute('opacity', '0.6');
+                        path.setAttribute('marker-end', `url(#${markerId})`);
+                        
+                        svg.appendChild(path);
+                        
+                        if (percentage !== undefined && percentage !== null && percentage >= 0) {
+                            const offsetRatio = 0.3 + (index / totalAssessments) * 0.4;
+                            const textX = assessmentStartX + (loEndX - assessmentStartX) * offsetRatio;
+                            const textY = assessmentStartY + (loEndY - assessmentStartY) * offsetRatio;
+                            
+                            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            text.setAttribute('x', textX.toString());
+                            text.setAttribute('y', (textY - 8).toString());
+                            text.setAttribute('text-anchor', 'middle');
+                            text.setAttribute('dominant-baseline', 'middle');
+                            text.setAttribute('font-size', '13');
+                            text.setAttribute('font-weight', '600');
+                            text.setAttribute('fill', '#92400e');
+                            text.style.pointerEvents = 'none';
+                            text.textContent = percentage + '%';
+                            text.setAttribute('data-text-x', textX.toString());
+                            text.setAttribute('data-text-y', textY.toString());
+                            svg.appendChild(text);
+                        }
+                    });
+                }
+            });
+        }
+        
+        if (loCards.length > 0 && poCards.length > 0) {
+            learningOutcomesData.forEach(function(loData) {
+                let loCard = document.querySelector(`.lo-card[data-lo-id="${loData.id}"]`);
+                if (!loCard && loData.ids) {
+                    const allLoCards = document.querySelectorAll('.lo-card[data-lo-ids]');
+                    for (let card of allLoCards) {
+                        const loIds = card.dataset.loIds;
+                        if (loIds && loData.ids.some(function(id) { return loIds.split(',').includes(id.toString()); })) {
+                            loCard = card;
+                            break;
+                        }
+                    }
+                }
+                if (!loCard) return;
+                
+                const loRect = loCard.getBoundingClientRect();
+                const loCardHeight = loRect.height;
+                const totalPos = loData.linked_pos ? loData.linked_pos.length : 0;
+                
+                if (totalPos === 0) return;
+                
+                const loVisible = loRect.top < containerRect.bottom && loRect.bottom > containerRect.top;
+                if (!loVisible) return;
+                
+                const loStartX = loRect.right - containerRect.left;
+                
+                if (!loData.linked_pos || loData.linked_pos.length === 0) {
+                    return;
+                }
+                
+                loData.linked_pos.forEach(function(linkedPo, index) {
+                    if (!linkedPo || !linkedPo.id) return;
+                    
+                    const poCard = document.querySelector(`.po-card[data-po-id="${linkedPo.id}"]`);
+                    if (!poCard) {
+                        return;
+                    }
+                    
+                    const poRect = poCard.getBoundingClientRect();
+                    const poCardHeight = poRect.height;
+                    
+                    const poVisible = poRect.top < containerRect.bottom && poRect.bottom > containerRect.top;
+                    if (!poVisible) return;
+                    
+                    const poEndX = poRect.left - containerRect.left;
+                    
+                    let loStartY;
+                    if (totalPos === 1) {
+                        loStartY = loRect.top - containerRect.top + loCardHeight / 2;
+                    } else {
+                        const loDistributionRange = loCardHeight * 0.8;
+                        const loStartOffset = loCardHeight * 0.1;
+                        const loStep = loDistributionRange / Math.max(1, totalPos - 1);
+                        loStartY = loRect.top - containerRect.top + loStartOffset + (loStep * index);
+                    }
+                    
+                    let poEndY;
+                    let posConnectedToThisPo = 0;
+                    let currentLoIndex = 0;
+                    learningOutcomesData.forEach(function(otherLoData) {
+                        if (otherLoData.linked_pos) {
+                            otherLoData.linked_pos.forEach(function(otherPo) {
+                                if (otherPo.id === linkedPo.id) {
+                                    if (otherLoData.id === loData.id) {
+                                        currentLoIndex = posConnectedToThisPo;
+                                    }
+                                    posConnectedToThisPo++;
+                                }
+                            });
+                        }
+                    });
+                    
+                    if (posConnectedToThisPo === 1) {
+                        poEndY = poRect.top - containerRect.top + poCardHeight / 2;
+                    } else {
+                        const poDistributionRange = poCardHeight * 0.8;
+                        const poStartOffset = poCardHeight * 0.1;
+                        const poStep = poDistributionRange / Math.max(1, posConnectedToThisPo - 1);
+                        poEndY = poRect.top - containerRect.top + poStartOffset + (poStep * currentLoIndex);
+                    }
+                    
+                    if (isNaN(loStartX) || isNaN(loStartY) || isNaN(poEndX) || isNaN(poEndY)) {
+                        return;
+                    }
+                    
+                    if (Math.abs(poEndX - loStartX) > 10000 || Math.abs(poEndY - loStartY) > 10000) {
+                        return;
+                    }
+                    
+                    const percentage = linkedPo.percentage || 0;
+                    
+                    const distance = poEndX - loStartX;
+                    const controlPointOffset = Math.max(distance * 0.35, 80);
+                    
+                    const controlPoint1X = loStartX + controlPointOffset;
+                    const controlPoint1Y = loStartY;
+                    const controlPoint2X = poEndX - controlPointOffset;
+                    const controlPoint2Y = poEndY;
+                    
+                    const strokeWidth = 2;
+                    const strokeColor = '#374151';
+                    
+                    const markerId = `arrowhead-${loData.id}-${linkedPo.id}`;
+                    let marker = svg.querySelector(`#${markerId}`);
+                    if (!marker) {
+                        const defs = svg.querySelector('defs') || svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'defs'));
+                        marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                        marker.setAttribute('id', markerId);
+                        marker.setAttribute('markerWidth', '8');
+                        marker.setAttribute('markerHeight', '8');
+                        marker.setAttribute('refX', '7');
+                        marker.setAttribute('refY', '4');
+                        marker.setAttribute('orient', 'auto');
+                        marker.setAttribute('markerUnits', 'strokeWidth');
+                        const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        markerPath.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
+                        markerPath.setAttribute('fill', strokeColor);
+                        markerPath.setAttribute('stroke', 'none');
+                        marker.appendChild(markerPath);
+                        defs.appendChild(marker);
+                    }
+                    
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    const d = `M ${loStartX} ${loStartY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${poEndX} ${poEndY}`;
+                    path.setAttribute('d', d);
+                    path.setAttribute('class', 'arrow-path');
+                    path.setAttribute('data-lo-id', loData.id);
+                    path.setAttribute('data-po-id', linkedPo.id);
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', strokeColor);
+                    path.setAttribute('stroke-width', strokeWidth.toString());
+                    path.setAttribute('opacity', '0.6');
+                    path.setAttribute('marker-end', `url(#${markerId})`);
+                    
+                    svg.appendChild(path);
+                    
+                    if (percentage !== undefined && percentage !== null && percentage >= 0) {
+                        const offsetRatio = 0.35 + (index / totalPos) * 0.3;
+                        const textX = loStartX + (poEndX - loStartX) * offsetRatio;
+                        const textY = loStartY + (poEndY - loStartY) * offsetRatio;
+                        
+                        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        text.setAttribute('x', textX.toString());
+                        text.setAttribute('y', textY.toString());
+                        text.setAttribute('text-anchor', 'middle');
+                        text.setAttribute('dominant-baseline', 'middle');
+                        text.setAttribute('font-size', '12');
+                        text.setAttribute('font-weight', '600');
+                        text.setAttribute('fill', '#000000');
+                        text.setAttribute('data-lo-id', loData.id);
+                        text.setAttribute('data-po-id', linkedPo.id);
+                        text.setAttribute('data-text-x', textX.toString());
+                        text.setAttribute('data-text-y', textY.toString());
+                        text.style.pointerEvents = 'none';
+                        text.textContent = percentage + '%';
+                        svg.appendChild(text);
+                    }
+                });
+            });
+        }
+    }
+    
+    function drawArrowsWithHover() {
+        updateSVGSize();
+        drawArrows();
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', drawArrowsWithHover);
+    } else {
+        drawArrowsWithHover();
+    }
+    
+    window.addEventListener('resize', function() {
+        setTimeout(drawArrowsWithHover, 100);
+    });
+})();
+</script>
+{% endblock %}
+

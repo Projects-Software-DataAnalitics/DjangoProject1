@@ -1,24 +1,32 @@
 {% extends "faculty/base.html" %}
 {% load static %}
 
-{% block title %}Learning Outcomes - {{ course_name }}{% endblock %}
+{% block title %}{{ page_title|default:"Learning Outcomes" }}{% endblock %}
 
 {% block content %}
 <div style="margin-left: 0; margin-top: 10px;">
-    <a href="{% url 'faculty_head_learning_outcomes' %}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: #3b82f6; font-size: 16px; font-weight: 500; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#3b82f6';">
+    <a href="{% url 'my_courses' %}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: #3b82f6; font-size: 16px; font-weight: 500; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#2563eb';" onmouseout="this.style.color='#3b82f6';">
         <span style="font-size: 20px;">←</span>
         <span>Go back</span>
     </a>
-    <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ course_name }}</h1>
+    <h1 style="font-size: 32px; margin: 0 0 8px 0;">{{ page_title|default:display_course_name|default:course_name|title }}</h1>
 </div>
 
-<div style="margin-bottom: 24px;">
-    <button id="create-btn" class="role-btn" style="display: inline-block; cursor: pointer;">
-        Create Learning Outcome
+<div style="margin-bottom: 24px; display: flex; gap: 12px;">
+    <button id="create-btn" type="button" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; padding: 12px 24px !important; background: #3b82f6 !important; color: #ffffff !important; border: none !important; border-radius: 8px !important; cursor: pointer !important; font-size: 16px !important; font-weight: 500 !important; transition: background 0.2s !important;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+        Create New
+    </button>
+    <button id="select-existing-btn" type="button" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; padding: 12px 24px !important; background: #3b82f6 !important; color: #ffffff !important; border: none !important; border-radius: 8px !important; cursor: pointer !important; font-size: 16px !important; font-weight: 500 !important; transition: background 0.2s !important;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+        Select From Existing
     </button>
 </div>
 
-<div id="create-form-container" style="display: none; margin-bottom: 24px; background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+<div id="create-form-container" class="{% if error_message %}show-form{% else %}hide-form{% endif %}" data-has-error="{% if error_message %}true{% else %}false{% endif %}" style="margin-bottom: 24px; background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);">
+    {% if error_message %}
+    <div style="background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+        {{ error_message }}
+    </div>
+    {% endif %}
     <form id="create-outcome-form" method="post">
         {% csrf_token %}
         <div style="margin-bottom: 20px;">
@@ -49,9 +57,22 @@
                        onmouseout="if(!this.querySelector('input[type=checkbox]').checked) { this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'; }">
                     <input type="checkbox" name="program_outcomes" value="{{ po.id }}" 
                            class="program-outcome-checkbox"
+                           data-po-id="{{ po.id }}"
                            style="margin-right: 12px; margin-top: 2px; width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6;"
-                           onchange="updateSaveButtonState(); if(this.checked) { this.closest('label').style.borderColor='#3b82f6'; this.closest('label').style.background='#eff6ff'; this.closest('label').style.boxShadow='0 2px 8px rgba(59,130,246,0.2)'; } else { this.closest('label').style.borderColor='#e2e8f0'; this.closest('label').style.background='#ffffff'; this.closest('label').style.boxShadow='none'; }">
+                           onchange="handlePOSelection(this); updateSaveButtonState();">
                     <span style="flex: 1; font-size: 14px; line-height: 1.5; color: #1e293b;">{{ po.text }}</span>
+                    <div class="po-percentage-input" data-po-id="{{ po.id }}" style="display: none; margin-left: 12px; align-self: center; flex-shrink: 0;">
+                        <input type="number" 
+                               name="po_percentage_{{ po.id }}" 
+                               class="po-percentage-field"
+                               min="0" 
+                               max="100" 
+                               step="1" 
+                               placeholder="%"
+                               style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center;"
+                               onchange="validatePercentage(this); updateSaveButtonState();"
+                               oninput="validatePercentage(this); updateSaveButtonState();">
+                    </div>
                 </label>
                 {% endfor %}
             </div>
@@ -79,13 +100,13 @@
 </div>
 
 <div style="margin-top: 32px;">
-    <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes of {{ course_name }}</h2>
+    <h2 style="margin-bottom: 16px; font-size: 24px; color: #0f172a;">Learning Outcomes of {{ display_course_name|default:course_name|title }}</h2>
     {% if outcomes_data %}
         <ul style="list-style: none; padding: 0; margin: 0;">
             {% for outcome in outcomes_data %}
-                <li style="background: #f8fafc; padding: 16px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #3b82f6; display: flex; justify-content: space-between; align-items: start;">
+                <li id="outcome-{{ forloop.counter0 }}" style="background: #f8fafc; padding: 16px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #3b82f6; display: flex; justify-content: space-between; align-items: start;">
                     <div style="flex: 1;">
-                        <p style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500;">
+                        <p id="outcome-text-{{ forloop.counter0 }}" style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500;">
                             {{ outcome.text }}
                         </p>
                         {% if outcome.related_program_outcomes %}
@@ -96,14 +117,22 @@
                             </span>
                         </div>
                         {% endif %}
-                        <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">
+                        <p style="margin: 0; font-size: 14px; color: #6b7280;">
                             Created by <strong>{{ outcome.created_by }}</strong> on {{ outcome.created_at }}
                         </p>
                     </div>
                     <div style="display: flex; gap: 8px; margin-left: 16px; align-items: center;">
+                        {% if course_id %}
                         <a href="{% url 'faculty_head_learning_outcome_detail' course_id outcome.id %}" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 500; transition: background 0.2s; cursor: pointer;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
                             View
                         </a>
+                        {% else %}
+                        <span style="display: inline-block; padding: 12px 24px; background: #94a3b8; color: #ffffff; border-radius: 6px; font-size: 16px; font-weight: 500; cursor: not-allowed;" title="Course not found">
+                            View
+                        </span>
+                        {% endif %}
+                        <button class="edit-outcome-btn" data-outcome-id="{{ outcome.id }}" data-outcome-text="{{ outcome.text|escapejs }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #3b82f6;" title="Edit">✏️</button>
+                        <button class="delete-outcome-btn" data-outcome-id="{{ outcome.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444;" title="Delete">🗑️</button>
                     </div>
                 </li>
             {% endfor %}
@@ -120,7 +149,98 @@
     {% endif %}
 </div>
 
+
 <script>
+    let validationModalInstance = null;
+    
+    function getValidationModal() {
+        if (!validationModalInstance) {
+            validationModalInstance = document.createElement('div');
+            validationModalInstance.id = 'percentage-validation-modal';
+            validationModalInstance.style.position = 'fixed';
+            validationModalInstance.style.inset = '0';
+            validationModalInstance.style.background = 'rgba(15,23,42,0.45)';
+            validationModalInstance.style.display = 'none';
+            validationModalInstance.style.alignItems = 'center';
+            validationModalInstance.style.justifyContent = 'center';
+            validationModalInstance.style.zIndex = '2000';
+            validationModalInstance.innerHTML = `
+                <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
+                    <p id="percentage-validation-message" style="margin: 0 0 20px 0; font-size: 16px; color: #111827;"></p>
+                    <button id="percentage-validation-ok-btn" style="padding: 10px 20px; background: #3b82f6; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        OK
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(validationModalInstance);
+            const okBtn = validationModalInstance.querySelector('#percentage-validation-ok-btn');
+            okBtn.addEventListener('click', function() {
+                validationModalInstance.style.display = 'none';
+            });
+        }
+        return validationModalInstance;
+    }
+    
+    function showPercentageValidationModal(message) {
+        const modal = getValidationModal();
+        const messageEl = modal.querySelector('#percentage-validation-message');
+        messageEl.textContent = message;
+        modal.style.display = 'flex';
+    }
+    
+    function validatePercentage(input) {
+        if (!input.value || input.value.trim() === '') {
+            return;
+        }
+        let value = parseInt(input.value);
+        if (isNaN(value) || value < 0) {
+            input.value = '';
+            showPercentageValidationModal('Percentage must be between 0 and 100.');
+            input.focus();
+        } else if (value > 100) {
+            input.value = '';
+            showPercentageValidationModal('Percentage cannot exceed 100. Please enter a value between 0 and 100.');
+            input.focus();
+        }
+    }
+    
+    function handlePOSelection(checkbox) {
+        const card = checkbox.closest('label');
+        if (!card) return;
+        
+        const poId = checkbox.dataset.poId;
+        const percentageInput = card.querySelector('.po-percentage-input');
+        
+        if (checkbox.checked) {
+            card.style.borderColor = '#3b82f6';
+            card.style.background = '#eff6ff';
+            card.style.boxShadow = '0 2px 8px rgba(59,130,246,0.2)';
+            if (percentageInput) {
+                percentageInput.style.display = 'flex';
+                percentageInput.style.alignItems = 'center';
+                const inputField = percentageInput.querySelector('input');
+                if (inputField) {
+                    inputField.value = '';
+                    setTimeout(function() {
+                        inputField.focus();
+                    }, 50);
+                }
+            }
+        } else {
+            card.style.borderColor = '#e2e8f0';
+            card.style.background = '#ffffff';
+            card.style.boxShadow = 'none';
+            if (percentageInput) {
+                percentageInput.style.display = 'none';
+                const inputField = percentageInput.querySelector('input');
+                if (inputField) {
+                    inputField.value = '';
+                }
+            }
+        }
+        updateSaveButtonState();
+    }
+    
     function updateSaveButtonState() {
         const saveBtn = document.getElementById('save-outcome-btn');
         if (!saveBtn) return;
@@ -128,17 +248,35 @@
         const hasProgramOutcomes = document.querySelectorAll('.program-outcome-checkbox').length > 0;
         const hasSelectedProgramOutcome = document.querySelectorAll('.program-outcome-checkbox:checked').length > 0;
         
-        if (!hasProgramOutcomes || !hasSelectedProgramOutcome) {
-            saveBtn.disabled = true;
-            saveBtn.style.background = '#93c5fd';
-            saveBtn.style.cursor = 'not-allowed';
-            saveBtn.style.opacity = '1';
+        if (hasProgramOutcomes && hasSelectedProgramOutcome) {
+            // Check if all selected PO's have percentage entered
+            const checkedBoxes = document.querySelectorAll('.program-outcome-checkbox:checked');
+            let allPercentagesEntered = true;
+            for (let checkbox of checkedBoxes) {
+                const poId = checkbox.dataset.poId;
+                const percentageInput = document.querySelector(`input[name="po_percentage_${poId}"]`);
+                if (!percentageInput || !percentageInput.value || percentageInput.value.trim() === '') {
+                    allPercentagesEntered = false;
+                    break;
+                }
+            }
+            
+            if (allPercentagesEntered) {
+                saveBtn.disabled = false;
+                saveBtn.style.background = '#3b82f6';
+                saveBtn.style.cursor = 'pointer';
+            } else {
+                saveBtn.disabled = true;
+                saveBtn.style.background = '#93c5fd';
+                saveBtn.style.cursor = 'not-allowed';
+            }
         } else {
+            // LO can be created without PO - enable save button
             saveBtn.disabled = false;
             saveBtn.style.background = '#3b82f6';
             saveBtn.style.cursor = 'pointer';
-            saveBtn.style.opacity = '1';
         }
+        saveBtn.style.opacity = '1';
     }
 
     (function () {
@@ -146,6 +284,14 @@
         const createFormContainer = document.getElementById("create-form-container");
         const cancelFormBtn = document.getElementById("cancel-form-btn");
         const createForm = document.getElementById("create-outcome-form");
+        
+        if (createFormContainer && createFormContainer.getAttribute('data-has-error') === 'false') {
+            createFormContainer.style.display = 'none';
+        }
+        
+        document.querySelectorAll('.program-outcome-checkbox:checked').forEach(function(checkbox) {
+            handlePOSelection(checkbox);
+        });
 
         if (createBtn && createFormContainer) {
             createBtn.addEventListener('click', function() {
@@ -165,6 +311,157 @@
             });
         }
 
+        // Select From Existing button handler
+        const selectExistingBtn = document.getElementById("select-existing-btn");
+        console.log('Select existing button found:', selectExistingBtn);
+        if (selectExistingBtn) {
+            const existingModal = document.createElement('div');
+            existingModal.id = 'existing-outcomes-modal';
+            existingModal.style.position = 'fixed';
+            existingModal.style.inset = '0';
+            existingModal.style.background = 'rgba(15,23,42,0.45)';
+            existingModal.style.display = 'none';
+            existingModal.style.alignItems = 'center';
+            existingModal.style.justifyContent = 'center';
+            existingModal.style.zIndex = '2000';
+            existingModal.style.overflowY = 'auto';
+            existingModal.style.padding = '20px';
+            existingModal.innerHTML = `
+                <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 800px; width: 90%; max-height: 80vh; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0; font-size: 24px; color: #0f172a;">Select From Existing Learning Outcomes</h2>
+                    <button id="close-existing-modal-btn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">&times;</button>
+                </div>
+                <div id="existing-outcomes-loading" style="text-align: center; padding: 40px; color: #64748b;">
+                    Loading...
+                </div>
+                <div id="existing-outcomes-list" style="display: none; max-height: 60vh; overflow-y: auto;">
+                </div>
+                <div id="existing-outcomes-error" style="display: none; padding: 16px; background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 8px; margin-top: 16px;">
+                </div>
+            </div>
+            `;
+            document.body.appendChild(existingModal);
+
+            const closeModalBtn = existingModal.querySelector('#close-existing-modal-btn');
+            closeModalBtn.addEventListener('click', function() {
+                existingModal.style.display = 'none';
+            });
+
+            existingModal.addEventListener('click', function(e) {
+                if (e.target === existingModal) {
+                    existingModal.style.display = 'none';
+                }
+            });
+
+            selectExistingBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Select existing button clicked');
+                const loadingDiv = existingModal.querySelector('#existing-outcomes-loading');
+                const listDiv = existingModal.querySelector('#existing-outcomes-list');
+                const errorDiv = existingModal.querySelector('#existing-outcomes-error');
+                
+                existingModal.style.display = 'flex';
+                loadingDiv.style.display = 'block';
+                listDiv.style.display = 'none';
+                errorDiv.style.display = 'none';
+                listDiv.innerHTML = '';
+
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                const csrfValue = csrfToken ? csrfToken.value : '';
+
+                const currentCourseName = "{{ course_name }}";
+                console.log('Current course name:', currentCourseName);
+                let url = "{% url 'faculty_head_get_existing_learning_outcomes' %}";
+                if (currentCourseName && currentCourseName.trim()) {
+                    url += "?exclude_course=" + encodeURIComponent(currentCourseName.trim());
+                }
+                console.log('Fetching from URL:', url);
+                
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': csrfValue,
+                    },
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingDiv.style.display = 'none';
+                    
+                    if (data.error) {
+                        errorDiv.textContent = data.error;
+                        errorDiv.style.display = 'block';
+                        return;
+                    }
+
+                    if (!data.learning_outcomes || data.learning_outcomes.length === 0) {
+                        errorDiv.textContent = 'No learning outcomes found.';
+                        errorDiv.style.display = 'block';
+                        return;
+                    }
+
+                    // Display learning outcomes
+                    listDiv.style.display = 'block';
+                    data.learning_outcomes.forEach(function(outcome) {
+                        const outcomeItem = document.createElement('div');
+                        outcomeItem.style.cssText = 'padding: 16px; margin-bottom: 12px; border: 2px solid #e2e8f0; border-radius: 8px; background: #ffffff; cursor: pointer; transition: all 0.2s;';
+                        outcomeItem.innerHTML = `
+                            <div style="margin-bottom: 8px;">
+                                <p style="margin: 0 0 8px 0; font-size: 16px; color: #0f172a; font-weight: 500; line-height: 1.5;">${escapeHtml(outcome.text)}</p>
+                                <div style="display: flex; gap: 16px; font-size: 13px; color: #64748b;">
+                                    <span><strong>Course:</strong> ${escapeHtml(outcome.course_name)}</span>
+                                    <span><strong>Created by:</strong> ${escapeHtml(outcome.created_by)}</span>
+                                </div>
+                            </div>
+                        `;
+                        outcomeItem.addEventListener('mouseenter', function() {
+                            this.style.borderColor = '#3b82f6';
+                            this.style.boxShadow = '0 2px 8px rgba(59,130,246,0.15)';
+                        });
+                        outcomeItem.addEventListener('mouseleave', function() {
+                            this.style.borderColor = '#e2e8f0';
+                            this.style.boxShadow = 'none';
+                        });
+                        outcomeItem.addEventListener('click', function() {
+                            // Populate the form with selected learning outcome
+                            const outcomeTextArea = document.getElementById('outcome-text');
+                            if (outcomeTextArea) {
+                                outcomeTextArea.value = outcome.text;
+                            }
+                            // Show the create form if hidden
+                            if (createFormContainer) {
+                                createFormContainer.style.display = 'block';
+                            }
+                            // Close modal
+                            existingModal.style.display = 'none';
+                            // Focus on textarea
+                            if (outcomeTextArea) {
+                                outcomeTextArea.focus();
+                            }
+                        });
+                        listDiv.appendChild(outcomeItem);
+                    });
+                })
+                .catch(error => {
+                    loadingDiv.style.display = 'none';
+                    errorDiv.textContent = 'Error loading learning outcomes: ' + error.message;
+                    errorDiv.style.display = 'block';
+                });
+            });
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
         if (cancelFormBtn && createFormContainer) {
             cancelFormBtn.addEventListener('click', function() {
                 createFormContainer.style.display = 'none';
@@ -180,18 +477,231 @@
         
         updateSaveButtonState();
         
+        const validationModal = document.createElement('div');
+        validationModal.id = 'validation-modal';
+        validationModal.style.position = 'fixed';
+        validationModal.style.inset = '0';
+        validationModal.style.background = 'rgba(15,23,42,0.45)';
+        validationModal.style.display = 'none';
+        validationModal.style.alignItems = 'center';
+        validationModal.style.justifyContent = 'center';
+        validationModal.style.zIndex = '2000';
+        validationModal.innerHTML = `
+            <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
+                <p id="validation-message" style="margin: 0 0 20px 0; font-size: 16px; color: #111827;"></p>
+                <button id="validation-ok-btn" style="padding: 10px 20px; background: #3b82f6; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    OK
+                </button>
+            </div>
+        `;
+        document.body.appendChild(validationModal);
+        
+        const validationOkBtn = validationModal.querySelector('#validation-ok-btn');
+        validationOkBtn.addEventListener('click', function() {
+            validationModal.style.display = 'none';
+        });
+        
+        function showValidationModal(message) {
+            const messageEl = validationModal.querySelector('#validation-message');
+            messageEl.textContent = message;
+            validationModal.style.display = 'flex';
+        }
+        
         if (createForm) {
             createForm.addEventListener('submit', function(e) {
                 const hasProgramOutcomes = document.querySelectorAll('.program-outcome-checkbox').length > 0;
                 const hasSelectedProgramOutcome = document.querySelectorAll('.program-outcome-checkbox:checked').length > 0;
                 
-                if (hasProgramOutcomes && !hasSelectedProgramOutcome) {
-                    e.preventDefault();
-                    alert('Please select at least one program outcome before saving.');
-                    return false;
+                if (hasProgramOutcomes && hasSelectedProgramOutcome) {
+                    const checkedBoxes = document.querySelectorAll('.program-outcome-checkbox:checked');
+                    for (let checkbox of checkedBoxes) {
+                        const poId = checkbox.dataset.poId;
+                        const percentageInput = document.querySelector(`input[name="po_percentage_${poId}"]`);
+                        if (!percentageInput || !percentageInput.value || percentageInput.value.trim() === '') {
+                            e.preventDefault();
+                            showValidationModal('You have to enter a percentage on how much the learning outcome affects the program outcome(s).');
+                            if (percentageInput) {
+                                percentageInput.focus();
+                            }
+                            return false;
+                        }
+                        const value = parseInt(percentageInput.value);
+                        if (isNaN(value) || value < 0) {
+                            e.preventDefault();
+                            showValidationModal('Percentage must be between 0 and 100.');
+                            percentageInput.focus();
+                            return false;
+                        }
+                        if (value > 100) {
+                            e.preventDefault();
+                            showValidationModal('Percentage cannot exceed 100. Please enter a value between 0 and 100.');
+                            percentageInput.focus();
+                            return false;
+                        }
+                    }
                 }
+            });
+
+            const updateUrlBase = "{% url 'faculty_head_update_learning_outcome' outcome_id=0 %}";
+            const deleteUrlBase = "{% url 'faculty_head_delete_learning_outcome' outcome_id=0 %}";
+
+            document.querySelectorAll('.edit-outcome-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const outcomeId = this.dataset.outcomeId;
+                    const outcomeText = this.dataset.outcomeText;
+                    const listItem = this.closest('li');
+                    const textParagraph = listItem.querySelector('p[id^="outcome-text-"]');
+
+                    if (!listItem || !textParagraph) return;
+
+                    if (listItem.dataset.editing === 'true') {
+                        return;
+                    }
+                    listItem.dataset.editing = 'true';
+
+                    textParagraph.style.display = 'none';
+
+                    const editorContainer = document.createElement('div');
+                    editorContainer.style.marginTop = '8px';
+                    editorContainer.style.width = '100%';
+
+                    const textarea = document.createElement('textarea');
+                    textarea.value = outcomeText;
+                    textarea.rows = 3;
+                    textarea.style.width = '100%';
+                    textarea.style.padding = '12px';
+                    textarea.style.borderRadius = '8px';
+                    textarea.style.border = '1px solid #cbd5e1';
+                    textarea.style.background = '#f8fafc';
+                    textarea.style.fontFamily = 'inherit';
+                    textarea.style.boxSizing = 'border-box';
+
+                    const buttonsRow = document.createElement('div');
+                    buttonsRow.style.display = 'flex';
+                    buttonsRow.style.gap = '8px';
+                    buttonsRow.style.marginTop = '8px';
+
+                    const saveBtn = document.createElement('button');
+                    saveBtn.type = 'button';
+                    saveBtn.textContent = 'Save';
+                    saveBtn.style.padding = '8px 16px';
+                    saveBtn.style.background = '#3b82f6';
+                    saveBtn.style.color = '#ffffff';
+                    saveBtn.style.border = 'none';
+                    saveBtn.style.borderRadius = '6px';
+                    saveBtn.style.cursor = 'pointer';
+                    saveBtn.style.fontSize = '14px';
+
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.type = 'button';
+                    cancelBtn.textContent = 'Cancel';
+                    cancelBtn.style.padding = '8px 16px';
+                    cancelBtn.style.background = '#6b7280';
+                    cancelBtn.style.color = '#ffffff';
+                    cancelBtn.style.border = 'none';
+                    cancelBtn.style.borderRadius = '6px';
+                    cancelBtn.style.cursor = 'pointer';
+                    cancelBtn.style.fontSize = '14px';
+
+                    buttonsRow.appendChild(saveBtn);
+                    buttonsRow.appendChild(cancelBtn);
+                    editorContainer.appendChild(textarea);
+                    editorContainer.appendChild(buttonsRow);
+
+                    textParagraph.parentNode.insertBefore(editorContainer, textParagraph.nextSibling);
+                    textarea.focus();
+
+                    cancelBtn.addEventListener('click', function() {
+                        listItem.dataset.editing = 'false';
+                        editorContainer.remove();
+                        textParagraph.style.display = '';
+                    });
+
+                    saveBtn.addEventListener('click', function() {
+                        const newText = textarea.value.trim();
+                        if (!newText || newText === outcomeText) {
+                            cancelBtn.click();
+                            return;
+                        }
+
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = updateUrlBase.replace('0', outcomeId);
+                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                        form.innerHTML = `
+                            <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                            <input type="hidden" name="text" value="${newText}">
+                        `;
+                        document.body.appendChild(form);
+                        form.submit();
+                    });
+                });
+            });
+
+            const modal = document.createElement('div');
+            modal.id = 'delete-confirm-modal';
+            modal.style.position = 'fixed';
+            modal.style.inset = '0';
+            modal.style.background = 'rgba(15,23,42,0.45)';
+            modal.style.display = 'none';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.zIndex = '1000';
+
+            modal.innerHTML = `
+                <div style="background: #ffffff; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 40px rgba(15,23,42,0.25);">
+                    <p style="margin: 0 0 16px 0; font-size: 16px; color: #111827;">
+                        Do you want to delete this learning outcome?
+                    </p>
+                    <div style="display: flex; justify-content: center; gap: 12px; margin-top: 8px;">
+                        <button id="confirm-delete-btn" style="padding: 10px 20px; background: #ef4444; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            Delete
+                        </button>
+                        <button id="cancel-delete-btn" style="padding: 10px 20px; background: #6b7280; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            let pendingDeleteId = null;
+
+            const confirmDeleteBtn = modal.querySelector('#confirm-delete-btn');
+            const cancelDeleteBtn = modal.querySelector('#cancel-delete-btn');
+
+            cancelDeleteBtn.addEventListener('click', function() {
+                pendingDeleteId = null;
+                modal.style.display = 'none';
+            });
+
+            confirmDeleteBtn.addEventListener('click', function() {
+                if (!pendingDeleteId) {
+                    modal.style.display = 'none';
+                    return;
+                }
+                const outcomeId = pendingDeleteId;
+                pendingDeleteId = null;
+                modal.style.display = 'none';
+
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = deleteUrlBase.replace('0', outcomeId);
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                form.innerHTML = `
+                    <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                `;
+                document.body.appendChild(form);
+                form.submit();
+            });
+
+            document.querySelectorAll('.delete-outcome-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    pendingDeleteId = this.dataset.outcomeId;
+                    modal.style.display = 'flex';
+                });
             });
         }
     })();
-</script>
+    </script>
 {% endblock %}
