@@ -3832,8 +3832,12 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
             })
     
     from .models import AssessmentLORelation
+    all_lo_instances = ProgramOutcome.objects.filter(
+        text=outcome.text.strip()
+    ).values_list('id', flat=True)
+    
     assessment_relations = AssessmentLORelation.objects.filter(
-        learning_outcome=outcome
+        learning_outcome_id__in=all_lo_instances
     ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
     
     assessments_data = []
@@ -3846,16 +3850,29 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
         'quiz': 'Quiz'
     }
     
+    seen_assessments = set()
     for rel in assessment_relations:
         assessment = rel.assessment
         course_obj = assessment.course
         assessment_type_key = rel.assessment_type
         assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
         
+        # Create display name with index if needed
+        if rel.assessment_index > 1:
+            display_name = f"{assessment_type_label} {rel.assessment_index}"
+        else:
+            display_name = assessment_type_label
+        
+        # Avoid duplicates (same assessment linked to multiple LO instances)
+        assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
+        if assessment_key in seen_assessments:
+            continue
+        seen_assessments.add(assessment_key)
+        
         assessments_data.append({
             'id': assessment.id,
             'course_name': course_obj.name,
-            'assessment_type': assessment_type_label,
+            'assessment_type': display_name,
             'assessment_type_key': assessment_type_key,
             'contribution_percentage': rel.contribution_percentage,
             'relation_id': rel.id,
@@ -3910,8 +3927,14 @@ def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
         })
     
     from .models import AssessmentLORelation
+    # Get all ProgramOutcome instances with the same text (same LO in different courses)
+    all_lo_instances = ProgramOutcome.objects.filter(
+        text=outcome.text.strip()
+    ).values_list('id', flat=True)
+    
+    # Get all assessment relations for all instances of this learning outcome
     assessment_relations = AssessmentLORelation.objects.filter(
-        learning_outcome=outcome
+        learning_outcome_id__in=all_lo_instances
     ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
     
     assessments_data = []
@@ -3924,16 +3947,29 @@ def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
         'quiz': 'Quiz'
     }
     
+    seen_assessments = set()
     for rel in assessment_relations:
         assessment = rel.assessment
         course_obj = assessment.course
         assessment_type_key = rel.assessment_type
         assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
         
+        # Create display name with index if needed
+        if rel.assessment_index > 1:
+            display_name = f"{assessment_type_label} {rel.assessment_index}"
+        else:
+            display_name = assessment_type_label
+        
+        # Avoid duplicates (same assessment linked to multiple LO instances)
+        assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
+        if assessment_key in seen_assessments:
+            continue
+        seen_assessments.add(assessment_key)
+        
         assessments_data.append({
             'id': assessment.id,
             'course_name': course_obj.name,
-            'assessment_type': assessment_type_label,
+            'assessment_type': display_name,
             'assessment_type_key': assessment_type_key,
             'contribution_percentage': rel.contribution_percentage,
             'relation_id': rel.id,
@@ -4735,8 +4771,14 @@ def learning_outcome_detail(request, course_id, outcome_id):
     program_outcomes_data, available_program_outcomes = build_program_outcomes_with_percentages(outcome, faculty)
     
     from .models import AssessmentLORelation
+    # Get all ProgramOutcome instances with the same text (same LO in different courses)
+    all_lo_instances = ProgramOutcome.objects.filter(
+        text=outcome.text.strip()
+    ).values_list('id', flat=True)
+    
+    # Get all assessment relations for all instances of this learning outcome
     assessment_relations = AssessmentLORelation.objects.filter(
-        learning_outcome=outcome
+        learning_outcome_id__in=all_lo_instances
     ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
     
     assessments_data = []
@@ -4749,16 +4791,29 @@ def learning_outcome_detail(request, course_id, outcome_id):
         'quiz': 'Quiz'
     }
     
+    seen_assessments = set()
     for rel in assessment_relations:
         assessment = rel.assessment
         course_obj = assessment.course
         assessment_type_key = rel.assessment_type
         assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
         
+        # Create display name with index if needed
+        if rel.assessment_index > 1:
+            display_name = f"{assessment_type_label} {rel.assessment_index}"
+        else:
+            display_name = assessment_type_label
+        
+        # Avoid duplicates (same assessment linked to multiple LO instances)
+        assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
+        if assessment_key in seen_assessments:
+            continue
+        seen_assessments.add(assessment_key)
+        
         assessments_data.append({
             'id': assessment.id,
             'course_name': course_obj.name,
-            'assessment_type': assessment_type_label,
+            'assessment_type': display_name,
             'assessment_type_key': assessment_type_key,
             'contribution_percentage': rel.contribution_percentage,
             'relation_id': rel.id,
@@ -4792,8 +4847,14 @@ def learning_outcome_graph(request, course_id, outcome_id):
     program_outcomes_data, _ = build_program_outcomes_with_percentages(outcome, faculty)
     
     from .models import AssessmentLORelation
+    # Get all ProgramOutcome instances with the same text (same LO in different courses)
+    all_lo_instances = ProgramOutcome.objects.filter(
+        text=outcome.text.strip()
+    ).values_list('id', flat=True)
+    
+    # Get all assessment relations for all instances of this learning outcome
     assessment_relations = AssessmentLORelation.objects.filter(
-        learning_outcome=outcome
+        learning_outcome_id__in=all_lo_instances
     ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
     
     assessments_data = []
@@ -4806,24 +4867,34 @@ def learning_outcome_graph(request, course_id, outcome_id):
         'quiz': 'Quiz'
     }
     
+    seen_assessments = set()
     for rel in assessment_relations:
         assessment = rel.assessment
         course_obj = assessment.course
-        assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
+        assessment_type_key = rel.assessment_type
+        assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
         
-        # For each assessment type with count > 0, create a separate entry
-        for atype in assessment_types:
-            count = getattr(assessment, atype, 0)
-            if count > 0:
-                assessments_data.append({
-                    'id': assessment.id,
-                    'course_name': course_obj.name,
-                    'assessment_type': assessment_type_labels[atype],
-                    'display_name': f"{course_obj.name} - {assessment_type_labels[atype]}",
-                    'contribution_percentage': rel.contribution_percentage,
-                    'relation_id': rel.id,
-                })
-                break  # Only show first available type per assessment relation
+        # Create display name with index if needed
+        if rel.assessment_index > 1:
+            display_name = f"{assessment_type_label} {rel.assessment_index}"
+        else:
+            display_name = assessment_type_label
+        
+        # Avoid duplicates (same assessment linked to multiple LO instances)
+        assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
+        if assessment_key in seen_assessments:
+            continue
+        seen_assessments.add(assessment_key)
+        
+        assessments_data.append({
+            'id': assessment.id,
+            'course_name': course_obj.name,
+            'assessment_type': display_name,
+            'display_name': f"{course_obj.name} - {display_name}",
+            'assessment_type_key': assessment_type_key,
+            'contribution_percentage': rel.contribution_percentage,
+            'relation_id': rel.id,
+        })
     
     course_name_slug = generate_course_slug(outcome.course_name)
     
@@ -6451,6 +6522,276 @@ def student_learning_outcome_detail(request, course_id, outcome_id):
         }
     )
 
+def student_my_progress(request):
+    """Show student's progress across all courses with 3-column graph"""
+    if not request.user.is_authenticated:
+        return redirect('student-login')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+        courses = student.courses.all().order_by('name')
+        
+        from .models import Assessment, AssessmentLORelation, Grade, ProgramOutcome, LearningOutcomeProgramOutcome
+        from django.db.models import Q
+        import json
+        
+        assessments_list = []
+        learning_outcomes_list = []
+        program_outcomes_list = []
+        
+        assessment_type_labels = {
+            'midterm': 'Midterm',
+            'final': 'Final',
+            'project': 'Project',
+            'assignment': 'Assignment',
+            'absence': 'Absence',
+            'quiz': 'Quiz'
+        }
+        
+        all_assessment_relations = {}
+        all_lo_scores = {}
+        all_po_scores = {}
+        
+        for course in courses:
+            try:
+                grade = Grade.objects.get(student=student, course=course)
+            except Grade.DoesNotExist:
+                grade = None
+            
+            try:
+                assessment = Assessment.objects.get(course=course)
+            except Assessment.DoesNotExist:
+                assessment = None
+            
+            if assessment and grade:
+                assessment_types = ['midterm', 'final', 'project', 'assignment', 'absence', 'quiz']
+                for assessment_type in assessment_types:
+                    assessment_count = getattr(assessment, assessment_type, 0)
+                    if assessment_count > 0:
+                        for i in range(1, assessment_count + 1):
+                            assessment_key = f"{assessment_type}_{i}"
+                            score = grade.get_individual_score(assessment_key)
+                            if score is not None:
+                                display_name = f"{assessment_type_labels[assessment_type]} {i}" if assessment_count > 1 else assessment_type_labels[assessment_type]
+                                
+                                assessment_id = f"{course.id}_{assessment_type}_{i}"
+                                assessments_list.append({
+                                    'id': assessment_id,
+                                    'course_name': course.name,
+                                    'assessment_type': display_name,
+                                    'assessment_type_key': assessment_type,
+                                    'assessment_index': i,
+                                    'score': round(score, 2),
+                                    'course_id': course.id
+                                })
+                                
+                                all_assessment_relations[assessment_id] = []
+        
+        course_names = [course.name for course in courses]
+        if course_names:
+            learning_outcomes_qs = ProgramOutcome.objects.filter(
+                course_name__in=course_names
+            ).exclude(course_name='').select_related('created_by').prefetch_related('related_program_outcomes').order_by('text', 'course_name')
+            
+            lo_groups = {}
+            for lo in learning_outcomes_qs:
+                lo_text = lo.text.strip()
+                if lo_text not in lo_groups:
+                    lo_groups[lo_text] = {
+                        'ids': [],
+                        'courses': [],
+                        'linked_pos_dict': {},
+                        'linked_assessments': []
+                    }
+                
+                lo_groups[lo_text]['ids'].append(lo.id)
+                if lo.course_name and lo.course_name not in lo_groups[lo_text]['courses']:
+                    lo_groups[lo_text]['courses'].append(lo.course_name)
+                
+                related_pos = lo.related_program_outcomes.all()
+                for po in related_pos:
+                    try:
+                        lo_po = LearningOutcomeProgramOutcome.objects.get(learning_outcome=lo, program_outcome=po)
+                        percentage = lo_po.percentage
+                    except LearningOutcomeProgramOutcome.DoesNotExist:
+                        percentage = 0
+                    
+                    if po.id not in lo_groups[lo_text]['linked_pos_dict']:
+                        lo_groups[lo_text]['linked_pos_dict'][po.id] = {
+                            'id': po.id,
+                            'text': po.text,
+                            'percentage': percentage
+                        }
+                    else:
+                        lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'] = max(
+                            lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'],
+                            percentage
+                        )
+                
+                assessment_relations = AssessmentLORelation.objects.filter(
+                    learning_outcome=lo
+                ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
+                
+                for rel in assessment_relations:
+                    assessment = rel.assessment
+                    course_obj = assessment.course
+                    assessment_type_key = rel.assessment_type
+                    assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
+                    
+                    if rel.assessment_index > 1:
+                        display_name = f"{assessment_type_label} {rel.assessment_index}"
+                    else:
+                        display_name = assessment_type_label
+                    
+                    assessment_id = f"{course_obj.id}_{assessment_type_key}_{rel.assessment_index}"
+                    lo_groups[lo_text]['linked_assessments'].append({
+                        'id': assessment_id,
+                        'course_name': course_obj.name,
+                        'assessment_type': display_name,
+                        'assessment_type_key': assessment_type_key,
+                        'assessment_index': rel.assessment_index,
+                        'contribution_percentage': rel.contribution_percentage,
+                        'relation_id': rel.id
+                    })
+                    
+                    if assessment_id in all_assessment_relations:
+                        all_assessment_relations[assessment_id].append({
+                            'lo_id': lo_groups[lo_text]['ids'][0],
+                            'lo_text': lo_text,
+                            'contribution_percentage': rel.contribution_percentage
+                        })
+            
+            for lo_text, group_data in lo_groups.items():
+                sorted_courses = sorted(group_data['courses'])
+                course_display = " - ".join(sorted_courses)
+                
+                linked_pos_list = list(group_data['linked_pos_dict'].values())
+                
+                lo_score = None
+                total_weighted_score = 0.0
+                total_contribution = 0
+                
+                for assessment_link in group_data['linked_assessments']:
+                    assessment_id = assessment_link['id']
+                    for assessment_data in assessments_list:
+                        if assessment_data['id'] == assessment_id:
+                            contribution = assessment_link['contribution_percentage']
+                            if contribution > 0:
+                                total_weighted_score += assessment_data['score'] * contribution
+                                total_contribution += contribution
+                            break
+                
+                if total_contribution > 0:
+                    lo_score = round(total_weighted_score / total_contribution, 2)
+                
+                all_lo_scores[group_data['ids'][0]] = lo_score
+                
+                learning_outcomes_list.append({
+                    'id': group_data['ids'][0],
+                    'ids': group_data['ids'],
+                    'text': lo_text,
+                    'course': course_display,
+                    'courses': sorted_courses,
+                    'linked_pos': linked_pos_list,
+                    'linked_assessments': group_data['linked_assessments'],
+                    'score': lo_score
+                })
+            
+            faculty = None
+            from .models import Faculty
+            
+            if student.department:
+                try:
+                    faculty = Faculty.objects.get(name=student.department)
+                except Faculty.DoesNotExist:
+                    pass
+            
+            if not faculty and courses.exists():
+                course_departments = courses.values_list('department', flat=True).distinct()
+                for dept in course_departments:
+                    if dept:
+                        try:
+                            faculty = Faculty.objects.get(name=dept)
+                            break
+                        except Faculty.DoesNotExist:
+                            continue
+            
+            if faculty:
+                program_outcomes_qs = ProgramOutcome.objects.filter(
+                    faculty=faculty,
+                    course_name=''
+                ).select_related('created_by').order_by('created_at')
+                
+                for po in program_outcomes_qs:
+                    po_score = None
+                    total_weighted_score = 0.0
+                    total_percentage = 0
+                    
+                    for lo_data in learning_outcomes_list:
+                        for linked_po in lo_data['linked_pos']:
+                            if linked_po['id'] == po.id:
+                                lo_score = all_lo_scores.get(lo_data['id'])
+                                if lo_score is not None:
+                                    percentage = linked_po['percentage']
+                                    if percentage > 0:
+                                        total_weighted_score += lo_score * percentage
+                                        total_percentage += percentage
+                                break
+                    
+                    if total_percentage > 0:
+                        po_score = round(total_weighted_score / total_percentage, 2)
+                    
+                    all_po_scores[po.id] = po_score
+                    
+                    program_outcomes_list.append({
+                        'id': po.id,
+                        'text': po.text,
+                        'score': po_score
+                    })
+            else:
+                program_outcomes_qs = ProgramOutcome.objects.filter(
+                    course_name=''
+                ).select_related('created_by').order_by('created_at')
+                
+                for po in program_outcomes_qs:
+                    po_score = None
+                    total_weighted_score = 0.0
+                    total_percentage = 0
+                    
+                    for lo_data in learning_outcomes_list:
+                        for linked_po in lo_data['linked_pos']:
+                            if linked_po['id'] == po.id:
+                                lo_score = all_lo_scores.get(lo_data['id'])
+                                if lo_score is not None:
+                                    percentage = linked_po['percentage']
+                                    if percentage > 0:
+                                        total_weighted_score += lo_score * percentage
+                                        total_percentage += percentage
+                                break
+                    
+                    if total_percentage > 0:
+                        po_score = round(total_weighted_score / total_percentage, 2)
+                    
+                    all_po_scores[po.id] = po_score
+                    
+                    program_outcomes_list.append({
+                        'id': po.id,
+                        'text': po.text,
+                        'score': po_score
+                    })
+        
+        learning_outcomes_json = json.dumps(learning_outcomes_list)
+        
+        return render(request, 'student/my_progress.html', {
+            'assessments': assessments_list,
+            'learning_outcomes': learning_outcomes_list,
+            'learning_outcomes_json': learning_outcomes_json,
+            'program_outcomes': program_outcomes_list,
+        })
+        
+    except Student.DoesNotExist:
+        return redirect('student-login')
+
 def student_learning_outcome_graph(request, course_id, outcome_id):
     """Show graph view for learning outcome (read-only for students)"""
     if not request.user.is_authenticated:
@@ -6961,8 +7302,10 @@ def faculty_head_department_graph(request):
         
         # Group learning outcomes by text (same LO in different courses)
         lo_groups = {}
+        lo_dict = {}  
         for lo in learning_outcomes_qs:
             lo_text = lo.text.strip()
+            lo_dict[lo.id] = lo
             if lo_text not in lo_groups:
                 lo_groups[lo_text] = {
                     'ids': [],
@@ -6974,6 +7317,36 @@ def faculty_head_department_graph(request):
             lo_groups[lo_text]['ids'].append(lo.id)
             if lo.course_name and lo.course_name not in lo_groups[lo_text]['courses']:
                 lo_groups[lo_text]['courses'].append(lo.course_name)
+        
+        for lo_text, group_data in lo_groups.items():
+            for lo_id in group_data['ids']:
+                if lo_id not in lo_dict:
+                    continue
+                lo = lo_dict[lo_id]
+                
+                related_pos = lo.related_program_outcomes.all()
+                for po in related_pos:
+                    try:
+                        lo_po = LearningOutcomeProgramOutcome.objects.get(
+                            learning_outcome=lo,
+                            program_outcome=po
+                        )
+                        percentage = lo_po.percentage
+                    except LearningOutcomeProgramOutcome.DoesNotExist:
+                        percentage = 0
+                    
+                    if po.id not in group_data['linked_pos_dict']:
+                        group_data['linked_pos_dict'][po.id] = {
+                            'id': po.id,
+                            'text': po.text,
+                            'percentage': percentage
+                        }
+                    else:
+                        existing_percentage = group_data['linked_pos_dict'][po.id]['percentage']
+                        group_data['linked_pos_dict'][po.id]['percentage'] = max(
+                            existing_percentage,
+                            percentage
+                        )
         
         all_lo_ids = [lo_id for group in lo_groups.values() for lo_id in group['ids']]
         assessment_relations_for_all_los = AssessmentLORelation.objects.filter(
@@ -6987,36 +7360,16 @@ def faculty_head_department_graph(request):
             if lo_text in lo_groups and assessment_course in course_names:
                 if assessment_course not in lo_groups[lo_text]['courses']:
                     lo_groups[lo_text]['courses'].append(assessment_course)
-            
-            related_pos = lo.related_program_outcomes.all()
-            for po in related_pos:
-                try:
-                    lo_po = LearningOutcomeProgramOutcome.objects.get(
-                        learning_outcome=lo,
-                        program_outcome=po
-                    )
-                    percentage = lo_po.percentage
-                except LearningOutcomeProgramOutcome.DoesNotExist:
-                    percentage = 0
+        
+        for lo_text, group_data in lo_groups.items():
+            for lo_id in group_data['ids']:
+                if lo_id not in lo_dict:
+                    continue
+                lo = lo_dict[lo_id]
                 
-                # Use maximum percentage if same PO is linked with different percentages
-                if po.id not in lo_groups[lo_text]['linked_pos_dict']:
-                    lo_groups[lo_text]['linked_pos_dict'][po.id] = {
-                        'id': po.id,
-                        'text': po.text,
-                        'percentage': percentage
-                    }
-                else:
-                    # Keep maximum percentage
-                    lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'] = max(
-                        lo_groups[lo_text]['linked_pos_dict'][po.id]['percentage'],
-                        percentage
-                    )
-            
-            # Get linked assessments (merge from all instances)
-            assessment_relations = AssessmentLORelation.objects.filter(
-                learning_outcome=lo
-            ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
+                assessment_relations = AssessmentLORelation.objects.filter(
+                    learning_outcome=lo
+                ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
             
             for rel in assessment_relations:
                 assessment = rel.assessment

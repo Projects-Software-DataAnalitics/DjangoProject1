@@ -36,6 +36,7 @@ urlpatterns = [
     path('student/courses/<int:course_id>/learning-outcomes/<int:outcome_id>/', core_views.student_learning_outcome_detail, name='student_learning_outcome_detail'),
     path('student/courses/<int:course_id>/learning-outcomes/<int:outcome_id>/graph/', core_views.student_learning_outcome_graph, name='student_learning_outcome_graph'),
     path('student/grades/', core_views.student_grades, name='student_grades'),
+    path('student/my-progress/', core_views.student_my_progress, name='student_my_progress'),
     path('student/announcements/', core_views.student_announcements, name='student_announcements'),
     path('student/announcements/<int:announcement_id>/mark-read/', core_views.mark_announcement_as_read, name='mark_announcement_read'),
     path('student/announcements/<int:announcement_id>/toggle-pin/', core_views.toggle_announcement_pin, name='toggle_announcement_pin'),
