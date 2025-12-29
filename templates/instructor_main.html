@@ -143,6 +143,54 @@
             </div>
             {% endif %}
         </div>
+<<<<<<< HEAD
+=======
+        
+        <div style="grid-column: span 2; grid-row: span 1; background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); min-height: 140px; display: flex; flex-direction: column;">
+            <h2 style="margin: 0 0 12px 0; font-size: 16px; color: #0f172a; font-weight: 700; border-bottom: 2px solid #ef4444; padding-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <span style="width: 3px; height: 16px; background: #ef4444; border-radius: 2px;"></span>
+                Upcoming Deadlines
+            </h2>
+            {% if upcoming_assignments %}
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 280px;">
+                {% for assignment in upcoming_assignments %}
+                <a href="{% url 'instructor_assignments' %}" style="text-decoration: none; color: inherit;">
+                    <div class="deadline-item" style="padding: 12px; background: {% if assignment.is_urgent %}#fef2f2{% else %}#f8fafc{% endif %}; border-radius: 8px; border-left: 3px solid {% if assignment.is_urgent %}#ef4444{% else %}#f59e0b{% endif %}; cursor: pointer; transition: all 0.2s;" 
+                         onmouseover="this.style.background='{% if assignment.is_urgent %}#fee2e2{% else %}#f1f5f9{% endif %}'; this.style.transform='translateX(4px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';"
+                         onmouseout="this.style.background='{% if assignment.is_urgent %}#fef2f2{% else %}#f8fafc{% endif %}'; this.style.transform='translateX(0)'; this.style.boxShadow='none';">
+                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 10px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #0f172a; margin-bottom: 3px; font-size: 13px;">{{ assignment.title }}</div>
+                                <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">{{ assignment.course_name }}</div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 11px; color: {% if assignment.is_urgent %}#ef4444{% else %}#f59e0b{% endif %}; font-weight: 600;">
+                                        Deadline: {{ assignment.deadline }}
+                                    </span>
+                                    {% if assignment.days_until < 0 %}
+                                    <span style="font-size: 10px; color: #94a3b8; font-weight: 500; background: #f1f5f9; padding: 2px 5px; border-radius: 3px;">Past deadline</span>
+                                    {% elif assignment.days_until == 0 %}
+                                    <span style="font-size: 10px; color: #ef4444; font-weight: 600; background: #fee2e2; padding: 2px 5px; border-radius: 3px;">Today!</span>
+                                    {% elif assignment.days_until == 1 %}
+                                    <span style="font-size: 10px; color: #ef4444; font-weight: 600; background: #fee2e2; padding: 2px 5px; border-radius: 3px;">Tomorrow</span>
+                                    {% elif assignment.days_until <= 3 %}
+                                    <span style="font-size: 10px; color: #f59e0b; font-weight: 600; background: #fef3c7; padding: 2px 5px; border-radius: 3px;">{{ assignment.days_until }} days left</span>
+                                    {% else %}
+                                    <span style="font-size: 10px; color: #64748b; font-weight: 500;">{{ assignment.days_until }} days left</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="flex: 1; color: #64748b; display: flex; align-items: center; justify-content: center;">
+                <p style="margin: 0; font-size: 12px;">No upcoming deadlines</p>
+            </div>
+            {% endif %}
+        </div>
+>>>>>>> 3ef4f0afb5aa9924694029ce5aa338f4481766d9
     </div>
 </div>
 

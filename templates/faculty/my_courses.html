@@ -54,6 +54,46 @@
         </tbody>
     </table>
 
+    <!-- Course Schedule Table -->
+    <div style="margin-top: 40px;">
+        <h2 style="font-size: 24px; color: #0f172a; margin-bottom: 20px;">Course Schedule</h2>
+        <table class="schedule-table" style="width: 100%; border-collapse: collapse; margin-top: 20px; background: #ffffff;">
+            <thead>
+                <tr style="background-color: #0b5fff; color: white;">
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 100px;">Time / Day</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Monday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Tuesday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Wednesday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Thursday</th>
+                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd; min-width: 150px;">Friday</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for time_slot in time_slots %}
+                <tr>
+                    <td style="padding: 12px; text-align: center; border: 1px solid #ddd; font-weight: 600; background: #f8fafc;">{{ time_slot }}</td>
+                    {% for day in days %}
+                    <td style="padding: 8px; text-align: center; border: 1px solid #ddd; vertical-align: top; min-height: 80px;">
+                        {% for course in courses %}
+                            {% if course.day and course.time and course.day == day and course.time == time_slot %}
+                            <div style="background: #e0f2fe; padding: 8px; border-radius: 6px; border-left: 4px solid #0b5fff; margin-bottom: 4px;">
+                                <div style="font-weight: 600; font-size: 13px; color: #0f172a; margin-bottom: 2px;">{{ course.name }}</div>
+                                {% if course.code %}
+                                <div style="font-size: 11px; color: #64748b; margin-bottom: 2px;">{{ course.code }}</div>
+                                {% endif %}
+                                {% if course.room %}
+                                <div style="font-size: 10px; color: #94a3b8;">{{ course.room }}</div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     <div id="add-assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
         <div style="background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
             <button id="close-assignment-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: #64748b; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
