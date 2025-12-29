@@ -130,6 +130,13 @@ class Assessment(models.Model):
     def save(self, *args, **kwargs):
         # assessment_count'u quiz dahil hesapla
         self.assessment_count = self.midterm + self.final + self.project + self.assignment + self.absence + self.quiz
+        
+        # Validate that percentages total to 100
+        total_percentage = (self.midterm_percentage + self.final_percentage + self.project_percentage + 
+                          self.assignment_percentage + self.absence_percentage + self.quiz_percentage)
+        if total_percentage != 100:
+            raise ValueError(f"Assessment percentages must total 100%, got {total_percentage}%")
+        
         super().save(*args, **kwargs)
     
     @property
@@ -519,6 +526,7 @@ class Announcement(models.Model):
     ROLE_CHOICES = [
         ('instructor', 'Instructor'),
         ('faculty_head', 'Faculty Head'),
+        ('student', 'Student'),
     ]
     
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_announcements')
@@ -561,7 +569,9 @@ class AssignmentSubmission(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ['assignment', 'student']
+        constraints = [
+            models.UniqueConstraint(fields=['assignment', 'student'], name='unique_assignment_student')
+        ]
         ordering = ['-submitted_at']
     
     def __str__(self):
