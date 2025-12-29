@@ -46,6 +46,9 @@
                             {{ po.text }}
                         </p>
                     </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 15px; font-weight: 600; color: #3b82f6; min-width: 45px; text-align: right;">{{ po.percentage }}%</span>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -53,6 +56,34 @@
             <div style="background: #f8fafc; padding: 32px; border-radius: 8px; text-align: center; border: 1px dashed #cbd5e1;">
                 <p style="margin: 0; font-size: 16px; color: #6b7280;">
                     This learning outcome is not linked to any program outcomes.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Assessment Methods -->
+        <div style="margin-top: 40px;">
+            <h2 style="font-size: 22px; color: #0f172a; margin-bottom: 24px;">Assessment Methods</h2>
+            
+            {% if assessments_data %}
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                {% for assessment in assessments_data %}
+                <div style="display: flex; align-items: center; gap: 12px; background: #ffffff; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="flex: 1;">
+                        <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.5;">
+                            <strong>{{ assessment.course_name }}</strong> - {{ assessment.assessment_type }}
+                        </p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 15px; font-weight: 600; color: #10b981; min-width: 45px; text-align: right;">{{ assessment.contribution_percentage }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="background: #f8fafc; padding: 32px; border-radius: 8px; text-align: center; border: 1px dashed #cbd5e1;">
+                <p style="margin: 0; font-size: 16px; color: #6b7280;">
+                    This learning outcome is not linked to any assessment methods.
                 </p>
             </div>
             {% endif %}

@@ -29,7 +29,6 @@ urlpatterns = [
     path('faculty-head-login/', core_views.faculty_head_login, name='faculty-head-login'),
     path('student/', core_views.student_dashboard, name='student'),
     path('student/profile/', core_views.student_profile, name='student_profile'),
-    path('student/advisor-info/', core_views.student_advisor_info, name='student_advisor_info'),
     path('student/courses/', core_views.student_courses, name='student_courses'),
     path('student/assignments/', core_views.student_assignments, name='student_assignments'),
     path('student/assignments/<int:assignment_id>/submit/', core_views.submit_assignment, name='submit_assignment'),
