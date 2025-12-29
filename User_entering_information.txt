@@ -9,56 +9,61 @@ for students, instructors, and faculty heads in the system.
                                 STUDENTS
 ================================================================================
 
-1. Name: Nehir Irem
-   Surname: Celik
-   Username: nehir.celik
-   Password: 12345
-
-2. Name: Mina
+1. Name: Mina
    Surname: Ozdamar
    Username: mina.ozdamar
    Password: abcde
+   Department: Computer Engineering
+   Year: 4
+
+2. Name: Nehir Irem
+   Surname: Celik
+   Username: nehir.celik
+   Password: 12345
+   Department: Computer Engineering
+   Year: 3
 
 3. Name: Pinar
    Surname: Cetin
    Username: pinar.cetin
    Password: 9876
+   Department: Computer Engineering
+   Year: 3
 
 4. Name: Perisa
    Surname: Çam
    Username: perisa.cam
    Password: cam123
+   Department: Electrical Engineering
+   Year: 3
 
 5. Name: Ross
    Surname: Lynch
    Username: ross.lynch
    Password: rosslynch
+   Department: Electrical Engineering
+   Year: 3
 
 ================================================================================
                               INSTRUCTORS
 ================================================================================
 
-1. Name: Dr. Emily
-   Surname: Smith
-   Username: emily.smith
-   Password: 5678
-
-2. Name: Prof. John
-   Surname: Doe
-   Username: john.doe
-   Password: 1234
-
-3. Name: Baris
+1. Name: Baris
    Surname: Arslan
    Username: baris.arslan
    Password: barisarslan
 
-4. Name: Cengiz
+2. Name: Cengiz
    Surname: Riva
    Username: cengiz.riva
    Password: cengizriva
 
-5. Name: Kadir
+3. Name: Dr. Emily
+   Surname: Smith
+   Username: emily.smith
+   Password: 5678
+
+4. Name: Kadir
    Surname: Uslu
    Username: kadir.uslu
    Password: kadiruslu
@@ -67,12 +72,18 @@ for students, instructors, and faculty heads in the system.
                             FACULTY HEADS
 ================================================================================
 
-1. Name: Prof. Dr. Ahmet
+1. Name: Ahmet
+   Surname: Aydın
+   Username: ahmet.aydin
+   Password: ahmet123
+   Department: Electrical Engineering
+
+2. Name: Prof. Dr. Ahmet
    Surname: Bulut
    Username: ahmet.bulut
    Password: head123
+   Department: Computer Engineering
 
 ================================================================================
                               END OF FILE
 ================================================================================
-
