@@ -24,8 +24,10 @@
             </div>
             <div style="margin-bottom: 16px;">
                 <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">Calendar File (PDF or CSV)</label>
-                <input type="file" name="calendar_file" accept=".pdf,.csv" required 
-                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <input type="file" id="calendar-file" name="calendar_file" accept=".pdf,.csv" required 
+                       style="display: none;">
+                <button type="button" id="calendar-file-btn" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; color: #475569; cursor: pointer; text-align: left; box-sizing: border-box;">Choose a file</button>
+                <div id="calendar-file-name" style="margin-top: 8px; font-size: 12px; color: #64748b; display: none;"></div>
                 <p style="margin-top: 8px; font-size: 12px; color: #6b7280;">
                     CSV format: Event Name, Start Date (DD.MM.YYYY HH:MM), End Date (DD.MM.YYYY HH:MM)
                 </p>
@@ -48,6 +50,31 @@
 </div>
 
 <script>
+// File input button functionality
+const calendarFileBtn = document.getElementById('calendar-file-btn');
+const calendarFileInput = document.getElementById('calendar-file');
+const calendarFileName = document.getElementById('calendar-file-name');
+
+if (calendarFileBtn && calendarFileInput) {
+    calendarFileBtn.addEventListener('click', function() {
+        calendarFileInput.click();
+    });
+    
+    calendarFileInput.addEventListener('change', function(e) {
+        if (e.target.files && e.target.files.length > 0) {
+            calendarFileBtn.textContent = e.target.files[0].name;
+            calendarFileBtn.style.color = '#059669';
+            calendarFileBtn.style.fontWeight = '500';
+            calendarFileName.style.display = 'none';
+        } else {
+            calendarFileBtn.textContent = 'Choose a file';
+            calendarFileBtn.style.color = '#475569';
+            calendarFileBtn.style.fontWeight = '400';
+            calendarFileName.style.display = 'none';
+        }
+    });
+}
+
 document.getElementById('upload-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const formData = new FormData(this);

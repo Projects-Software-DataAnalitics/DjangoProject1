@@ -7401,6 +7401,13 @@ def student_grades(request):
             courses_with_grades.append(course_data)
     except Student.DoesNotExist:
         courses_with_grades = []
+    except Exception as e:
+        # Log the error for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in student_grades view: {str(e)}", exc_info=True)
+        # Return empty list on error
+        courses_with_grades = []
     
     import json
     # Convert assessment_percentages to JSON-serializable format
