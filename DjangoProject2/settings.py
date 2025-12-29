@@ -91,6 +91,13 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
+        # Connection Pooling Settings
+        # CONN_MAX_AGE: Keep database connections alive for 10 minutes (600 seconds)
+        # This reduces the overhead of opening/closing connections for each request
+        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '600')),  # 10 minutes
+        'OPTIONS': {
+            'connect_timeout': 10,  # Connection timeout in seconds
+        },
     }
 }
 
