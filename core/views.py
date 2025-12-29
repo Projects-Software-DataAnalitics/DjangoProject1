@@ -494,10 +494,7 @@ def student_dashboard(request):
         
         advisor_name = "-"
         advisor_username = None
-        # If department is Computer Engineering, set advisor to Prof. Dr. Ahmet Bulut
-        if department_display and department_display.lower().strip() == "computer engineering":
-            advisor_name = "Prof. Dr. Ahmet Bulut"
-        elif student.advisor:
+        if student.advisor:
             advisor_name = f"{student.advisor.first_name} {student.advisor.last_name}".strip() or student.advisor.username
             advisor_username = student.advisor.username
         
@@ -1112,7 +1109,7 @@ def add_assignment(request):
                         title=f'New Assignment: {assignment.title}',
                         message=f'A new assignment "{assignment.title}" has been added to {course.name}.',
                         assignment=assignment
-                    )
+            )
             
             return JsonResponse({
                 'success': True,
@@ -1191,7 +1188,7 @@ def faculty_head_add_assignment(request):
                         title=f'New Assignment: {assignment.title}',
                         message=f'A new assignment "{assignment.title}" has been added to {course.name}.',
                         assignment=assignment
-                    )
+            )
             
             return JsonResponse({
                 'success': True,
@@ -2336,7 +2333,7 @@ def update_individual_grade(request, course_name):
             return JsonResponse({'error': 'Student is not enrolled in this course'}, status=400)
         
         # Parse and validate score before transaction
-        score_value = None
+            score_value = None
         # If score is None, null, empty string, or "-", treat as delete (score_value stays None)
         if score is not None and score != '' and score != '-':
             try:
@@ -3077,7 +3074,7 @@ def send_announcements(sender, message, subject, receivers_list):
                             message=message[:100] + ('...' if len(message) > 100 else ''),
                             assignment=None,
                             announcement=announcement
-                        )
+                    )
                     count += 1
                 except User.DoesNotExist:
                     pass
@@ -3433,7 +3430,7 @@ def faculty_head_dashboard(request):
     
     if faculty_head_department:
         # Get all courses from the department
-        courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='').select_related('instructor').prefetch_related('students')
+        courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='').select_related('instructor', 'instructor__profile').prefetch_related('students')
         
         # Get all students from the department (not just enrolled in courses)
         department_students = Student.objects.filter(department__iexact=faculty_head_department).exclude(department='')
@@ -3441,6 +3438,12 @@ def faculty_head_dashboard(request):
             total_students_set.add(student.id)
         
         for course in courses:
+            # Filter by instructor's department - only show courses from instructors in the same department
+            if course.instructor:
+                instructor_profile = getattr(course.instructor, 'profile', None)
+                if instructor_profile and instructor_profile.department:
+                    if instructor_profile.department.lower() != faculty_head_department.lower():
+                        continue
             students = course.students.all()
             student_count = students.count()
             
@@ -4160,7 +4163,7 @@ def build_program_outcomes_data(outcomes_qs, faculty_heads_map, instructors_map)
                 seen_course_instructor.add(course_instructor_key)
                 linked_learning_outcomes.append({
                     'text': lo.text,
-                    'course': lo.course_name,
+                    'course': lo.course_name.title() if lo.course_name else lo.course_name,
                     'instructor': lo_creator_name,
                 })
         
@@ -4511,7 +4514,7 @@ def program_outcome_detail(request, outcome_id):
         learning_outcomes_data.append({
             'id': lo.id,
             'text': lo.text,
-            'course': lo.course_name,
+            'course': lo.course_name.title() if lo.course_name else lo.course_name,
             'instructor': lo_creator_name,
             'created_at': lo.created_at.strftime('%Y-%m-%d %H:%M'),
         })
@@ -4967,7 +4970,7 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
             'assessment_type_key': assessment_type_key,
             'contribution_percentage': rel.contribution_percentage,
             'relation_id': rel.id,
-        })
+            })
     
     course_name_slug = generate_course_slug(outcome.course_name)
     
@@ -6181,7 +6184,7 @@ def get_available_assessments(request, outcome_id):
     
     # Get already linked assessment relations for this learning outcome
     linked_relations = AssessmentLORelation.objects.filter(
-        learning_outcome=outcome
+            learning_outcome=outcome
     ).select_related('assessment')
     
     # Create a set of (assessment_id, assessment_type, assessment_index) tuples for quick lookup
@@ -6277,10 +6280,10 @@ def link_assessment_to_lo(request, outcome_id):
                 assessment_index=assessment_index,
                 defaults={'contribution_percentage': percentage}
             )
-            
-            if not created:
-                relation.contribution_percentage = percentage
-                relation.save()
+        
+        if not created:
+            relation.contribution_percentage = percentage
+            relation.save()
             
             # If assessment's course is different from LO's course, add LO to assessment's course
             if assessment.course.name != outcome.course_name:
@@ -6940,67 +6943,6 @@ def student_profile(request):
         }
     
     return render(request, "student/profile.html", {'profile': profile_data})
-
-
-def student_advisor_info(request):
-    if not request.user.is_authenticated:
-        return redirect('student-login')
-    
-    try:
-        student = Student.objects.get(user=request.user)
-        advisor_info = None
-        
-        # Only Computer Engineering students have advisor (Ahmet Bulut)
-        if student.department and student.department.lower() == 'computer engineering':
-            # Get Ahmet Bulut's information
-            try:
-                advisor_user = User.objects.get(username='ahmet.bulut')
-                advisor_profile = getattr(advisor_user, 'profile', None)
-                
-                # Get advisor's courses
-                advisor_courses = Course.objects.filter(instructor=advisor_user).select_related('instructor')
-                
-                # Prepare schedule data - get all unique time slots from advisor's courses
-                days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-                # Get all unique time slots from courses
-                all_time_slots = set()
-                for course in advisor_courses:
-                    if course.time:
-                        all_time_slots.add(course.time)
-                # Sort time slots and create list
-                time_slots = sorted(list(all_time_slots))
-                # If no time slots found, use default
-                if not time_slots:
-                    time_slots = ['08:00-09:30', '09:30-11:00', '11:00-12:30', '13:00-14:30', '14:30-16:00', '16:00-17:30']
-                
-                schedule_data = {}
-                for course in advisor_courses:
-                    if course.day and course.time:
-                        if course.day not in schedule_data:
-                            schedule_data[course.day] = {}
-                        schedule_data[course.day][course.time] = {
-                            'name': course.name,
-                            'code': course.code,
-                            'room': course.room or '',
-                        }
-                
-                advisor_info = {
-                    'name': f"{advisor_user.first_name} {advisor_user.last_name}".strip() or advisor_user.username,
-                    'username': advisor_user.username,
-                    'department': advisor_profile.department if advisor_profile else 'Computer Engineering',
-                    'email': 'ahmetbulut@gmail.com',
-                    'office': 'B block 2nd floor',
-                    'courses': [{'name': course.name, 'code': course.code} for course in advisor_courses],
-                    'courses_for_schedule': advisor_courses,  # For schedule table rendering
-                    'days': days,
-                    'time_slots': time_slots,
-                }
-            except User.DoesNotExist:
-                advisor_info = None
-    except Student.DoesNotExist:
-        advisor_info = None
-    
-    return render(request, "student/advisor_info.html", {'advisor_info': advisor_info})
 
 
 def student_courses(request):
@@ -7664,7 +7606,7 @@ def instructor_program_outcomes(request):
                 seen_course_instructor.add(course_instructor_key)
                 linked_learning_outcomes.append({
                     'text': lo.text,
-                    'course': lo.course_name,
+                    'course': lo.course_name.title() if lo.course_name else lo.course_name,
                     'instructor': lo_creator_name,
                 })
         
@@ -7820,6 +7762,53 @@ def student_learning_outcome_detail(request, course_id, outcome_id):
         instructors_map = get_instructors_map()
         creator_name = instructors_map.get(outcome.created_by.username) or outcome.created_by.get_full_name() or outcome.created_by.username
         
+        # Get assessments linked to this learning outcome (similar to instructor/faculty_head)
+        from .models import AssessmentLORelation
+        all_lo_instances = ProgramOutcome.objects.filter(
+            text=outcome.text.strip()
+        ).values_list('id', flat=True)
+        
+        assessment_relations = AssessmentLORelation.objects.filter(
+            learning_outcome_id__in=all_lo_instances
+        ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
+        
+        assessments_data = []
+        assessment_type_labels = {
+            'midterm': 'Midterm',
+            'final': 'Final',
+            'project': 'Project',
+            'assignment': 'Assignment',
+            'absence': 'Absence',
+            'quiz': 'Quiz'
+        }
+        
+        seen_assessments = set()
+        for rel in assessment_relations:
+            assessment = rel.assessment
+            course_obj = assessment.course
+            assessment_type_key = rel.assessment_type
+            assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
+            
+            if rel.assessment_index > 1:
+                display_name = f"{assessment_type_label} {rel.assessment_index}"
+            else:
+                display_name = assessment_type_label
+            
+            assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
+            if assessment_key in seen_assessments:
+                continue
+            seen_assessments.add(assessment_key)
+            
+            assessments_data.append({
+                'id': assessment.id,
+                'course_name': course_obj.name,
+                'assessment_type': display_name,
+                'display_name': f"{course_obj.name} - {display_name}",
+                'assessment_type_key': assessment_type_key,
+                'contribution_percentage': rel.contribution_percentage,
+                'relation_id': rel.id,
+            })
+        
     except Student.DoesNotExist:
         return redirect('student-login')
     
@@ -7830,6 +7819,7 @@ def student_learning_outcome_detail(request, course_id, outcome_id):
             'outcome': outcome,
             'course': course,
             'program_outcomes': program_outcomes_data,
+            'assessments_data': assessments_data,
             'course_name_slug': course_name_slug,
             'created_by': creator_name,
             'created_at': outcome.created_at.strftime('%Y'),
@@ -8138,6 +8128,94 @@ def student_learning_outcome_graph(request, course_id, outcome_id):
         
         course_name_slug = generate_course_slug(outcome.course_name)
         
+        from .models import AssessmentLORelation, Grade
+        all_lo_instances = ProgramOutcome.objects.filter(
+            text=outcome.text.strip()
+        ).values_list('id', flat=True)
+        
+        assessment_relations = AssessmentLORelation.objects.filter(
+            learning_outcome_id__in=all_lo_instances
+        ).select_related('assessment', 'assessment__course').order_by('assessment__course__name', 'assessment__id')
+        
+        assessments_data = []
+        assessment_type_labels = {
+            'midterm': 'Midterm',
+            'final': 'Final',
+            'project': 'Project',
+            'assignment': 'Assignment',
+            'absence': 'Absence',
+            'quiz': 'Quiz'
+        }
+        
+        seen_assessments = set()
+        for rel in assessment_relations:
+            assessment = rel.assessment
+            course_obj = assessment.course
+            assessment_type_key = rel.assessment_type
+            assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
+            
+            if rel.assessment_index > 1:
+                display_name = f"{assessment_type_label} {rel.assessment_index}"
+            else:
+                display_name = assessment_type_label
+            
+            assessment_key = (assessment.id, assessment_type_key, rel.assessment_index)
+            if assessment_key in seen_assessments:
+                continue
+            seen_assessments.add(assessment_key)
+            
+            # Get student's grade for this assessment
+            student_grade = None
+            try:
+                grade = Grade.objects.get(student=student, course=course_obj)
+                # Use individual score with key format: "assessment_type_index" (e.g., "midterm_1", "final_1")
+                assessment_key = f"{assessment_type_key}_{rel.assessment_index}"
+                student_grade = grade.get_individual_score(assessment_key)
+                # If individual score doesn't exist, try getting average score for the type
+                if student_grade is None:
+                    student_grade = grade.get_assessment_score(assessment_type_key)
+            except Grade.DoesNotExist:
+                pass
+            
+            assessments_data.append({
+                'id': assessment.id,
+                'course_name': course_obj.name,
+                'assessment_type': display_name,
+                'display_name': f"{course_obj.name} - {display_name}",
+                'assessment_type_key': assessment_type_key,
+                'assessment_index': rel.assessment_index,
+                'contribution_percentage': rel.contribution_percentage,
+                'relation_id': rel.id,
+                'student_score': student_grade,
+            })
+        
+        # Calculate LO score (weighted average of assessment scores)
+        lo_score = None
+        total_weight = 0
+        weighted_sum = 0
+        for assessment_data in assessments_data:
+            if assessment_data['student_score'] is not None:
+                weight = assessment_data['contribution_percentage'] / 100.0
+                weighted_sum += assessment_data['student_score'] * weight
+                total_weight += weight
+        
+        if total_weight > 0:
+            lo_score = round(weighted_sum / total_weight, 2)
+        
+        # Calculate PO scores (weighted average of LO score)
+        po_scores = []
+        for po in program_outcomes_data:
+            po_score = None
+            if lo_score is not None:
+                po_weight = po['percentage'] / 100.0
+                po_score = round(lo_score * po_weight, 2)
+            po_scores.append({
+                'id': po['id'],
+                'text': po['text'],
+                'percentage': po['percentage'],
+                'score': po_score,
+            })
+        
     except Student.DoesNotExist:
         return redirect('student-login')
     
@@ -8147,7 +8225,9 @@ def student_learning_outcome_graph(request, course_id, outcome_id):
         {
             'outcome': outcome,
             'course': course,
-            'program_outcomes': program_outcomes_data,
+            'program_outcomes': po_scores,
+            'assessments_data': assessments_data,
+            'lo_score': lo_score,
             'course_name_slug': course_name_slug,
         }
     )
@@ -8241,7 +8321,7 @@ def faculty_head_announcements(request):
                                     message=message[:100] + ('...' if len(message) > 100 else ''),
                                     assignment=None,
                                     announcement=announcement
-                                )
+                            )
                         except User.DoesNotExist:
                             pass
             
@@ -8318,12 +8398,12 @@ def faculty_head_announcements(request):
                     'sender_first_name': ann.sender.first_name,
                     'sender_last_name': ann.sender.last_name,
                     'receiver_username': ann.receiver.username if ann.receiver else None,
-                    'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
-                    'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
-                    'sender_role': ann.sender_role,
-                    'receiver_role': ann.receiver_role,
-                    'created_at': ann.created_at,
-                })
+            'receiver_first_name': ann.receiver.first_name if ann.receiver else '',
+            'receiver_last_name': ann.receiver.last_name if ann.receiver else '',
+            'sender_role': ann.sender_role,
+            'receiver_role': ann.receiver_role,
+            'created_at': ann.created_at,
+        })
     
     
     # Group announcements sent to course students
@@ -8636,12 +8716,23 @@ def advisor_profile(request, username):
         advisor = User.objects.get(username=username)
         profile = getattr(advisor, 'profile', None)
         
+        # Format role
+        role_display = '-'
+        if profile and profile.role:
+            role_display = profile.role.replace('_', ' ').title()
+        
+        # Get advisor's courses
+        advisor_courses = Course.objects.filter(instructor=advisor).values_list('name', flat=True)
+        courses_list = list(advisor_courses) if advisor_courses else []
+        
         advisor_data = {
             'username': advisor.username,
             'name': f"{advisor.first_name} {advisor.last_name}".strip() or advisor.username,
+            'role': role_display,
             'department': profile.department if profile else '-',
             'faculty': profile.faculty.name if profile and profile.faculty else '-',
             'email': advisor.email or '-',
+            'courses': courses_list,
         }
         
         return render(request, 'student/advisor_profile.html', {
@@ -8764,22 +8855,22 @@ def faculty_head_department_graph(request):
                     continue
                 lo = lo_dict[lo_id]
                 
-                related_pos = lo.related_program_outcomes.all()
-                for po in related_pos:
-                    try:
-                        lo_po = LearningOutcomeProgramOutcome.objects.get(
-                            learning_outcome=lo,
-                            program_outcome=po
-                        )
-                        percentage = lo_po.percentage
-                    except LearningOutcomeProgramOutcome.DoesNotExist:
-                        percentage = 0
-                    
+            related_pos = lo.related_program_outcomes.all()
+            for po in related_pos:
+                try:
+                    lo_po = LearningOutcomeProgramOutcome.objects.get(
+                        learning_outcome=lo,
+                        program_outcome=po
+                    )
+                    percentage = lo_po.percentage
+                except LearningOutcomeProgramOutcome.DoesNotExist:
+                    percentage = 0
+                
                     if po.id not in group_data['linked_pos_dict']:
                         group_data['linked_pos_dict'][po.id] = {
-                            'id': po.id,
-                            'text': po.text,
-                            'percentage': percentage
+                    'id': po.id,
+                    'text': po.text,
+                    'percentage': percentage
                         }
                     else:
                         existing_percentage = group_data['linked_pos_dict'][po.id]['percentage']

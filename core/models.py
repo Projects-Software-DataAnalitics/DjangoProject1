@@ -39,6 +39,7 @@ class UserProfile(models.Model):
     faculty = models.ForeignKey(Faculty, null=True, blank=True, on_delete=models.SET_NULL)
     department = models.CharField(max_length=200, blank=True)
     courses = models.ManyToManyField('Course', blank=True, related_name='user_profiles')
+    advisor_details = models.TextField(blank=True, help_text='Detailed information about the advisor')
 
     def __str__(self):
         return f"{self.user.username} ({self.role})"

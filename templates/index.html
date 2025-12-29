@@ -12,187 +12,6 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <style>
-        .login-body {
-            background: url('{% static "images/university-background.jpg" %}') center center no-repeat fixed;
-            background-size: cover;
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-            image-rendering: pixelated;
-            -ms-interpolation-mode: nearest-neighbor;
-            background-attachment: fixed;
-            background-position: center center;
-            -webkit-background-size: cover;
-            -moz-background-size: cover;
-            -o-background-size: cover;
-            will-change: transform;
-            transform: translateZ(0);
-            -webkit-transform: translateZ(0);
-        }
-        
-        .login-body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, #F4F7FF 0%, #E0E7FF 50%, #F4F7FF 100%);
-            z-index: 0;
-        }
-        
-        .login-wrapper {
-            position: relative;
-            z-index: 1;
-            animation: fadeInUp 0.8s ease-out;
-        }
-        
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .login-hero {
-            margin-bottom: 30px;
-            text-align: center;
-            padding: 0 20px 15px 20px;
-        }
-        
-        .role-selection {
-            margin-bottom: 30px;
-            padding: 15px 20px;
-            margin-top: -10px;
-        }
-        
-        .role-buttons {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-        
-        .app-title {
-            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-            color: #0b2a6f;
-            font-size: 40px;
-            margin-bottom: 12px;
-            letter-spacing: -0.5px;
-            font-weight: 800;
-        }
-        
-        .app-subtitle {
-            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-            color: #1e293b;
-            font-weight: 600;
-            font-size: 18px;
-            margin-bottom: 8px;
-        }
-        
-        .app-description {
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-            color: #475569;
-            font-size: 14px;
-            margin-top: 8px;
-            line-height: 1.5;
-        }
-        
-        .role-btn {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 24px 40px !important;
-            text-align: center !important;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18) !important;
-            border-radius: 24px !important;
-            min-height: 85px !important;
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
-            border: 2px solid rgba(255, 255, 255, 0.8) !important;
-        }
-        
-        .role-btn:hover {
-            transform: translateY(-8px) scale(1.03) !important;
-            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28) !important;
-            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%) !important;
-            border-color: rgba(139, 92, 246, 0.3) !important;
-        }
-        
-        .role-text {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            align-items: center;
-        }
-        
-        .role-text strong {
-            font-size: 28px;
-            display: block;
-            margin-bottom: 2px;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-            background: linear-gradient(135deg, #0b2a6f 0%, #1e40af 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .role-text small {
-            font-size: 12px;
-            color: #64748b;
-            font-weight: 400;
-            opacity: 0.9;
-        }
-        
-        .login-footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        
-        .login-footer p {
-            margin: 0;
-            color: #64748b;
-            font-size: 13px;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-        }
-        
-        @media (max-width: 768px) {
-            .app-title {
-                font-size: 32px;
-            }
-            
-            .app-subtitle {
-                font-size: 16px;
-            }
-            
-            .role-buttons {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-            
-            .role-btn {
-                padding: 24px 30px !important;
-                min-height: 80px !important;
-            }
-            
-            .role-text strong {
-                font-size: 24px;
-            }
-            
-            .role-text small {
-                font-size: 11px;
-            }
-        }
-    </style>
 
 </head>
 
@@ -202,33 +21,19 @@
 
         <section class="login-hero">
             <h1 class="app-title">Smart School System</h1>
-            <p class="app-description">Access your courses, grades, assignments, and announcements in one place</p>
+            <p class="app-subtitle">Access your courses, grades and announcements!</p>
         </section>
 
         <!-- Role Selection -->
         <section class="role-selection">
             <div class="role-buttons">
-                <a href="{% url 'student-login' %}" class="role-btn">
-                    <span class="role-text">
-                        <strong>Student</strong>
-                    </span>
-                </a>
-                <a href="{% url 'instructor-login' %}" class="role-btn">
-                    <span class="role-text">
-                        <strong>Instructor</strong>
-                    </span>
-                </a>
-                <a href="{% url 'faculty-head-login' %}" class="role-btn">
-                    <span class="role-text">
-                        <strong>Faculty Head</strong>
-                    </span>
-                </a>
+                <a href="{% url 'student-login' %}" class="role-btn">Student</a>
+                <a href="{% url 'instructor-login' %}" class="role-btn">Instructor</a>
+                <a href="{% url 'faculty-head-login' %}" class="role-btn">Faculty Head</a>
             </div>
         </section>
 
-        <footer class="login-footer">
-            <p>© {{ now|date:'Y' }} Smart School System. All rights reserved.</p>
-        </footer>
+        <footer class="login-footer">© {{ now|date:'Y' }} Smart School</footer>
 
     </main>
 

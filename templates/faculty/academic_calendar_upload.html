@@ -5,6 +5,11 @@
 
 {% block content %}
 <div style="max-width: 800px; margin: 20px auto; padding: 20px;">
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 24px;">
+        <a href="{% url 'faculty_head_academic_calendar' %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+            ← Back to Academic Calendar
+        </a>
+    </div>
     <h1 style="margin-bottom: 24px; color: #1e293b;">Upload Academic Calendar</h1>
     
     <div style="background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px;">

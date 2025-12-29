@@ -659,6 +659,39 @@
     window.addEventListener('resize', function() {
         setTimeout(drawArrowsWithHover, 100);
     });
+    
+    // Override toggleSidebar to redraw arrows when sidebar is toggled
+    const originalToggleSidebar = window.toggleSidebar;
+    if (typeof originalToggleSidebar === 'function') {
+        window.toggleSidebar = function() {
+            originalToggleSidebar();
+            // Redraw arrows after sidebar animation completes
+            setTimeout(drawArrowsWithHover, 300);
+        };
+    }
+    
+    // Also listen for sidebar and content style changes
+    const sidebar = document.getElementById('sidebar');
+    const content = document.getElementById('content');
+    
+    function observeElement(element, name) {
+        if (element) {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        setTimeout(drawArrowsWithHover, 150);
+                    }
+                });
+            });
+            observer.observe(element, {
+                attributes: true,
+                attributeFilter: ['style']
+            });
+        }
+    }
+    
+    observeElement(sidebar, 'sidebar');
+    observeElement(content, 'content');
 })();
 </script>
 {% endblock %}
