@@ -76,60 +76,25 @@
 <!-- DEBUG: unread_notifications_count={{ unread_notifications_count|default:"NOT_SET" }}, unread_notifications={{ unread_notifications|length|default:"NOT_SET" }}, student_info={{ student_info|default:"NOT_SET" }}, debug_notifications={{ debug_notifications|default:"NOT_SET" }} -->
 <!-- Header with Profile and Notifications -->
 <div style="position: fixed; top: 0; right: 0; left: 0; padding: 12px 24px; display: flex; align-items: center; gap: 12px; z-index: 1000; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-bottom: 1px solid #e5e7eb; justify-content: flex-end;">
-    <!-- Notifications Bell with Dropdown -->
+    <!-- Notifications Icon with Dropdown -->
     <div style="position: relative;">
-        <button id="notification-btn" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: transparent; border: none; cursor: pointer; transition: all 0.2s; color: {% if unread_notifications_count and unread_notifications_count > 0 %}#ef4444{% else %}#64748b{% endif %};" 
-                    onclick="toggleNotificationDropdown()"
-                    title="Notifications ({{ unread_notifications_count|default:0 }})"
-                    data-has-notifications="{% if unread_notifications_count and unread_notifications_count > 0 %}true{% else %}false{% endif %}"
-                    data-notification-count="{{ unread_notifications_count|default:0 }}">
-                <svg id="notification-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{% if unread_notifications_count and unread_notifications_count > 0 %}#ef4444{% else %}#64748b{% endif %}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                </svg>
-            </button>
-            <div id="notification-dropdown" style="display: none; position: absolute; top: 50px; right: 0; width: 320px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001; max-height: 400px; overflow-y: auto;">
-                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Notifications {% if unread_notifications_count %}({{ unread_notifications_count }}){% endif %}</h3>
-                    <a href="{% url 'student_announcements' %}" style="font-size: 12px; color: #3b82f6; text-decoration: none;">View all</a>
-                </div>
-                <div id="notification-list" style="padding: 8px 0; max-height: 400px; overflow-y: auto;">
-                     {% if unread_notifications and unread_notifications|length > 0 %}
-                         {% for notification in unread_notifications %}
-                             <a href="{{ notification.url }}" 
-                                onclick="{% if notification.type == 'announcement' and notification.announcement_id %}markAnnouncementAsRead('{{ notification.announcement_id }}', event);{% elif notification.type == 'assignment' and notification.assignment_id %}markAssignmentAsRead('{{ notification.assignment_id }}', event);{% endif %}" 
-                                class="notification-item"
-                                style="display: block; padding: 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: {% if not notification.is_read %}#f0f9ff{% else %}#ffffff{% endif %}; cursor: pointer; border-left: 4px solid {% if not notification.is_read %}#3b82f6{% else %}#e5e7eb{% endif %};" 
-                                onmouseover="this.style.background='#f9fafb';" 
-                                onmouseout="this.style.background='{% if not notification.is_read %}#f0f9ff{% else %}#ffffff{% endif %}';">
-                                 <div style="font-weight: 600; font-size: 15px; color: #0f172a; margin-bottom: 6px;">
-                                     {{ notification.title|default:"No title" }}
-                                 </div>
-                                 <div style="font-size: 12px; color: #64748b; line-height: 1.4; margin-bottom: 4px;">
-                                     {{ notification.message|default:"No message" }}
-                                 </div>
-                                 <div style="font-size: 12px; color: #64748b; display: flex; gap: 12px;">
-                                     {% if notification.sender %}
-                                     <span>From: {{ notification.sender }}</span>
-                                     <span>•</span>
-                                     {% endif %}
-                                     <span>{{ notification.created_at|date:"M d, H:i" }}</span>
-                                 </div>
-                             </a>
-                         {% endfor %}
-                        <div style="padding: 10px; text-align: center; border-top: 1px solid #eee;">
-                            <a href="{% url 'student_announcements' %}" style="font-size: 12px; color: #2563eb; text-decoration: none; font-weight: 500;">View All</a>
-                        </div>
-                    {% else %}
-                        <div style="padding: 30px 16px; text-align: center; color: #9ca3af;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 10px; display: block; opacity: 0.5;">
-                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                            </svg>
-                            <p style="font-size: 13px; margin: 0;">No new notifications</p>
-                        </div>
-                    {% endif %}
-                </div>
+        <button id="notification-btn-student" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: transparent; border: none; cursor: pointer; transition: all 0.2s; color: #64748b;" 
+                onclick="toggleNotificationDropdown()"
+                title="Notifications"
+                onmouseover="this.style.background='#f9fafb'; this.style.color='#3b82f6';" 
+                onmouseout="this.style.background='transparent'; this.style.color='#64748b';">
+            <svg id="notification-icon-student" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+        </button>
+        <div id="notification-dropdown-student" style="display: none; position: absolute; top: 50px; right: 0; width: 320px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001; max-height: 400px; overflow-y: auto;">
+            <div style="padding: 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Recent Announcements</h3>
+            </div>
+            <div id="notification-list-student" style="padding: 8px 0;">
+                <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">Loading...</div>
+            </div>
         </div>
     </div>
     
@@ -209,248 +174,101 @@
         return cookieValue;
     }
     
-    function markNotificationAsRead(notificationId, event) {
-        // If it's a notification (notif_X format), mark it as read
-        if (notificationId.startsWith('notif_')) {
-            const notifId = notificationId.replace('notif_', '');
-            const csrftoken = getCookie('csrftoken');
-            
-            fetch(`/notifications/${notifId}/read/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrftoken,
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'same-origin',
-            }).catch(error => {
-                console.error('Error marking notification as read:', error);
-            });
-        }
-    }
-    
-    function markAnnouncementAsRead(announcementId, event) {
-        const csrftoken = getCookie('csrftoken');
-        
-        fetch(`/student/announcements/${announcementId}/mark-read/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrftoken,
-                'Content-Type': 'application/json',
-            },
-            credentials: 'same-origin',
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                // Remove from notification dropdown by finding item with announcement ID
-                const items = document.querySelectorAll('.notification-item');
-                items.forEach(item => {
-                    const onclickAttr = item.getAttribute('onclick') || '';
-                    if (onclickAttr.includes(`'${announcementId}'`)) {
-                        item.remove();
-                    }
-                });
-                
-                // Check if notification list is now empty
-                const notificationList = document.getElementById('notification-list');
-                if (notificationList) {
-                    const remainingItems = notificationList.querySelectorAll('.notification-item');
-                    if (remainingItems.length === 0) {
-                        notificationList.innerHTML = '<div style="padding: 30px 16px; text-align: center; color: #9ca3af;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 10px; display: block; opacity: 0.5;"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path></svg><p style="font-size: 13px; margin: 0;">No new notifications</p></div>';
-                    }
-                }
-                
-                // Update notification count
-                updateNotificationCount();
-            }
-        })
-        .catch(error => {
-            console.error('Error marking announcement as read:', error);
-        });
-    }
-    
-    function markAssignmentAsRead(assignmentId, event) {
-        const csrftoken = getCookie('csrftoken');
-        
-        fetch(`/student/assignments/${assignmentId}/mark-read/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrftoken,
-                'Content-Type': 'application/json',
-            },
-            credentials: 'same-origin',
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                // Remove from notification dropdown
-                const items = document.querySelectorAll('.notification-item');
-                items.forEach(item => {
-                    const onclickAttr = item.getAttribute('onclick') || '';
-                    if (onclickAttr.includes(`'${assignmentId}'`)) {
-                        item.remove();
-                    }
-                });
-                
-                // Check if notification list is now empty
-                const notificationList = document.getElementById('notification-list');
-                if (notificationList) {
-                    const remainingItems = notificationList.querySelectorAll('.notification-item');
-                    if (remainingItems.length === 0) {
-                        notificationList.innerHTML = '<div style="padding: 30px 16px; text-align: center; color: #9ca3af;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 10px; display: block; opacity: 0.5;"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path></svg><p style="font-size: 13px; margin: 0;">No new notifications</p></div>';
-                    }
-                }
-                
-                // Update notification count
-                updateNotificationCount();
-            }
-        })
-        .catch(error => {
-            console.error('Error marking assignment as read:', error);
-        });
-    }
-    
-    function updateNotificationCount() {
-        const notificationList = document.getElementById('notification-list');
-        const notificationBtn = document.getElementById('notification-btn');
-        const notificationIcon = document.getElementById('notification-icon');
-        
-        if (notificationList) {
-            const remainingItems = notificationList.querySelectorAll('.notification-item');
-            const count = remainingItems.length;
-            
-            // Update icon color
-            if (notificationBtn && notificationIcon) {
-                if (count > 0) {
-                    notificationBtn.style.color = '#ef4444';
-                    notificationIcon.setAttribute('stroke', '#ef4444');
-                } else {
-                    notificationBtn.style.color = '#64748b';
-                    notificationIcon.setAttribute('stroke', '#64748b');
-                }
-                notificationBtn.setAttribute('data-has-notifications', count > 0 ? 'true' : 'false');
-                notificationBtn.setAttribute('data-notification-count', count);
-                notificationBtn.setAttribute('title', `Notifications (${count})`);
-            }
-        }
-    }
-    
-    function toggleNotificationDropdown() {
-        const dropdown = document.getElementById('notification-dropdown');
-        const profileDropdown = document.getElementById('profile-dropdown');
-        if (profileDropdown) profileDropdown.style.display = 'none';
-        
-        if (dropdown) {
-            const isOpening = dropdown.style.display === 'none' || dropdown.style.display === '';
-            
-            if (isOpening) {
-                // Mark all unread notifications as read
-                const csrftoken = getCookie('csrftoken');
-                fetch('/student/mark-all-notifications-read/', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrftoken,
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'same-origin',
-                }).then(() => {
-                    // Update icon color to gray
-                    const notificationBtn = document.getElementById('notification-btn');
-                    const notificationIcon = document.getElementById('notification-icon');
-                    if (notificationBtn && notificationIcon) {
-                        notificationBtn.style.color = '#64748b';
-                        notificationIcon.style.color = '#64748b';
-                        notificationBtn.setAttribute('data-has-notifications', 'false');
-                        notificationBtn.setAttribute('data-notification-count', '0');
-                    }
-                }).catch(error => {
-                    console.error('Error marking all notifications as read:', error);
-                });
-            }
-            
-            dropdown.style.display = isOpening ? 'block' : 'none';
-        }
-    }
-    
     function toggleProfileDropdown() {
         const dropdown = document.getElementById('profile-dropdown');
-        const notificationDropdown = document.getElementById('notification-dropdown');
-        if (notificationDropdown) notificationDropdown.style.display = 'none';
         if (dropdown) {
             dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
         }
     }
     
-    // Set notification icon color based on unread count
-    document.addEventListener('DOMContentLoaded', function() {
-        const notificationBtn = document.getElementById('notification-btn');
-        const notificationIcon = document.getElementById('notification-icon');
-        const hasNotifications = notificationBtn && notificationBtn.getAttribute('data-has-notifications') === 'true';
-        const notificationCount = notificationBtn ? parseInt(notificationBtn.getAttribute('data-notification-count') || '0') : 0;
-        
-        const unreadCount = {{ unread_notifications_count|default:0 }};
-        const notificationsLength = {{ unread_notifications|length|default:0 }};
-        console.log('Notification setup:', {
-            hasNotifications: hasNotifications,
-            notificationCount: notificationCount,
-            unreadCount: unreadCount,
-            notificationsLength: notificationsLength,
-            btn: notificationBtn ? 'exists' : 'missing',
-            icon: notificationIcon ? 'exists' : 'missing',
-            templateValues: {
-                unread_notifications_count_raw: '{{ unread_notifications_count|default:"NOT_SET" }}',
-                unread_notifications_length_raw: '{{ unread_notifications|length|default:"NOT_SET" }}',
-                student_info_exists: '{{ student_info|default:"NOT_SET" }}' !== 'NOT_SET'
-            }
-        });
-        
-        if (notificationBtn && notificationIcon) {
-            // Set initial color - use stroke for SVG
-            if (hasNotifications && notificationCount > 0) {
-                notificationBtn.style.color = '#ef4444';
-                notificationIcon.setAttribute('stroke', '#ef4444');
-            } else {
-                notificationBtn.style.color = '#64748b';
-                notificationIcon.setAttribute('stroke', '#64748b');
-            }
+    function toggleNotificationDropdown() {
+        const dropdown = document.getElementById('notification-dropdown-student');
+        if (dropdown) {
+            const isVisible = dropdown.style.display === 'block';
+            dropdown.style.display = isVisible ? 'none' : 'block';
             
-            // Set hover handlers
-            notificationBtn.addEventListener('mouseover', function() {
-                this.style.background = '#f3f4f6';
-                if (hasNotifications && notificationCount > 0) {
-                    this.style.color = '#dc2626';
-                    notificationIcon.setAttribute('stroke', '#dc2626');
-                } else {
-                    this.style.color = '#3b82f6';
-                    notificationIcon.setAttribute('stroke', '#3b82f6');
-                }
-            });
-            
-            notificationBtn.addEventListener('mouseout', function() {
-                this.style.background = 'transparent';
-                if (hasNotifications && notificationCount > 0) {
-                    this.style.color = '#ef4444';
-                    notificationIcon.setAttribute('stroke', '#ef4444');
-                } else {
-                    this.style.color = '#64748b';
-                    notificationIcon.setAttribute('stroke', '#64748b');
-                }
-            });
+            // Load announcements when opening
+            if (!isVisible) {
+                loadRecentAnnouncements();
+            }
         }
+    }
+    
+    function loadRecentAnnouncements() {
+        const notificationList = document.getElementById('notification-list-student');
+        if (!notificationList) return;
         
-        // Close dropdowns when clicking outside
+        // Show loading state
+        notificationList.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">Loading...</div>';
+        
+        fetch('{% url "student_recent_announcements" %}', {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            credentials: 'same-origin',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.announcements && data.announcements.length > 0) {
+                let html = '';
+                data.announcements.forEach(ann => {
+                    const messagePreview = ann.message ? (ann.message.length > 100 ? ann.message.substring(0, 100) + '...' : ann.message) : '';
+                    html += `
+                        <a href="{% url 'student_announcements' %}" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s;" 
+                           onmouseover="this.style.background='#f9fafb';" 
+                           onmouseout="this.style.background='transparent';">
+                            <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">${escapeHtml(ann.subject)}</div>
+                            ${messagePreview ? `<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">${escapeHtml(messagePreview)}</div>` : ''}
+                            <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
+                                <span>From: ${escapeHtml(ann.sender)}</span>
+                                <span style="margin: 0 4px;">•</span>
+                                <span>${escapeHtml(ann.created_at)}</span>
+                            </div>
+                        </a>
+                    `;
+                });
+                // Add "View All" link at the bottom
+                html += `
+                    <div style="padding: 12px 16px; border-top: 1px solid #e5e7eb; background: #f9fafb;">
+                        <a href="{% url 'student_announcements' %}" style="display: block; text-align: center; padding: 8px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 500; border-radius: 6px; transition: background 0.2s;" 
+                           onmouseover="this.style.background='#e0f2fe';" 
+                           onmouseout="this.style.background='transparent';">
+                            View All Announcements
+                        </a>
+                    </div>
+                `;
+                notificationList.innerHTML = html;
+            } else {
+                notificationList.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No announcements yet</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading announcements:', error);
+            notificationList.innerHTML = '<div style="padding: 16px; text-align: center; color: #ef4444; font-size: 14px;">Error loading announcements</div>';
+        });
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener('click', function(event) {
-            const notificationBtn = document.getElementById('notification-btn');
-            const notificationDropdown = document.getElementById('notification-dropdown');
             const profileBtn = document.getElementById('profile-btn');
             const profileDropdown = document.getElementById('profile-dropdown');
-            
-            if (notificationBtn && notificationDropdown && !notificationBtn.contains(event.target) && !notificationDropdown.contains(event.target)) {
-                notificationDropdown.style.display = 'none';
-            }
+            const notificationBtn = document.getElementById('notification-btn-student');
+            const notificationDropdown = document.getElementById('notification-dropdown-student');
             
             if (profileBtn && profileDropdown && !profileBtn.contains(event.target) && !profileDropdown.contains(event.target)) {
                 profileDropdown.style.display = 'none';
+            }
+            
+            if (notificationBtn && notificationDropdown && !notificationBtn.contains(event.target) && !notificationDropdown.contains(event.target)) {
+                notificationDropdown.style.display = 'none';
             }
         });
     });

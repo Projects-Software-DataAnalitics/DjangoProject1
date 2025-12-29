@@ -2,6 +2,9 @@ from .models import Student, Notification, Announcement, Assignment
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 def student_info(request):
     if request.user.is_authenticated:
@@ -52,74 +55,94 @@ def student_info(request):
                 filtered_announcements = []
                 assignments = []
             
-            # Combine all notifications - Show all announcements and assignments (same as announcements page)
-            all_notifications = []
+            # Format announcements same as student_announcements view (received_messages format)
+            received_messages = []
             unread_count = 0
             
-            # 1. Add all Announcement objects (both read and unread)
+            # 1. Add all Announcement objects (both read and unread) - same format as received_messages
             for ann in filtered_announcements:
-                # Clean subject (remove course marker if present)
-                display_subject = ann.subject
-                if display_subject.startswith('__COURSE:'):
-                    marker_end = display_subject.find('__', 9)
-                    if marker_end > 0:
-                        display_subject = display_subject[marker_end + 2:]
+                try:
+                    # Clean subject (remove course marker if present)
+                    display_subject = ann.subject
+                    if display_subject and display_subject.startswith('__COURSE:'):
+                        marker_end = display_subject.find('__', 9)
+                        if marker_end > 0:
+                            display_subject = display_subject[marker_end + 2:]
+                    
+                    # Check if read
+                    is_read = ann.read_by.filter(id=request.user.id).exists()
+                    if not is_read:
+                        unread_count += 1
+                    
+                    # Get sender name - simple and safe approach
+                    try:
+                        sender_name = ann.sender.get_full_name() or ann.sender.username
+                    except:
+                        sender_name = ann.sender.username if ann.sender else 'Unknown'
                 
-                # Check if read
-                is_read = ann.read_by.filter(id=request.user.id).exists()
-                if not is_read:
-                    unread_count += 1
-                
-                sender_name = ann.sender.get_full_name() or ann.sender.username
-                
-                all_notifications.append({
-                    'title': display_subject or 'New Announcement',
-                    'message': ann.message[:100] + ('...' if len(ann.message) > 100 else ''),
-                    'url': reverse('student_announcements'),
-                    'created_at': ann.created_at,
-                    'id': f"ann_{ann.id}",
-                    'type': 'announcement',
-                    'announcement_id': ann.id,
-                    'sender': sender_name,
-                    'is_read': is_read,
-                })
+                    received_messages.append({
+                        'id': ann.id,
+                        'subject': display_subject or 'New Announcement',
+                        'message': ann.message or '',
+                        'sender': sender_name,
+                        'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M') if ann.created_at else '',
+                        'is_read': is_read,
+                        'is_pinned': ann.is_pinned if hasattr(ann, 'is_pinned') else False,
+                        'is_assignment': False,
+                    })
+                except Exception as e:
+                    # Skip this announcement if there's an error
+                    import sys
+                    print(f"ERROR processing announcement {ann.id if hasattr(ann, 'id') else 'unknown'}: {e}", file=sys.stderr)
+                    continue
             
             # 2. Add assignments as announcements (same format as announcements page)
             for assignment in assignments:
-                # Check if assignment has been read (via Notification model)
-                assignment_read = False
                 try:
-                    assignment_notification = Notification.objects.filter(
-                        user=request.user,
-                        assignment=assignment
-                    ).first()
-                    if assignment_notification and assignment_notification.is_read:
-                        assignment_read = True
-                except:
-                    pass
-                
-                if not assignment_read:
-                    unread_count += 1
-                
-                creator_name = assignment.created_by.get_full_name() if assignment.created_by else None
-                if not creator_name and assignment.created_by:
-                    creator_name = assignment.created_by.username
-                
-                all_notifications.append({
-                    'title': f'New Assignment: {assignment.title}',
-                    'message': f'A new assignment has been added to {assignment.course.name}',
-                    'url': reverse('student_announcements'),
-                    'created_at': assignment.created_at,
-                    'id': f"assignment_{assignment.id}",
-                    'type': 'assignment',
-                    'assignment_id': assignment.id,
-                    'sender': creator_name or '',
-                    'is_read': assignment_read,
-                })
+                    # Check if assignment has been read (via Notification model)
+                    assignment_read = False
+                    try:
+                        assignment_notification = Notification.objects.filter(
+                            user=request.user,
+                            assignment=assignment
+                        ).first()
+                        if assignment_notification and assignment_notification.is_read:
+                            assignment_read = True
+                    except:
+                        pass
+                    
+                    if not assignment_read:
+                        unread_count += 1
+                    
+                    # Get creator name - simple and safe approach
+                    try:
+                        creator_name = assignment.created_by.get_full_name() if assignment.created_by else None
+                        if not creator_name and assignment.created_by:
+                            creator_name = assignment.created_by.username
+                    except:
+                        creator_name = assignment.created_by.username if assignment.created_by else 'Unknown'
+                    
+                    received_messages.append({
+                        'id': f'assignment_{assignment.id}',
+                        'subject': f'New Assignment: {assignment.title}',
+                        'message': f'A new assignment has been added to {assignment.course.name if assignment.course else "Unknown Course"}',
+                        'sender': creator_name or '',
+                        'created_at': assignment.created_at.strftime('%Y-%m-%d %H:%M') if assignment.created_at else '',
+                        'is_read': assignment_read,
+                        'is_pinned': False,
+                        'is_assignment': True,
+                    })
+                except Exception as e:
+                    # Skip this assignment if there's an error
+                    import sys
+                    print(f"ERROR processing assignment {assignment.id if hasattr(assignment, 'id') else 'unknown'}: {e}", file=sys.stderr)
+                    continue
             
-            # Sort by created_at (most recent first) and take top 10
-            all_notifications.sort(key=lambda x: x['created_at'], reverse=True)
-            all_notifications = all_notifications[:10]
+            # Sort: pinned messages first, then by created_at (same as announcements page)
+            received_messages.sort(key=lambda x: (not x['is_pinned'], x['created_at']), reverse=True)
+            
+            # Take only last 3 messages (most recent)
+            received_messages = received_messages[:3]
             
             # Add unread notifications count
             unread_count += len(unread_notifications_list)
@@ -131,12 +154,12 @@ def student_info(request):
                     'student_id': student.student_id,
                 },
                 'unread_notifications_count': unread_count,
-                'unread_notifications': all_notifications,
+                'unread_notifications': received_messages,
                 'debug_notifications': {
                     'unread_notifications_list_count': len(unread_notifications_list),
                     'announcements_count': len(filtered_announcements),
                     'assignments_count': len(assignments),
-                    'all_notifications_length': len(all_notifications),
+                    'received_messages_length': len(received_messages),
                     'total_count': unread_count
                 }
             }
