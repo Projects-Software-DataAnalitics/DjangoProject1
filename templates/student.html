@@ -165,7 +165,7 @@
                                 <span>{{ ann.created_at }}</span>
                             </div>
                         </a>
-                        <button class="pin-button-main" data-ann-id="{{ ann.id }}" onclick="event.stopPropagation(); togglePinMain('{{ ann.id }}', this);" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s; flex-shrink: 0;" 
+                        <button class="pin-button-main" data-ann-id="{{ ann.id }}" onclick="event.stopPropagation(); togglePinMain({{ ann.id }}, this);" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s; flex-shrink: 0;" 
                                 onmouseover="this.style.background='#f1f5f9';" 
                                 onmouseout="this.style.background='none';"
                                 title="{% if ann.is_pinned %}Unpin{% else %}Pin{% endif %}">
@@ -201,15 +201,15 @@
             <div style="flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 350px;">
                 {% for assignment in upcoming_assignments %}
                 <a href="{% url 'student_assignments' %}" style="text-decoration: none; color: inherit;">
-                    <div class="deadline-item" data-is-urgent="{% if assignment.is_urgent %}true{% else %}false{% endif %}" style="padding: 14px; border-radius: 10px; cursor: pointer; transition: all 0.2s;" 
-                         onmouseover="handleDeadlineHover(this, true);"
-                         onmouseout="handleDeadlineHover(this, false);">
+                    <div class="deadline-item" style="padding: 14px; background: {% if assignment.is_urgent %}#fef2f2{% else %}#f8fafc{% endif %}; border-radius: 10px; border-left: 4px solid {% if assignment.is_urgent %}#ef4444{% else %}#f59e0b{% endif %}; cursor: pointer; transition: all 0.2s;" 
+                         onmouseover="this.style.background='{% if assignment.is_urgent %}#fee2e2{% else %}#f1f5f9{% endif %}'; this.style.transform='translateX(4px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';"
+                         onmouseout="this.style.background='{% if assignment.is_urgent %}#fef2f2{% else %}#f8fafc{% endif %}'; this.style.transform='translateX(0)'; this.style.boxShadow='none';">
                         <div style="display: flex; justify-content: space-between; align-items: start; gap: 12px;">
                             <div style="flex: 1;">
                                 <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 15px;">{{ assignment.title }}</div>
                                 <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">{{ assignment.course_name }}</div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span class="deadline-text" data-is-urgent="{% if assignment.is_urgent %}true{% else %}false{% endif %}" style="font-size: 12px; font-weight: 600;">
+                                    <span style="font-size: 12px; color: {% if assignment.is_urgent %}#ef4444{% else %}#f59e0b{% endif %}; font-weight: 600;">
                                         Deadline: {{ assignment.deadline }}
                                     </span>
                                     {% if assignment.days_until < 0 %}
@@ -296,32 +296,6 @@
         return cookieValue;
     }
     
-    function handleDeadlineHover(element, isHover) {
-        const isUrgent = element.getAttribute('data-is-urgent') === 'true';
-        if (isHover) {
-            element.style.background = isUrgent ? '#fee2e2' : '#f1f5f9';
-            element.style.transform = 'translateX(4px)';
-            element.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-        } else {
-            element.style.background = isUrgent ? '#fef2f2' : '#f8fafc';
-            element.style.transform = 'translateX(0)';
-            element.style.boxShadow = 'none';
-        }
-    }
-    
-    function initializeDeadlineItems() {
-        document.querySelectorAll('.deadline-item').forEach(item => {
-            const isUrgent = item.getAttribute('data-is-urgent') === 'true';
-            item.style.background = isUrgent ? '#fef2f2' : '#f8fafc';
-            item.style.borderLeft = '4px solid ' + (isUrgent ? '#ef4444' : '#f59e0b');
-        });
-        
-        document.querySelectorAll('.deadline-text').forEach(item => {
-            const isUrgent = item.getAttribute('data-is-urgent') === 'true';
-            item.style.color = isUrgent ? '#ef4444' : '#f59e0b';
-        });
-    }
-    
     function togglePinMain(announcementId, buttonElement) {
         const csrftoken = getCookie('csrftoken');
         const announcementItem = buttonElement.closest('.announcement-item');
@@ -373,10 +347,5 @@
             console.error('Error toggling pin:', error);
         });
     }
-    
-    // Initialize deadline items on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        initializeDeadlineItems();
-    });
 </script>
 {% endblock %}

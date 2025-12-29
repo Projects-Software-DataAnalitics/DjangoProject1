@@ -68,10 +68,25 @@
             {% endwith %}
             <div id="notification-dropdown-instructor" style="display: none; position: absolute; top: 50px; right: 0; width: 320px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 1001; max-height: 400px; overflow-y: auto;">
                 <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Recent Announcements</h3>
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Notifications</h3>
+                    <a href="{% url 'instructor_announcements' %}" style="font-size: 12px; color: #3b82f6; text-decoration: none;">View all</a>
                 </div>
                 <div id="notification-list-instructor" style="padding: 8px 0;">
-                    <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">Loading...</div>
+                    {% if unread_notifications_count > 0 %}
+                        {% if unread_notifications %}
+                            {% for notification in unread_notifications %}
+                                <a href="{% url 'mark_notification_read' notification.id %}" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff;" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='#f0f9ff';">
+                                    <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">{{ notification.title }}</div>
+                                    <div style="font-size: 12px; color: #6b7280;">{{ notification.message }}</div>
+                                    <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">{{ notification.created_at|date:"M d, Y H:i" }}</div>
+                                </a>
+                            {% endfor %}
+                        {% else %}
+                            <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
+                        {% endif %}
+                    {% else %}
+                        <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -173,95 +188,13 @@
         btn.style.color = hasNotifications ? '#ef4444' : '#64748b';
     }
     
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-    
     function toggleNotificationDropdown() {
         const dropdown = document.getElementById('notification-dropdown-instructor');
         const profileDropdown = document.getElementById('profile-dropdown');
         if (profileDropdown) profileDropdown.style.display = 'none';
         if (dropdown) {
-            const isVisible = dropdown.style.display === 'block';
-            dropdown.style.display = isVisible ? 'none' : 'block';
-            
-            // Load announcements when opening
-            if (!isVisible) {
-                loadRecentAnnouncements();
-            }
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
         }
-    }
-    
-    function loadRecentAnnouncements() {
-        const notificationList = document.getElementById('notification-list-instructor');
-        if (!notificationList) return;
-        
-        // Show loading state
-        notificationList.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">Loading...</div>';
-        
-        fetch('{% url "instructor_recent_announcements" %}', {
-            method: 'GET',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken'),
-            },
-            credentials: 'same-origin',
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.announcements && data.announcements.length > 0) {
-                let html = '';
-                data.announcements.forEach(ann => {
-                    const messagePreview = ann.message ? (ann.message.length > 100 ? ann.message.substring(0, 100) + '...' : ann.message) : '';
-                    html += `
-                        <a href="{% url 'instructor_announcements' %}" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s;" 
-                           onmouseover="this.style.background='#f9fafb';" 
-                           onmouseout="this.style.background='transparent';">
-                            <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">${escapeHtml(ann.subject)}</div>
-                            ${messagePreview ? `<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">${escapeHtml(messagePreview)}</div>` : ''}
-                            <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
-                                <span>From: ${escapeHtml(ann.sender)}</span>
-                                <span style="margin: 0 4px;">•</span>
-                                <span>${escapeHtml(ann.created_at)}</span>
-                            </div>
-                        </a>
-                    `;
-                });
-                // Add "View All" link at the bottom
-                html += `
-                    <div style="padding: 12px 16px; border-top: 1px solid #e5e7eb; background: #f9fafb;">
-                        <a href="{% url 'instructor_announcements' %}" style="display: block; text-align: center; padding: 8px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 500; border-radius: 6px; transition: background 0.2s;" 
-                           onmouseover="this.style.background='#e0f2fe';" 
-                           onmouseout="this.style.background='transparent';">
-                            View All Announcements
-                        </a>
-                    </div>
-                `;
-                notificationList.innerHTML = html;
-            } else {
-                notificationList.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No announcements yet</div>';
-            }
-        })
-        .catch(error => {
-            console.error('Error loading announcements:', error);
-            notificationList.innerHTML = '<div style="padding: 16px; text-align: center; color: #ef4444; font-size: 14px;">Error loading announcements</div>';
-        });
-    }
-    
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
     
     function toggleProfileDropdown() {

@@ -3671,46 +3671,6 @@ def instructor_announcements(request):
         'recipients': recipients,
     })
 
-@instructor_required
-def instructor_recent_announcements(request):
-    """API endpoint to get the last 3 announcements for an instructor"""
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Not authenticated'}, status=401)
-    
-    instructor_user = request.instructor_user
-    instructors_map = get_instructors_map()
-    faculty_heads_map = get_faculty_heads_map()
-    
-    # Get announcements for the instructor (received announcements, excluding sent by self)
-    announcements = Announcement.objects.filter(
-        Q(receiver=instructor_user) | Q(receiver__isnull=True)
-    ).exclude(sender=instructor_user).select_related('sender', 'receiver').order_by('-created_at', '-is_pinned')
-    
-    # Format announcements
-    announcements_data = []
-    for ann in announcements:
-        # Clean subject (remove course marker if present)
-        display_subject = clean_announcement_subject(ann.subject)
-        
-        sender_name = instructors_map.get(ann.sender.username) or faculty_heads_map.get(ann.sender.username) or ann.sender.get_full_name() or ann.sender.username
-        
-        announcements_data.append({
-            'id': ann.id,
-            'subject': display_subject,
-            'message': ann.message,
-            'sender': sender_name,
-            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
-            'is_pinned': ann.is_pinned if hasattr(ann, 'is_pinned') else False,
-        })
-    
-    # Sort: pinned first, then by created_at (most recent first)
-    announcements_data.sort(key=lambda x: (not x['is_pinned'], x['created_at']), reverse=True)
-    
-    # Take only the first 3
-    announcements_data = announcements_data[:3]
-    
-    return JsonResponse({'announcements': announcements_data}, safe=False)
-
 
 def set_instructor_session(request):
     """
@@ -7842,26 +7802,13 @@ def student_announcements(request):
         # For academic project this works, but in production a proper Notification model would be better
         assignment_ann_id = f"assignment_{assignment.id}"
         
-        # Check if assignment notification is read
-        assignment_is_read = False
-        try:
-            assignment_notification = Notification.objects.filter(
-                user=request.user,
-                assignment=assignment,
-                notification_type='assignment_created'
-            ).first()
-            if assignment_notification:
-                assignment_is_read = assignment_notification.is_read
-        except:
-            pass
-        
         announcements_data.append({
             'id': assignment_ann_id,
             'subject': f"New Assignment: {assignment.title}",
             'message': assignment_message,
             'sender': creator_name,
             'created_at': assignment.created_at.strftime('%Y-%m-%d %H:%M'),
-            'is_read': assignment_is_read,
+            'is_read': False,  # Assignments are always unread initially (or we could check notifications)
             'is_pinned': False,
             'is_assignment': True,
             'assignment_id': assignment.id,
@@ -7884,94 +7831,6 @@ def student_announcements(request):
         'all_announcements': announcements_data,
         'unread_count': unread_count,
     })
-
-def student_recent_announcements(request):
-    """API endpoint to get the last 3 announcements for a student"""
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Not authenticated'}, status=401)
-    
-    try:
-        student = Student.objects.get(user=request.user)
-        student_courses = student.courses.all()
-        student_courses_set = set(student.courses.values_list('name', flat=True))
-    except Student.DoesNotExist:
-        student_courses = []
-        student_courses_set = set()
-    
-    # Get announcements for the student (same logic as student_announcements)
-    announcements = Announcement.objects.filter(
-        Q(receiver=request.user) | Q(receiver__isnull=True)
-    ).select_related('sender').order_by('-created_at', '-is_pinned')
-    
-    # Get all assignments from courses the student is enrolled in
-    assignments = Assignment.objects.filter(
-        course__in=student_courses
-    ).select_related('course', 'created_by').order_by('-created_at')
-    
-    # Get instructors and faculty heads maps for name formatting
-    instructors_map = get_instructors_map()
-    faculty_heads_map = get_faculty_heads_map()
-    
-    # Format announcements
-    announcements_data = []
-    for ann in announcements:
-        # Check if this is a course broadcast announcement
-        is_course_broadcast = False
-        course_name_from_marker = None
-        display_subject = ann.subject
-        
-        if ann.subject.startswith('__COURSE:'):
-            marker_end = ann.subject.find('__', 9)
-            if marker_end > 0:
-                course_name_from_marker = ann.subject[9:marker_end]
-                display_subject = ann.subject[marker_end + 2:]
-                is_course_broadcast = True
-        
-        # If it's a course broadcast, check if student is enrolled in that course
-        if is_course_broadcast and course_name_from_marker:
-            if course_name_from_marker not in student_courses_set:
-                continue  # Skip this announcement - student not enrolled
-        
-        sender_name = instructors_map.get(ann.sender.username) or faculty_heads_map.get(ann.sender.username) or ann.sender.get_full_name() or ann.sender.username
-        
-        announcements_data.append({
-            'id': ann.id,
-            'subject': display_subject,
-            'message': ann.message,
-            'sender': sender_name,
-            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
-            'is_pinned': ann.is_pinned,
-        })
-    
-    # Format assignments as announcements
-    for assignment in assignments:
-        creator_name = instructors_map.get(assignment.created_by.username) or faculty_heads_map.get(assignment.created_by.username) or assignment.created_by.get_full_name() or assignment.created_by.username
-        
-        # Create assignment message with details
-        assignment_message = f"Course: {assignment.course.name}\n\n"
-        assignment_message += f"Details: {assignment.details}\n\n"
-        assignment_message += f"Deadline: {assignment.deadline.strftime('%d/%m/%Y %H:%M')}"
-        if assignment.file:
-            assignment_message += f"\n\nFile attached: {assignment.file.name.split('/')[-1]}"
-        
-        assignment_ann_id = f"assignment_{assignment.id}"
-        
-        announcements_data.append({
-            'id': assignment_ann_id,
-            'subject': f"New Assignment: {assignment.title}",
-            'message': assignment_message,
-            'sender': creator_name,
-            'created_at': assignment.created_at.strftime('%Y-%m-%d %H:%M'),
-            'is_pinned': False,
-        })
-    
-    # Sort: pinned first, then by created_at (most recent first)
-    announcements_data.sort(key=lambda x: (not x['is_pinned'], x['created_at']), reverse=True)
-    
-    # Take only the first 3
-    announcements_data = announcements_data[:3]
-    
-    return JsonResponse({'announcements': announcements_data}, safe=False)
 
 def debug_notifications(request):
     """Debug view to check notifications"""
@@ -9096,71 +8955,6 @@ def faculty_head_announcements(request):
         'recipients': recipients,
     })
 
-@faculty_head_required
-def faculty_head_recent_announcements(request):
-    """API endpoint to get the last 3 announcements for a faculty head"""
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Not authenticated'}, status=401)
-    
-    faculty_head_user = request.user
-    faculty_head_data = get_faculty_head_data(faculty_head_user.username)
-    faculty_head_department = faculty_head_data.get('department')
-    
-    instructors_map = get_instructors_map()
-    faculty_heads_map = get_faculty_heads_map()
-    
-    # Get department course names for filtering announcements
-    department_course_names = set()
-    if faculty_head_department:
-        department_courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='')
-        department_course_names = set(department_courses.values_list('name', flat=True))
-    
-    # Get all announcements (received by faculty head or general)
-    all_announcements_raw = Announcement.objects.filter(
-        Q(receiver=faculty_head_user) | Q(receiver__isnull=True)
-    ).exclude(sender=faculty_head_user).select_related('sender', 'receiver').order_by('-created_at', '-is_pinned')
-    
-    # Filter announcements by department courses (same logic as faculty_head_dashboard)
-    filtered_announcements = []
-    for ann in all_announcements_raw:
-        # Check if announcement is related to a course in faculty head's department
-        if ann.subject and ann.subject.startswith('__COURSE:'):
-            # Extract course name from subject
-            end_marker = ann.subject.find('__', 9)
-            if end_marker != -1:
-                course_name = ann.subject[9:end_marker]
-                # Only include if course is in faculty head's department
-                if course_name in department_course_names:
-                    filtered_announcements.append(ann)
-        else:
-            # Announcements without course marker - only show if receiver is faculty head
-            # (general announcements sent directly to faculty head)
-            if ann.receiver == faculty_head_user:
-                filtered_announcements.append(ann)
-    
-    # Format announcements
-    announcements_data = []
-    for ann in filtered_announcements:
-        display_subject = clean_announcement_subject(ann.subject)
-        sender_name = instructors_map.get(ann.sender.username) or faculty_heads_map.get(ann.sender.username) or ann.sender.get_full_name() or ann.sender.username
-        
-        announcements_data.append({
-            'id': ann.id,
-            'subject': display_subject,
-            'message': ann.message,
-            'sender': sender_name,
-            'created_at': ann.created_at.strftime('%Y-%m-%d %H:%M'),
-            'is_pinned': ann.is_pinned if hasattr(ann, 'is_pinned') else False,
-        })
-    
-    # Sort: pinned first, then by created_at (most recent first)
-    announcements_data.sort(key=lambda x: (not x['is_pinned'], x['created_at']), reverse=True)
-    
-    # Take only the first 3
-    announcements_data = announcements_data[:3]
-    
-    return JsonResponse({'announcements': announcements_data}, safe=False)
-
 def faculty_head_logout(request):
     logout(request)
     return redirect("home")
@@ -9173,50 +8967,8 @@ def mark_announcement_as_read(request, announcement_id):
         return JsonResponse({'error': 'Authentication required'}, status=401)
     
     try:
-        from .models import Announcement, Notification
-        
-        # Convert to string for checking (URL pattern now uses str, but could be int from other sources)
-        announcement_id_str = str(announcement_id)
-        
-        # Check if this is an assignment ID (format: "assignment_123")
-        if announcement_id_str.startswith('assignment_'):
-            # Extract assignment ID
-            try:
-                assignment_id = int(announcement_id_str.replace('assignment_', ''))
-                assignment = get_object_or_404(Assignment, id=assignment_id)
-                
-                # Mark assignment notification as read
-                notification = Notification.objects.filter(
-                    user=request.user,
-                    assignment=assignment,
-                    notification_type='assignment_created'
-                ).first()
-                
-                if notification:
-                    notification.is_read = True
-                    notification.save()
-                    return JsonResponse({'status': 'success', 'message': 'Assignment notification marked as read'})
-                else:
-                    # If notification doesn't exist, create it as read (edge case)
-                    Notification.objects.create(
-                        user=request.user,
-                        notification_type='assignment_created',
-                        title=f'New Assignment: {assignment.title}',
-                        message=f'A new assignment "{assignment.title}" has been added to {assignment.course.name}.',
-                        assignment=assignment,
-                        is_read=True
-                    )
-                    return JsonResponse({'status': 'success', 'message': 'Assignment notification marked as read'})
-            except ValueError:
-                return JsonResponse({'error': 'Invalid assignment ID format'}, status=400)
-        
-        # Regular announcement - convert to int if needed
-        try:
-            announcement_id_int = int(announcement_id_str)
-        except ValueError:
-            return JsonResponse({'error': 'Invalid announcement ID'}, status=400)
-        
-        announcement = get_object_or_404(Announcement, id=announcement_id_int)
+        from .models import Announcement
+        announcement = get_object_or_404(Announcement, id=announcement_id)
         
         # Check if user has permission to read this announcement
         if announcement.receiver and announcement.receiver != request.user:
