@@ -28,10 +28,16 @@
         }
         .content-wrapper {
             margin-top: 60px;
+            margin-left: 0;
+            transition: margin-left 0.2s ease;
         }
         body .sidebar {
             top: 60px;
             height: calc(100% - 60px);
+            z-index: 999;
+        }
+        body .sidebar[style*="width: 200px"] {
+            z-index: 1001 !important;
         }
     </style>
     {% block extra_head %}{% endblock %}
@@ -70,7 +76,7 @@
     </ul>
 </div>
 
-<!-- DEBUG: unread_notifications_count={{ unread_notifications_count|default:"NOT_SET" }}, unread_notifications={{ unread_notifications|length|default:"NOT_SET" }}, student_info={{ student_info|default:"NOT_SET" }} -->
+<!-- DEBUG: unread_notifications_count={{ unread_notifications_count|default:"NOT_SET" }}, unread_notifications={{ unread_notifications|length|default:"NOT_SET" }}, student_info={{ student_info|default:"NOT_SET" }}, debug_notifications={{ debug_notifications|default:"NOT_SET" }} -->
 <!-- Header with Profile and Notifications -->
 <div style="position: fixed; top: 0; right: 0; left: 0; padding: 12px 24px; display: flex; align-items: center; gap: 12px; z-index: 1000; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-bottom: 1px solid #e5e7eb; justify-content: flex-end;">
     <!-- Notifications Bell with Dropdown -->
@@ -90,52 +96,37 @@
                     <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #111827;">Notifications {% if unread_notifications_count %}({{ unread_notifications_count }}){% endif %}</h3>
                     <a href="{% url 'student_announcements' %}" style="font-size: 12px; color: #3b82f6; text-decoration: none;">View all</a>
                 </div>
-                <!-- DEBUG: unread_notifications_count={{ unread_notifications_count|default:0 }}, unread_notifications length={{ unread_notifications|length|default:0 }} -->
-                <div id="notification-list" style="padding: 8px 0;">
-                    {% if unread_notifications_count and unread_notifications_count > 0 %}
-                        {% if unread_notifications %}
-                            {% for notification in unread_notifications %}
-                                {% if notification.type == 'assignment' or notification.is_assignment %}
-                                    <a href="{% url 'student_assignments' %}" onclick="markNotificationAsRead('{{ notification.id }}', event);" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff; cursor: pointer;" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='#f0f9ff';">
-                                        <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">{{ notification.title }}</div>
-                                        <div style="font-size: 12px; color: #6b7280;">{{ notification.message }}</div>
-                                        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">{{ notification.created_at|date:"M d, Y H:i" }}</div>
-                                    </a>
-                                {% elif notification.type == 'announcement' %}
-                                    <a href="{% url 'student_announcements' %}" onclick="markAnnouncementAsRead('{{ notification.announcement_id }}', event);" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff; cursor: pointer;" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='#f0f9ff';">
-                                        <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">{{ notification.title }}</div>
-                                        <div style="font-size: 12px; color: #6b7280;">{{ notification.message }}</div>
-                                        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">{{ notification.created_at|date:"M d, Y H:i" }}</div>
-                                    </a>
-                                {% elif notification.type == 'notification' %}
-                                    {% if notification.assignment_id %}
-                                        <a href="{% url 'student_assignments' %}" onclick="markNotificationAsRead('{{ notification.id }}', event);" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff; cursor: pointer;" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='#f0f9ff';">
-                                            <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">{{ notification.title }}</div>
-                                            <div style="font-size: 12px; color: #6b7280;">{{ notification.message }}</div>
-                                            <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">{{ notification.created_at|date:"M d, Y H:i" }}</div>
-                                        </a>
-                                    {% else %}
-                                        {% with notification_id=notification.id|slice:"6:" %}
-                                        <a href="{% url 'student_announcements' %}" onclick="markNotificationAsRead('{{ notification.id }}', event);" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff; cursor: pointer;" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='#f0f9ff';">
-                                            <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">{{ notification.title }}</div>
-                                            <div style="font-size: 12px; color: #6b7280;">{{ notification.message }}</div>
-                                            <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">{{ notification.created_at|date:"M d, Y H:i" }}</div>
-                                        </a>
-                                        {% endwith %}
-                                    {% endif %}
-                                {% else %}
-                                    <a href="{% url 'student_announcements' %}" style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff; cursor: pointer;" onmouseover="this.style.background='#f9fafb';" onmouseout="this.style.background='#f0f9ff';">
-                                        <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px;">{{ notification.title }}</div>
-                                        <div style="font-size: 12px; color: #6b7280;">{{ notification.message }}</div>
-                                        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">{{ notification.created_at|date:"M d, Y H:i" }}</div>
-                                    </a>
-                                {% endif %}
-                            {% endfor %}
-                        {% else %}
-                            <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
-                        {% endif %}
+                <div id="notification-list" style="padding: 8px 0; max-height: 400px; overflow-y: auto;">
+                    {% if unread_notifications and unread_notifications|length > 0 %}
+                        {% for notification in unread_notifications %}
+                            <a href="{{ notification.url }}" 
+                               onclick="{% if notification.type == 'notification' and notification.notification_id %}markNotificationAsRead('{{ notification.id }}', event);{% elif notification.type == 'announcement' and notification.announcement_id %}markAnnouncementAsRead('{{ notification.announcement_id }}', event);{% endif %}" 
+                               class="notification-item"
+                               style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff; cursor: pointer;" 
+                               onmouseover="this.style.background='#f9fafb';" 
+                               onmouseout="this.style.background='#f0f9ff';">
+                                <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 2px;">
+                                    {{ notification.title|default:"No title" }}
+                                </div>
+                                <div style="font-size: 12px; color: #4b5563; line-height: 1.4;">
+                                    {{ notification.message|default:"No message" }}
+                                </div>
+                                <div style="font-size: 10px; color: #9ca3af; margin-top: 4px;">
+                                    {{ notification.created_at|date:"d M, H:i" }}
+                                </div>
+                            </a>
+                        {% endfor %}
+                        <div style="padding: 10px; text-align: center; border-top: 1px solid #eee;">
+                            <a href="{% url 'student_announcements' %}" style="font-size: 12px; color: #2563eb; text-decoration: none; font-weight: 500;">View All</a>
+                        </div>
                     {% else %}
-                        <div style="padding: 16px; text-align: center; color: #6b7280; font-size: 14px;">No new notifications</div>
+                        <div style="padding: 30px 16px; text-align: center; color: #9ca3af;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 10px; display: block; opacity: 0.5;">
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            </svg>
+                            <p style="font-size: 13px; margin: 0;">No new notifications</p>
+                        </div>
                     {% endif %}
                 </div>
         </div>

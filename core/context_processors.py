@@ -1,5 +1,7 @@
 from .models import Student, Notification, Announcement, Assignment
 from django.db.models import Q
+from django.urls import reverse
+from django.utils import timezone
 
 def student_info(request):
     if request.user.is_authenticated:
@@ -15,50 +17,47 @@ def student_info(request):
                 traceback.print_exc(file=sys.stderr)
                 unread_notifications_list = []
             
-            # Get unread announcements (not read by user)
+            # Get all announcements for the student (both read and unread) - same as announcements page
             try:
-                unread_announcements = Announcement.objects.filter(
+                student_courses = student.courses.all()
+                student_courses_set = set(student.courses.values_list('name', flat=True))
+                
+                # Get all announcements for the student (same query as student_announcements view)
+                all_announcements = Announcement.objects.filter(
                     (Q(receiver=request.user) | Q(receiver__isnull=True))
-                ).exclude(read_by=request.user).select_related('sender').order_by('-created_at')[:10]
+                ).select_related('sender').order_by('-created_at', '-is_pinned')[:10]
+                
+                # Filter announcements based on course enrollment (for course broadcasts)
+                filtered_announcements = []
+                for ann in all_announcements:
+                    # Check if this is a course broadcast announcement
+                    if ann.subject.startswith('__COURSE:'):
+                        marker_end = ann.subject.find('__', 9)
+                        if marker_end > 0:
+                            course_name_from_marker = ann.subject[9:marker_end]
+                            if course_name_from_marker not in student_courses_set:
+                                continue  # Skip if student not enrolled
+                    filtered_announcements.append(ann)
+                
+                # Also get assignments from student's courses (same as announcements page)
+                assignments = Assignment.objects.filter(
+                    course__in=student_courses
+                ).select_related('course', 'created_by').order_by('-created_at')[:10]
+                
             except Exception as e:
                 import sys
                 print(f"ERROR getting announcements for {request.user.username}: {e}", file=sys.stderr)
                 import traceback
                 traceback.print_exc(file=sys.stderr)
-                unread_announcements = Announcement.objects.none()
+                filtered_announcements = []
+                assignments = []
             
-            # Get recent assignments from student's courses
-            try:
-                student_courses = student.courses.all()
-                recent_assignments = Assignment.objects.filter(
-                    course__in=student_courses
-                ).select_related('course', 'created_by').order_by('-created_at')[:10]
-            except Exception as e:
-                import sys
-                print(f"ERROR getting assignments for {request.user.username}: {e}", file=sys.stderr)
-                import traceback
-                traceback.print_exc(file=sys.stderr)
-                recent_assignments = Assignment.objects.none()
-            
-            # Combine all notifications
+            # Combine all notifications - Show all announcements and assignments (same as announcements page)
             all_notifications = []
             
-            # Add Notification objects
-            for notif in unread_notifications_list:
-                all_notifications.append({
-                    'id': f"notif_{notif.id}",
-                    'title': notif.title,
-                    'message': notif.message,
-                    'created_at': notif.created_at,
-                    'is_assignment': notif.assignment is not None,
-                    'assignment_id': notif.assignment.id if notif.assignment else None,
-                    'announcement_id': notif.announcement.id if notif.announcement else None,
-                    'type': 'notification'
-                })
-            
-            # Add Announcement objects
-            for ann in unread_announcements:
-                # Clean subject
+            # 1. Add all Announcement objects (both read and unread)
+            for ann in filtered_announcements:
+                # Clean subject (remove course marker if present)
                 display_subject = ann.subject
                 if display_subject.startswith('__COURSE:'):
                     marker_end = display_subject.find('__', 9)
@@ -66,48 +65,33 @@ def student_info(request):
                         display_subject = display_subject[marker_end + 2:]
                 
                 all_notifications.append({
-                    'id': f"ann_{ann.id}",
-                    'title': display_subject,
-                    'message': ann.message,
+                    'title': display_subject or 'New Announcement',
+                    'message': ann.message[:100] + ('...' if len(ann.message) > 100 else ''),
+                    'url': reverse('student_announcements'),
                     'created_at': ann.created_at,
-                    'is_assignment': False,
-                    'assignment_id': None,
+                    'id': f"ann_{ann.id}",
                     'type': 'announcement',
-                    'announcement_id': ann.id
+                    'announcement_id': ann.id,
                 })
             
-            # Count assignments that don't have notifications (before adding them to list)
-            from datetime import timedelta
-            from django.utils import timezone
-            assignments_without_notifications = 0
-            assignment_notifications_to_add = []
-            
-            for assignment in recent_assignments:
-                # Check if there's already a notification for this assignment
-                has_notification = any(n.get('assignment_id') == assignment.id for n in all_notifications)
-                if not has_notification:
-                    # Only show assignments from last 7 days to avoid too many notifications
-                    if assignment.created_at >= timezone.now() - timedelta(days=7):
-                        assignments_without_notifications += 1
-                        assignment_notifications_to_add.append({
-                            'id': f"assignment_{assignment.id}",
-                            'title': f"New Assignment: {assignment.title}",
-                            'message': f"A new assignment has been added to {assignment.course.name}",
-                            'created_at': assignment.created_at,
-                            'is_assignment': True,
-                            'assignment_id': assignment.id,
-                            'type': 'assignment'
-                        })
-            
-            # Add assignment notifications
-            all_notifications.extend(assignment_notifications_to_add)
+            # 2. Add assignments as announcements (same format as announcements page)
+            for assignment in assignments:
+                all_notifications.append({
+                    'title': f'New Assignment: {assignment.title}',
+                    'message': f'A new assignment has been added to {assignment.course.name}',
+                    'url': reverse('student_announcements'),
+                    'created_at': assignment.created_at,
+                    'id': f"assignment_{assignment.id}",
+                    'type': 'assignment',
+                    'assignment_id': assignment.id,
+                })
             
             # Sort by created_at (most recent first) and take top 10
             all_notifications.sort(key=lambda x: x['created_at'], reverse=True)
             all_notifications = all_notifications[:10]
             
-            # Count total unread (notifications + announcements + assignments without notifications)
-            unread_count = len(unread_notifications_list) + unread_announcements.count() + assignments_without_notifications
+            # Count total unread - use the actual list length to ensure consistency
+            unread_count = len(all_notifications)
             
             return {
                 'student_info': {
@@ -116,7 +100,14 @@ def student_info(request):
                     'student_id': student.student_id,
                 },
                 'unread_notifications_count': unread_count,
-                'unread_notifications': all_notifications
+                'unread_notifications': all_notifications,
+                'debug_notifications': {
+                    'unread_notifications_list_count': len(unread_notifications_list),
+                    'announcements_count': len(filtered_announcements),
+                    'assignments_count': len(assignments),
+                    'all_notifications_length': len(all_notifications),
+                    'total_count': unread_count
+                }
             }
         except Student.DoesNotExist:
             # User is authenticated but not a student - return empty
@@ -127,7 +118,14 @@ def student_info(request):
                     'student_id': '-',
                 },
                 'unread_notifications_count': 0,
-                'unread_notifications': []
+                'unread_notifications': [],
+                'debug_notifications': {
+                    'unread_notifications_list_count': 0,
+                    'unread_announcements_count': 0,
+                    'all_notifications_length': 0,
+                    'total_count': 0,
+                    'error': 'Student.DoesNotExist'
+                }
             }
         except Exception as e:
             # Log error but don't break the page
@@ -148,10 +146,21 @@ def student_info(request):
                 },
                 'unread_notifications_count': 0, 
                 'unread_notifications': [],
-                'debug_error': str(e)
+                'debug_notifications': {
+                    'error': str(e),
+                    'error_type': type(e).__name__
+                }
             }
     
-    return {'student_info': None, 'unread_notifications_count': 0, 'unread_notifications': []}
+    return {
+        'student_info': None, 
+        'unread_notifications_count': 0, 
+        'unread_notifications': [],
+        'debug_notifications': {
+            'error': 'User not authenticated',
+            'error_type': 'NotAuthenticated'
+        }
+    }
 
 def instructor_info(request):
     if request.user.is_authenticated:

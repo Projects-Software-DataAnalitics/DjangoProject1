@@ -4,7 +4,7 @@ input, button { border: 1px solid #ccc; border-radius: 8px; }
 button { background: #0b5fff; color: #fff; border: none; cursor: pointer; }
 button:hover { background: #0a53d5; }
 
-.sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 0; overflow-x: hidden; transition: width 0.2s ease; background: #1f2937; color: #fff; padding-top: 60px; }
+.sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 0; overflow-x: hidden; transition: width 0.2s ease; background: #1f2937; color: #fff; padding-top: 60px; z-index: 999; }
 .sidebar ul { list-style: none; padding: 0 12px; margin: 0; }
 .sidebar li { padding: 12px; border-radius: 8px; }
 .sidebar li:hover { background: rgba(255,255,255,0.1); }
@@ -74,9 +74,12 @@ button:hover { background: #0a53d5; }
 .grades-table {
     width: 90%;
     margin: 20px auto;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-family: Arial, sans-serif;
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 .grades-table th, .grades-table td {
@@ -91,6 +94,22 @@ button:hover { background: #0a53d5; }
     color: white;
 }
 
+.grades-table th:first-child {
+    border-top-left-radius: 12px;
+}
+
+.grades-table th:last-child {
+    border-top-right-radius: 12px;
+}
+
+.grades-table tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.grades-table tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
 .grades-table tr:nth-child(even) {
     background-color: #f9f9f9;
 }
@@ -98,6 +117,106 @@ button:hover { background: #0a53d5; }
 .grades-table tr:hover {
     background-color: #f1f1f1;
     transition: 0.3s;
+}
+
+/* Schedule Table Styles */
+.schedule-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.schedule-table th:first-child {
+    border-top-left-radius: 12px;
+}
+
+.schedule-table th:last-child {
+    border-top-right-radius: 12px;
+}
+
+.schedule-table tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.schedule-table tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+/* Profile Table Styles */
+.profile-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.profile-table tr:first-child td:first-child {
+    border-top-left-radius: 12px;
+}
+
+.profile-table tr:first-child td:last-child {
+    border-top-right-radius: 12px;
+}
+
+.profile-table tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.profile-table tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+/* Courses Table Styles */
+.courses-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.courses-table th:first-child {
+    border-top-left-radius: 12px;
+}
+
+.courses-table th:last-child {
+    border-top-right-radius: 12px;
+}
+
+.courses-table tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.courses-table tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+/* Assignments Table Styles */
+.assignments-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.assignments-table th:first-child {
+    border-top-left-radius: 12px;
+}
+
+.assignments-table th:last-child {
+    border-top-right-radius: 12px;
+}
+
+.assignments-table tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.assignments-table tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
 }
 
 #grades-section h2 {

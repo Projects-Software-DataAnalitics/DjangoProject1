@@ -5,9 +5,11 @@ function toggleSidebar() {
     
     if (sidebar.style.width === "200px" || sidebar.style.width === "") {
         sidebar.style.width = "0";          
+        sidebar.style.zIndex = "999";
         content.style.marginLeft = "0";     
     } else {
         sidebar.style.width = "200px";      
+        sidebar.style.zIndex = "1001";  // Above header (z-index: 1000)
         content.style.marginLeft = "200px"; 
     }
 }
