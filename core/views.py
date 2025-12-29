@@ -3357,16 +3357,23 @@ def faculty_head_dashboard(request):
     upcoming_assignments = []
     
     if faculty_head_department:
-        courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='').exclude(name__in=['Electronics', 'Embedded Systems']).select_related('instructor').prefetch_related('students')
+        # Get all courses from the department
+        courses = Course.objects.filter(department__iexact=faculty_head_department).exclude(department='').select_related('instructor').prefetch_related('students')
+        
+        # Get all students from the department (not just enrolled in courses)
+        department_students = Student.objects.filter(department__iexact=faculty_head_department).exclude(department='')
+        for student in department_students:
+            total_students_set.add(student.id)
+        
         for course in courses:
             students = course.students.all()
             student_count = students.count()
             
-            for student in students:
-                total_students_set.add(student.id)
-            
+            # Only count instructor if they are not a faculty_head
             if course.instructor:
-                total_instructors_set.add(course.instructor.id)
+                instructor_profile = getattr(course.instructor, 'profile', None)
+                if instructor_profile and instructor_profile.role != 'faculty_head':
+                    total_instructors_set.add(course.instructor.id)
             
             instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() if course.instructor else 'Unknown'
             if not instructor_name or instructor_name == ' ':
@@ -3788,11 +3795,11 @@ def all_courses(request):
     # We only use Course.instructor to ensure the table reflects the actual PostgreSQL database state
     # Note: Course.instructor can be either an instructor OR a faculty_head (both are User objects)
     
-    # Get all courses from the department, excluding Electronics and Embedded Systems for Computer Engineering faculty head
+    # Get all courses from the department
     if faculty_head_department:
-        courses_qs = Course.objects.filter(department=faculty_head_department).exclude(name__in=['Electronics', 'Embedded Systems']).select_related('instructor', 'instructor__profile')
+        courses_qs = Course.objects.filter(department=faculty_head_department).select_related('instructor', 'instructor__profile')
     else:
-        courses_qs = Course.objects.all().exclude(name__in=['Electronics', 'Embedded Systems']).select_related('instructor', 'instructor__profile')
+        courses_qs = Course.objects.all().select_related('instructor', 'instructor__profile')
     
     # Optimize: Fetch all learning outcomes in one query
     course_names = [course.name for course in courses_qs]

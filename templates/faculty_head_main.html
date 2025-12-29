@@ -46,10 +46,14 @@
 
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
         <div style="grid-column: span 1; grid-row: span 1; background: white; border-radius: 16px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); min-height: 200px; display: flex; flex-direction: column;">
-            <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a; font-weight: 700; border-bottom: 3px solid #8b5cf6; padding-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                <span style="width: 4px; height: 20px; background: #8b5cf6; border-radius: 2px;"></span>
-                All Courses
-            </h2>
+            <a href="{% url 'all_courses' %}" style="text-decoration: none; color: inherit;">
+                <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #0f172a; font-weight: 700; border-bottom: 3px solid #8b5cf6; padding-bottom: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s;" 
+                    onmouseover="this.style.color='#8b5cf6'; this.style.borderBottomColor='#8b5cf6';" 
+                    onmouseout="this.style.color='#0f172a'; this.style.borderBottomColor='#8b5cf6';">
+                    <span style="width: 4px; height: 20px; background: #8b5cf6; border-radius: 2px;"></span>
+                    All Courses
+                </h2>
+            </a>
             {% if courses_list %}
             <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 150px;">
                 {% for course in courses_list %}
