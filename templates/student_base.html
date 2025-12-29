@@ -65,6 +65,9 @@
             <a href="{% url 'student_grades' %}">Grades</a>
         </li>
         <li>
+            <a href="{% url 'student_my_progress' %}">My Progress</a>
+        </li>
+        <li>
             <a href="{% url 'student_announcements' %}">Announcements</a>
         </li>
         <li>
@@ -176,9 +179,11 @@
     </div>
 </div>
 
-<div class="content" id="content">
-    <button class="menu-btn" id="menu-btn">☰</button>
-    {% block content %}{% endblock %}
+<div class="content-wrapper">
+    <div class="content" id="content">
+        <button class="menu-btn" id="menu-btn">☰</button>
+        {% block content %}{% endblock %}
+    </div>
 </div>
 
 <div id="popup" class="popup-overlay" style="display: none;">

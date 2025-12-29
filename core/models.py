@@ -38,7 +38,6 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     faculty = models.ForeignKey(Faculty, null=True, blank=True, on_delete=models.SET_NULL)
     department = models.CharField(max_length=200, blank=True)
-    # NOTE: Secondary course relationship - see docstring above
     courses = models.ManyToManyField('Course', blank=True, related_name='user_profiles')
 
     def __str__(self):
@@ -76,13 +75,8 @@ class Course(models.Model):
     
     NOTE: Model-level uniqueness constraint is required to enforce this assumption.
     """
-    name = models.CharField(max_length=100, unique=True)  # CRITICAL: Must be unique system-wide
+    name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=20, blank=True)
-    # NOTE: Course-Instructor relationship is stored in multiple places:
-    # 1. Course.instructor (ForeignKey) - Primary source of truth
-    # 2. UserProfile.courses (ManyToMany) - Secondary relationship
-    # 3. User.instructor_courses (reverse ForeignKey) - Derived from Course.instructor
-    # This creates potential synchronization issues but is acceptable for academic purposes.
     instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='instructor_courses')
     department = models.CharField(max_length=200, blank=True)
     credits = models.IntegerField(null=True, blank=True)
@@ -122,6 +116,15 @@ class Assessment(models.Model):
     assignment_percentage = models.IntegerField(default=0)
     absence_percentage = models.IntegerField(default=0)
     quiz_percentage = models.IntegerField(default=0)
+    
+    # Many-to-Many relationship with Learning Outcomes (through AssessmentLORelation)
+    learning_outcomes = models.ManyToManyField(
+        'ProgramOutcome',
+        through='AssessmentLORelation',
+        related_name='assessments',
+        blank=True,
+        help_text="Learning Outcomes that this assessment contributes to"
+    )
 
     def save(self, *args, **kwargs):
         # assessment_count'u quiz dahil hesapla
@@ -362,6 +365,105 @@ class ProgramOutcome(models.Model):
 
     def __str__(self):
         return self.text
+    
+    def calculate_student_score(self, student):
+        from .models import AssessmentLORelation, Grade
+        
+        if not self.course_name:
+            return None
+        
+        assessment_relations = AssessmentLORelation.objects.filter(
+            learning_outcome=self
+        ).select_related('assessment', 'assessment__course')
+        
+        if not assessment_relations.exists():
+            return None
+        
+        total_score = 0.0
+        total_contribution = 0
+        
+        for rel in assessment_relations:
+            assessment = rel.assessment
+            course = assessment.course
+            contribution_percentage = rel.contribution_percentage
+            assessment_type = rel.assessment_type  # Use the specific assessment type from relation
+            
+            if contribution_percentage <= 0:
+                continue
+            
+            try:
+                grade = Grade.objects.get(student=student, course=course)
+            except Grade.DoesNotExist:
+                continue
+            
+            # Get score for the specific assessment type
+            assessment_score = grade.get_assessment_score(assessment_type)
+            
+            if assessment_score is not None:
+                total_score += assessment_score * contribution_percentage
+                total_contribution += contribution_percentage
+        
+        # Calculate final score: total_score / total_contribution
+        # Total contribution can be any value (100, 150, etc.) - we normalize by dividing by it
+        if total_contribution > 0:
+            return total_score / total_contribution
+        return None
+    
+    def calculate_program_outcome_score(self, student):
+        """
+        Calculate a student's achievement score for this Program Outcome.
+        
+        Formula: PO_Başarısı = Σ(LO_Notu × LO_PO_Etki_Yüzdesi) / Total_Contribution
+        
+        For each learning outcome linked to this PO:
+        - Get the student's LO score
+        - Multiply by the LO->PO percentage
+        - Sum all contributions
+        - Divide by total contribution (can be > 100, no need to be exactly 100)
+        
+        Args:
+            student: Student instance
+            
+        Returns:
+            float: Achievement score (0-100) or None if no learning outcomes linked
+        """
+        from .models import LearningOutcomeProgramOutcome
+        
+        # Only calculate for Program Outcomes (course_name == '')
+        if self.course_name:
+            return None
+        
+        # Get all learning outcomes linked to this PO
+        lo_po_relations = LearningOutcomeProgramOutcome.objects.filter(
+            program_outcome=self
+        ).select_related('learning_outcome')
+        
+        if not lo_po_relations.exists():
+            return None
+        
+        total_score = 0.0
+        total_contribution = 0
+        
+        for rel in lo_po_relations:
+            learning_outcome = rel.learning_outcome
+            percentage = rel.percentage
+            
+            if percentage <= 0:
+                continue
+            
+            # Get student's score for this learning outcome
+            lo_score = learning_outcome.calculate_student_score(student)
+            
+            if lo_score is not None:
+                # Add weighted contribution: LO_score × percentage
+                total_score += lo_score * percentage
+                total_contribution += percentage
+        
+        # Calculate final score: total_score / total_contribution
+        # Total contribution can be any value (100, 150, etc.) - we normalize by dividing by it
+        if total_contribution > 0:
+            return total_score / total_contribution
+        return None
 
 class LearningOutcomeProgramOutcome(models.Model):
     learning_outcome = models.ForeignKey('ProgramOutcome', on_delete=models.CASCADE, related_name='lo_po_relationships')
@@ -372,6 +474,45 @@ class LearningOutcomeProgramOutcome(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['learning_outcome', 'program_outcome'], name='unique_lo_po')
         ]
+
+class AssessmentLORelation(models.Model):
+    """
+    NOTE: Learning Outcomes are stored in ProgramOutcome model with course_name != ''.
+    """
+    ASSESSMENT_TYPE_CHOICES = [
+        ('midterm', 'Midterm'),
+        ('final', 'Final'),
+        ('project', 'Project'),
+        ('assignment', 'Assignment'),
+        ('absence', 'Absence'),
+        ('quiz', 'Quiz'),
+    ]
+    
+    assessment = models.ForeignKey(Assessment, on_delete=models.CASCADE, related_name='lo_relations')
+    learning_outcome = models.ForeignKey('ProgramOutcome', on_delete=models.CASCADE, related_name='assessment_relations')
+    assessment_type = models.CharField(
+        max_length=20,
+        choices=ASSESSMENT_TYPE_CHOICES,
+        default='midterm',
+        help_text="Type of assessment (midterm, final, project, etc.)"
+    )
+    assessment_index = models.IntegerField(
+        default=1,
+        help_text="Index of the assessment (1, 2, 3, etc.) - used to match with assessment_scores (e.g., midterm_1, midterm_2)"
+    )
+    contribution_percentage = models.IntegerField(
+        default=0, 
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Percentage contribution of this assessment to the learning outcome (0-100)"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['assessment', 'learning_outcome', 'assessment_type', 'assessment_index'], name='unique_assessment_lo_type_index')
+        ]
+    
+    def __str__(self):
+        return f"{self.assessment.course.name} - {self.get_assessment_type_display()} to {self.learning_outcome.text[:50]} ({self.contribution_percentage}%)"
 
 class Announcement(models.Model):
     ROLE_CHOICES = [
