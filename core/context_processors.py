@@ -54,6 +54,7 @@ def student_info(request):
             
             # Combine all notifications - Show all announcements and assignments (same as announcements page)
             all_notifications = []
+            unread_count = 0
             
             # 1. Add all Announcement objects (both read and unread)
             for ann in filtered_announcements:
@@ -64,6 +65,13 @@ def student_info(request):
                     if marker_end > 0:
                         display_subject = display_subject[marker_end + 2:]
                 
+                # Check if read
+                is_read = ann.read_by.filter(id=request.user.id).exists()
+                if not is_read:
+                    unread_count += 1
+                
+                sender_name = ann.sender.get_full_name() or ann.sender.username
+                
                 all_notifications.append({
                     'title': display_subject or 'New Announcement',
                     'message': ann.message[:100] + ('...' if len(ann.message) > 100 else ''),
@@ -72,10 +80,31 @@ def student_info(request):
                     'id': f"ann_{ann.id}",
                     'type': 'announcement',
                     'announcement_id': ann.id,
+                    'sender': sender_name,
+                    'is_read': is_read,
                 })
             
             # 2. Add assignments as announcements (same format as announcements page)
             for assignment in assignments:
+                # Check if assignment has been read (via Notification model)
+                assignment_read = False
+                try:
+                    assignment_notification = Notification.objects.filter(
+                        user=request.user,
+                        assignment=assignment
+                    ).first()
+                    if assignment_notification and assignment_notification.is_read:
+                        assignment_read = True
+                except:
+                    pass
+                
+                if not assignment_read:
+                    unread_count += 1
+                
+                creator_name = assignment.created_by.get_full_name() if assignment.created_by else None
+                if not creator_name and assignment.created_by:
+                    creator_name = assignment.created_by.username
+                
                 all_notifications.append({
                     'title': f'New Assignment: {assignment.title}',
                     'message': f'A new assignment has been added to {assignment.course.name}',
@@ -84,14 +113,16 @@ def student_info(request):
                     'id': f"assignment_{assignment.id}",
                     'type': 'assignment',
                     'assignment_id': assignment.id,
+                    'sender': creator_name or '',
+                    'is_read': assignment_read,
                 })
             
             # Sort by created_at (most recent first) and take top 10
             all_notifications.sort(key=lambda x: x['created_at'], reverse=True)
             all_notifications = all_notifications[:10]
             
-            # Count total unread - use the actual list length to ensure consistency
-            unread_count = len(all_notifications)
+            # Add unread notifications count
+            unread_count += len(unread_notifications_list)
             
             return {
                 'student_info': {
