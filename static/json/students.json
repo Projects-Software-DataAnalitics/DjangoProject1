@@ -8,7 +8,11 @@
     "department": "Computer Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Data Systems", "Computer Architecture", "Algorithms"],
+    "courses": [
+      "Data Systems",
+      "Computer Architecture",
+      "Algorithms"
+    ],
     "email": "",
     "phone_number": ""
   },
@@ -21,7 +25,12 @@
     "department": "Computer Engineering",
     "faculty": "Engineering",
     "year": 4,
-    "courses": ["Data Systems", "Computer Architecture", "Algorithms","Software"],
+    "courses": [
+      "Data Systems",
+      "Computer Architecture",
+      "Algorithms",
+      "Software"
+    ],
     "email": "pinar.cetin1@live.acibadem.edu.tr",
     "phone_number": ""
   },
@@ -29,12 +38,17 @@
     "firstName": "Pinar",
     "lastName": "Cetin",
     "username": "pinar.cetin",
-    "password": "9876",
+    "password": "zF62NGBzwQ",
     "student_id": "221401039",
     "department": "Electronical Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Embedded Systems", "Electronics","Data Systems","Operating Systems"],
+    "courses": [
+      "Embedded Systems",
+      "Electronics",
+      "Data Systems",
+      "Operating Systems"
+    ],
     "email": "cetinpinar2025@gmail.com",
     "phone_number": ""
   },
@@ -47,7 +61,10 @@
     "department": "Electronical Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Data Systems", "Operating Systems"],
+    "courses": [
+      "Data Systems",
+      "Operating Systems"
+    ],
     "email": "",
     "phone_number": ""
   },
@@ -60,11 +77,11 @@
     "department": "Electrical Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Embedded Systems", "Electronics"],
+    "courses": [
+      "Embedded Systems",
+      "Electronics"
+    ],
     "email": "",
     "phone_number": ""
   }
- 
 ]
-
-

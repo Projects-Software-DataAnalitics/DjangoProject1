@@ -57,7 +57,9 @@ class Command(BaseCommand):
                 user.last_name = student_data.get('lastName', '')
                 user.save()
             
-            if student_data.get('password'):
+            # Only set password if user was just created (new user)
+            # Don't overwrite passwords for existing users (they might have reset their password)
+            if created and student_data.get('password'):
                 user.set_password(student_data['password'])
                 user.save()
             

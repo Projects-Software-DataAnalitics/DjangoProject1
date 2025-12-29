@@ -116,6 +116,70 @@ Created by: {creator_name}
         return False
 
 
+def send_password_reset_email(user, new_password, user_type='student'):
+    """
+    Send password reset email to user
+    
+    Args:
+        user: User model instance
+        new_password: New password (plain text, will be shown in email)
+        user_type: 'student', 'instructor', or 'faculty_head'
+    
+    Returns:
+        bool: True if email sent successfully, False otherwise
+    """
+    # Get email address based on user type
+    email_address = None
+    
+    if user_type == 'student':
+        try:
+            from core.models import Student
+            student = Student.objects.get(user=user)
+            email_address = student.email
+            name = student.first_name or student.username
+        except Student.DoesNotExist:
+            return False
+    else:
+        # For instructor/faculty_head, try to get email from user
+        email_address = user.email if hasattr(user, 'email') and user.email else None
+        name = user.get_full_name() or user.username
+    
+    if not email_address:
+        return False
+    
+    subject = "Password Reset - University Management System"
+    
+    message = f"""
+Hello {name},
+
+Your password has been reset.
+
+Username: {user.username}
+New Password: {new_password}
+
+Please login with your new password and change it for security purposes.
+
+---
+This is an automated message from the University Management System.
+"""
+    
+    try:
+        send_mail(
+            subject=subject,
+            message=strip_tags(message),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email_address],
+            fail_silently=False,
+        )
+        return True
+    except Exception as e:
+        print(f"Email error for {email_address}: {e}")
+        import traceback
+        print("Full error traceback:")
+        traceback.print_exc()
+        return False
+
+
 def send_bulk_emails(students, email_type, **kwargs):
     """
     Send emails to multiple students
