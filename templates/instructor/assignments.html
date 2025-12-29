@@ -89,7 +89,9 @@
             </div>
             <div style="margin-bottom: 20px;">
                 <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">File (PDF only)</label>
-                <input type="file" id="assignment-file" name="file" accept=".pdf" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                <input type="file" id="assignment-file" name="file" accept=".pdf" style="display: none;">
+                <button type="button" id="assignment-file-btn" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; color: #475569; cursor: pointer; text-align: left; box-sizing: border-box;">Choose a file</button>
+                <div id="assignment-file-name" style="margin-top: 8px; font-size: 12px; color: #64748b; display: none;"></div>
             </div>
             <div style="display: flex; gap: 12px; justify-content: flex-end;">
                 <button type="button" id="cancel-assignment-btn" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Cancel</button>
@@ -145,7 +147,9 @@
             </div>
             <div style="margin-bottom: 20px;">
                 <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #0f172a;">File (PDF only) - Leave empty to keep current file</label>
-                <input type="file" id="edit-assignment-file" name="file" accept=".pdf" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; box-sizing: border-box;">
+                <input type="file" id="edit-assignment-file" name="file" accept=".pdf" style="display: none;">
+                <button type="button" id="edit-assignment-file-btn" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; color: #475569; cursor: pointer; text-align: left; box-sizing: border-box;">Choose a file</button>
+                <div id="edit-assignment-file-name" style="margin-top: 8px; font-size: 12px; color: #64748b; display: none;"></div>
             </div>
             <div id="edit-assignment-status" style="margin-bottom: 16px;"></div>
             <div style="display: flex; gap: 12px; justify-content: flex-end;">
@@ -279,6 +283,14 @@
         if (addAssignmentBtn && assignmentModal) {
             addAssignmentBtn.addEventListener('click', function() {
                 assignmentModal.style.display = 'flex';
+                if (assignmentFileBtn) {
+                    assignmentFileBtn.textContent = 'Choose a file';
+                    assignmentFileBtn.style.color = '#475569';
+                    assignmentFileBtn.style.fontWeight = '400';
+                }
+                if (assignmentFileInput) {
+                    assignmentFileInput.value = '';
+                }
             });
         }
 
@@ -301,6 +313,55 @@
                 if (e.target === assignmentModal) {
                     assignmentModal.style.display = 'none';
                     assignmentForm.reset();
+                }
+            });
+        }
+
+        // File input button functionality
+        const assignmentFileBtn = document.getElementById('assignment-file-btn');
+        const assignmentFileInput = document.getElementById('assignment-file');
+        const assignmentFileName = document.getElementById('assignment-file-name');
+        
+        if (assignmentFileBtn && assignmentFileInput) {
+            assignmentFileBtn.addEventListener('click', function() {
+                assignmentFileInput.click();
+            });
+            
+            assignmentFileInput.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    assignmentFileBtn.textContent = e.target.files[0].name;
+                    assignmentFileBtn.style.color = '#059669';
+                    assignmentFileBtn.style.fontWeight = '500';
+                    assignmentFileName.style.display = 'none';
+                } else {
+                    assignmentFileBtn.textContent = 'Choose a file';
+                    assignmentFileBtn.style.color = '#475569';
+                    assignmentFileBtn.style.fontWeight = '400';
+                    assignmentFileName.style.display = 'none';
+                }
+            });
+        }
+
+        const editAssignmentFileBtn = document.getElementById('edit-assignment-file-btn');
+        const editAssignmentFileInput = document.getElementById('edit-assignment-file');
+        const editAssignmentFileName = document.getElementById('edit-assignment-file-name');
+        
+        if (editAssignmentFileBtn && editAssignmentFileInput) {
+            editAssignmentFileBtn.addEventListener('click', function() {
+                editAssignmentFileInput.click();
+            });
+            
+            editAssignmentFileInput.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    editAssignmentFileBtn.textContent = e.target.files[0].name;
+                    editAssignmentFileBtn.style.color = '#059669';
+                    editAssignmentFileBtn.style.fontWeight = '500';
+                    editAssignmentFileName.style.display = 'none';
+                } else {
+                    editAssignmentFileBtn.textContent = 'Choose a file';
+                    editAssignmentFileBtn.style.color = '#475569';
+                    editAssignmentFileBtn.style.fontWeight = '400';
+                    editAssignmentFileName.style.display = 'none';
                 }
             });
         }
@@ -370,6 +431,11 @@
                 document.getElementById('edit-deadline-date').value = deadlineDate;
                 document.getElementById('edit-deadline-time').value = deadlineTime;
                 document.getElementById('edit-assignment-file').value = '';
+                if (editAssignmentFileBtn) {
+                    editAssignmentFileBtn.textContent = 'Choose a file';
+                    editAssignmentFileBtn.style.color = '#475569';
+                    editAssignmentFileBtn.style.fontWeight = '400';
+                }
 
                 editAssignmentModal.style.display = 'flex';
             });
