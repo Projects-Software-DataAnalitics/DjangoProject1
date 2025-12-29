@@ -210,6 +210,7 @@
             <th>Course</th>
             <th>Instructor</th>
             <th>Credits</th>
+            <th>Learning Outcome</th>
             <th>Average Scores</th>
         </tr>
         </thead>
@@ -463,6 +464,39 @@
             creditsTd.className = 'credits-cell';
             creditsTd.textContent = credits;
             
+            // Learning Outcome column
+            const learningOutcomeTd = document.createElement('td');
+            learningOutcomeTd.className = 'learning-outcome-cell';
+            learningOutcomeTd.style.cssText = 'padding: 12px; text-align: center;';
+            
+            if (firstLoId && courseId) {
+                const loContainer = document.createElement('div');
+                loContainer.style.cssText = 'display: flex; gap: 8px; justify-content: center; align-items: center;';
+                
+                // Details button - using faculty head URL for read-only access
+                const detailsBtn = document.createElement('a');
+                detailsBtn.href = `/faculty-head/courses/${courseId}/learning-outcomes/${firstLoId}/`;
+                detailsBtn.textContent = 'Details';
+                detailsBtn.style.cssText = 'padding: 6px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-block; transition: background 0.2s;';
+                detailsBtn.onmouseover = function() { this.style.background = '#2563eb'; };
+                detailsBtn.onmouseout = function() { this.style.background = '#3b82f6'; };
+                
+                // Graph button - using faculty head URL for read-only access
+                const graphBtn = document.createElement('a');
+                graphBtn.href = `/faculty-head/courses/${courseId}/learning-outcomes/${firstLoId}/graph/`;
+                graphBtn.textContent = 'Graph';
+                graphBtn.style.cssText = 'padding: 6px 12px; background-color: #10b981; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-block; transition: background 0.2s;';
+                graphBtn.onmouseover = function() { this.style.background = '#059669'; };
+                graphBtn.onmouseout = function() { this.style.background = '#10b981'; };
+                
+                loContainer.appendChild(detailsBtn);
+                loContainer.appendChild(graphBtn);
+                learningOutcomeTd.appendChild(loContainer);
+            } else {
+                learningOutcomeTd.textContent = 'No LO';
+                learningOutcomeTd.style.cssText = 'padding: 12px; text-align: center; color: #9ca3af;';
+            }
+            
             const averageScoreTd = document.createElement('td');
             averageScoreTd.className = 'average-score-cell';
             averageScoreTd.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px;';
@@ -499,6 +533,7 @@
             tr.appendChild(courseTd);
             tr.appendChild(instructorTd);
             tr.appendChild(creditsTd);
+            tr.appendChild(learningOutcomeTd);
             tr.appendChild(averageScoreTd);
             tbody.appendChild(tr);
         }

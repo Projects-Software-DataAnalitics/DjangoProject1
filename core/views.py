@@ -4370,14 +4370,20 @@ def my_courses(request):
                 'day': course.day,
                 'time': course.time,
                 'room': course.room,
+                'students': students_list,  # Add students list to course data
             })
     
     # Prepare schedule data for template
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     time_slots = ['09:00-10:30', '11:00-12:30', '14:00-15:30', '16:00-17:30']
     
+    # Create JSON data for JavaScript
+    import json
+    courses_json = json.dumps(courses_data)
+    
     context = {
         'courses': courses_data,
+        'courses_json': courses_json,  # Add JSON data for JavaScript
         'days': days,
         'time_slots': time_slots
     }
@@ -5194,7 +5200,14 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
     """Show detail page for a learning outcome with linked program outcomes (for faculty head)"""
     profile = getattr(request.user, 'profile', None)
     course = get_object_or_404(Course, id=course_id)
-    # Note: profile.courses will be synced automatically via signals when Course.instructor is set
+    
+    # Check if faculty head has access to this course (either owns it or it's in their department)
+    if profile:
+        faculty_head_department = profile.department
+        # Allow access if course is in faculty head's department
+        if faculty_head_department and course.department != faculty_head_department:
+            return HttpResponseForbidden("You don't have access to this course.")
+    
     # NOTE: Using course_name (string) for matching - technical debt
     # Ideally should use ForeignKey, but works for now. Course rename would break this.
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
@@ -5289,6 +5302,7 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
     referer = request.META.get('HTTP_REFERER', '')
     from_all_courses = 'all-courses' in referer
     
+    # Always use faculty template, but pass from_all_courses flag for read-only mode
     return render(
         request,
         'faculty/learning_outcome_detail.html',
@@ -5307,12 +5321,14 @@ def faculty_head_learning_outcome_detail(request, course_id, outcome_id):
 def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
     """Show graph view for learning outcome (for faculty head)"""
     profile = getattr(request.user, 'profile', None)
+    course = get_object_or_404(Course, id=course_id)
+    
+    # Check if faculty head has access to this course (either owns it or it's in their department)
     if profile:
-        course = profile.courses.filter(id=course_id).first()
-        if not course:
+        faculty_head_department = profile.department
+        # Allow access if course is in faculty head's department
+        if faculty_head_department and course.department != faculty_head_department:
             return HttpResponseForbidden("You don't have access to this course.")
-    else:
-        course = get_object_or_404(Course, id=course_id)
     
     outcome = get_object_or_404(ProgramOutcome, id=outcome_id, course_name=course.name)
     
@@ -5388,6 +5404,10 @@ def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
     
     course_name_slug = generate_course_slug(outcome.course_name)
     
+    referer = request.META.get('HTTP_REFERER', '')
+    from_all_courses = 'all-courses' in referer
+    
+    # Always use faculty template, but pass from_all_courses flag for read-only mode
     return render(
         request,
         'faculty/learning_outcome_graph.html',
@@ -5397,6 +5417,7 @@ def faculty_head_learning_outcome_graph(request, course_id, outcome_id):
             'program_outcomes': program_outcomes_data,
             'assessments_data': assessments_data,
             'course_name_slug': course_name_slug,
+            'from_all_courses': from_all_courses,
         }
     )
 
@@ -7258,7 +7279,7 @@ def student_profile(request):
 
 @student_required
 def student_courses(request):
-    from .models import Assignment, AssignmentSubmission
+    from .models import Assignment, AssignmentSubmission, ProgramOutcome
     
     student = request.student_user
     courses = student.courses.all().select_related('instructor').prefetch_related('assignments')
@@ -7266,11 +7287,20 @@ def student_courses(request):
     # Get course schedule from JSON
     course_schedule_map = get_course_schedule_from_json()
     
+    # Get first learning outcome for each course (optimize with one query)
+    course_names = [course.name for course in courses]
+    first_learning_outcomes = {}
+    if course_names:
+        outcomes = ProgramOutcome.objects.filter(course_name__in=course_names).order_by('course_name', '-created_at')
+        for outcome in outcomes:
+            if outcome.course_name not in first_learning_outcomes:
+                first_learning_outcomes[outcome.course_name] = outcome.id
+    
     courses_data = []
     all_assignments = []
     
     for course in courses:
-        instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username
+        instructor_name = f"{course.instructor.first_name} {course.instructor.last_name}".strip() or course.instructor.username if course.instructor else 'N/A'
         
         # Get assignments for this course
         assignments = course.assignments.all().order_by('-created_at')
@@ -7299,6 +7329,9 @@ def student_courses(request):
         # Get schedule from JSON first, fallback to database
         schedule_info = course_schedule_map.get(course.name, {})
         
+        # Get first learning outcome ID for this course
+        first_lo_id = first_learning_outcomes.get(course.name)
+        
         courses_data.append({
             'id': course.id,
             'name': course.name,
@@ -7307,6 +7340,7 @@ def student_courses(request):
             'department': course.department,
             'credits': course.credits,
             'assignments': assignments_list,
+            'first_lo_id': first_lo_id,  # First learning outcome ID
             'day': schedule_info.get('day') or course.day,
             'time': schedule_info.get('time') or course.time,
             'room': schedule_info.get('room') or course.room,
@@ -8019,7 +8053,6 @@ def student_course_learning_outcomes(request, course_id):
             'created_at': o.created_at.strftime('%Y'),
             'related_program_outcomes': [{'id': po.id, 'text': po.text} for po in related_program_outcomes],
         })
-        return redirect('student-login')
     
     return render(request, "student/course_learning_outcomes.html", {
         'course_name': course_name,
@@ -8535,6 +8568,7 @@ def logout_view(request):
 
 @faculty_head_required
 def faculty_head_announcements(request):
+    from datetime import datetime, timedelta
     from .models import Announcement, UserProfile
     faculty_head_user = request.user
     
@@ -8726,7 +8760,6 @@ def faculty_head_announcements(request):
     
     # Group announcements sent to course students
     from collections import defaultdict
-    from datetime import timedelta
     
     # First, process all announcements and group them
     announcements_data = []
@@ -8745,7 +8778,6 @@ def faculty_head_announcements(request):
         if is_sent:
             created_at_dt = ann['created_at']
             if not isinstance(created_at_dt, datetime):
-                from datetime import datetime
                 created_at_dt = datetime.now()
             
             course_name_from_marker = None
@@ -8825,7 +8857,6 @@ def faculty_head_announcements(request):
             
             created_at_str = ann['created_at']
             if isinstance(created_at_str, str):
-                from datetime import datetime
                 try:
                     created_at_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S.%f')
                 except:

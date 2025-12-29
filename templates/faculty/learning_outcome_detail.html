@@ -17,15 +17,9 @@
 {% block content %}
 <div style="max-width: 900px; margin: 0 auto; padding: 24px;">
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 24px;">
-        {% if from_all_courses %}
         <a href="{% url 'all_courses' %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
             ← Back to All Courses
         </a>
-        {% else %}
-        <a href="{% url 'faculty_head_course_learning_outcomes' course_name=course_name_slug %}" style="display: inline-block; padding: 10px 20px; background: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 500; transition: background 0.2s; font-size: 14px;" onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
-            ← Back to Learning Outcomes
-        </a>
-        {% endif %}
     </div>
     
     <!-- Toggle -->
@@ -66,8 +60,9 @@
                         </button>
                     </div>
                 </form>
-                <div id="lo-display" style="position: relative; width: 100%; padding: 16px; padding-right: 100px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 16px; line-height: 1.6; color: #1e293b; min-height: 60px;">
+                <div id="lo-display" style="position: relative; width: 100%; padding: 16px; {% if not from_all_courses %}padding-right: 100px;{% endif %} border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 16px; line-height: 1.6; color: #1e293b; min-height: 60px;">
                     {{ outcome.text }}
+                    {% if not from_all_courses %}
                     <div style="position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; align-items: center; z-index: 10;">
                         <button id="edit-lo-btn" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #3b82f6; padding: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.color='#2563eb'; this.style.transform='scale(1.1)';" onmouseout="this.style.color='#3b82f6'; this.style.transform='scale(1)';" title="Edit Learning Outcome">
                             ✏️
@@ -76,6 +71,7 @@
                             🗑️
                         </button>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -95,8 +91,10 @@
                     </div>
                     <div class="percentage-display" style="display: flex; align-items: center; gap: 8px;">
                         <span class="percentage-value" style="font-size: 15px; font-weight: 600; color: #3b82f6; min-width: 45px; text-align: right;">{{ po.percentage }}%</span>
+                        {% if not from_all_courses %}
                         <button class="edit-percentage-btn" data-po-id="{{ po.id }}" data-percentage="{{ po.percentage }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #3b82f6; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Edit Percentage">✏️</button>
-                    <button class="delete-po-btn" data-po-id="{{ po.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Unlink Program Outcome">🗑️</button>
+                        <button class="delete-po-btn" data-po-id="{{ po.id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Unlink Program Outcome">🗑️</button>
+                        {% endif %}
                     </div>
                     <div class="percentage-edit" style="display: none; align-items: center; gap: 8px;">
                         <input type="number" class="percentage-input-edit" min="0" max="100" step="1" value="{{ po.percentage }}" style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center;">
@@ -112,11 +110,13 @@
             </div>
             {% endif %}
             
+            {% if not from_all_courses %}
             <div style="margin-top: 16px; display: flex; justify-content: center;">
                 <button id="add-po-btn" style="background: #ffffff; border: 2px solid #e2e8f0; padding: 20px; border-radius: 10px; cursor: pointer; font-size: 24px; color: #3b82f6; width: 100%; max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;" onmouseover="this.style.borderColor='#3b82f6'; this.style.background='#eff6ff';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.background='#ffffff';">
                     +
                 </button>
             </div>
+            {% endif %}
         </div>
         
         <!-- Assessment Methods -->
@@ -134,8 +134,10 @@
                     </div>
                     <div class="assessment-percentage-display" style="display: flex; align-items: center; gap: 8px;">
                         <span class="assessment-percentage-value" style="font-size: 15px; font-weight: 600; color: #10b981; min-width: 45px; text-align: right;">{{ assessment.contribution_percentage }}%</span>
+                        {% if not from_all_courses %}
                         <button class="edit-assessment-percentage-btn" data-relation-id="{{ assessment.relation_id }}" data-percentage="{{ assessment.contribution_percentage }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #10b981; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Edit Contribution Percentage">✏️</button>
                         <button class="delete-assessment-btn" data-relation-id="{{ assessment.relation_id }}" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Unlink Assessment">🗑️</button>
+                        {% endif %}
                     </div>
                     <div class="assessment-percentage-edit" style="display: none; align-items: center; gap: 8px;">
                         <input type="number" class="assessment-percentage-input-edit" min="0" max="100" step="1" value="{{ assessment.contribution_percentage }}" style="width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: center;">
@@ -151,11 +153,13 @@
             </div>
             {% endif %}
             
+            {% if not from_all_courses %}
             <div style="margin-top: 16px; display: flex; justify-content: center;">
                 <button id="add-assessment-btn" type="button" style="background: #ffffff; border: 2px solid #e2e8f0; padding: 20px; border-radius: 10px; cursor: pointer; font-size: 24px; color: #10b981; width: 100%; max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; position: relative; z-index: 10;" onmouseover="this.style.borderColor='#10b981'; this.style.background='#f0fdf4';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.background='#ffffff';">
                     +
                 </button>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
