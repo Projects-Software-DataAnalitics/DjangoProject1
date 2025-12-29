@@ -1109,7 +1109,15 @@ def add_assignment(request):
                         title=f'New Assignment: {assignment.title}',
                         message=f'A new assignment "{assignment.title}" has been added to {course.name}.',
                         assignment=assignment
-            )
+                    )
+            
+            # Send email notifications to students
+            from django.conf import settings
+            from core.services.email_service import send_bulk_emails
+            
+            if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                email_result = send_bulk_emails(students, 'assignment', assignment=assignment)
+                print(f"Assignment emails sent: {email_result['sent']}, failed: {email_result['failed']}")
             
             return JsonResponse({
                 'success': True,
@@ -1188,7 +1196,15 @@ def faculty_head_add_assignment(request):
                         title=f'New Assignment: {assignment.title}',
                         message=f'A new assignment "{assignment.title}" has been added to {course.name}.',
                         assignment=assignment
-            )
+                    )
+            
+            # Send email notifications to students
+            from django.conf import settings
+            from core.services.email_service import send_bulk_emails
+            
+            if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                email_result = send_bulk_emails(students, 'assignment', assignment=assignment)
+                print(f"Assignment emails sent: {email_result['sent']}, failed: {email_result['failed']}")
             
             return JsonResponse({
                 'success': True,
@@ -3045,6 +3061,14 @@ def send_announcements(sender, message, subject, receivers_list):
                                     assignment=None,
                                     announcement=announcement
                                 )
+                                
+                                # Send email notifications
+                                from django.conf import settings
+                                from core.services.email_service import send_announcement_email
+                                
+                                if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                    send_announcement_email(student, announcement)
+                                
                                 count += 1
                 except Course.DoesNotExist:
                     pass
@@ -3074,7 +3098,24 @@ def send_announcements(sender, message, subject, receivers_list):
                             message=message[:100] + ('...' if len(message) > 100 else ''),
                             assignment=None,
                             announcement=announcement
-                    )
+                        )
+                        
+                        # Send email and SMS notifications
+                        try:
+                            student = Student.objects.get(user=receiver)
+                            from django.conf import settings
+                            from core.services.email_service import send_announcement_email
+                            from core.services.sms_service import send_announcement_sms
+                            
+                            if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                send_announcement_email(student, announcement)
+                            
+                            # Send SMS only if sender is instructor or faculty head
+                            if getattr(settings, 'ENABLE_SMS_NOTIFICATIONS', True):
+                                send_announcement_sms(student, announcement)
+                        except Student.DoesNotExist:
+                            pass
+                    
                     count += 1
                 except User.DoesNotExist:
                     pass
@@ -8293,6 +8334,18 @@ def faculty_head_announcements(request):
                                             assignment=None,
                                             announcement=announcement
                                         )
+                                        
+                                        # Send email and SMS notifications
+                                        from django.conf import settings
+                                        from core.services.email_service import send_announcement_email
+                                        from core.services.sms_service import send_announcement_sms
+                                        
+                                        if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                            send_announcement_email(student, announcement)
+                                        
+                                        # Send SMS only if sender is instructor or faculty head
+                                        if getattr(settings, 'ENABLE_SMS_NOTIFICATIONS', True):
+                                            send_announcement_sms(student, announcement)
                         except Course.DoesNotExist:
                             pass
                     else:
@@ -8321,7 +8374,18 @@ def faculty_head_announcements(request):
                                     message=message[:100] + ('...' if len(message) > 100 else ''),
                                     assignment=None,
                                     announcement=announcement
-                            )
+                                )
+                                
+                                # Send email notifications
+                                try:
+                                    student = Student.objects.get(user=receiver)
+                                    from django.conf import settings
+                                    from core.services.email_service import send_announcement_email
+                                    
+                                    if getattr(settings, 'ENABLE_EMAIL_NOTIFICATIONS', True):
+                                        send_announcement_email(student, announcement)
+                                except Student.DoesNotExist:
+                                    pass
                         except User.DoesNotExist:
                             pass
             

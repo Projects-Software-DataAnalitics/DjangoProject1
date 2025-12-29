@@ -8,7 +8,9 @@
     "department": "Computer Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Data Systems", "Computer Architecture", "Algorithms"]
+    "courses": ["Data Systems", "Computer Architecture", "Algorithms"],
+    "email": "",
+    "phone_number": ""
   },
   {
     "firstName": "Mina",
@@ -19,7 +21,9 @@
     "department": "Computer Engineering",
     "faculty": "Engineering",
     "year": 4,
-    "courses": ["Data Systems", "Computer Architecture", "Algorithms","Software"]
+    "courses": ["Data Systems", "Computer Architecture", "Algorithms","Software"],
+    "email": "pinar.cetin1@live.acibadem.edu.tr",
+    "phone_number": ""
   },
   {
     "firstName": "Pinar",
@@ -30,7 +34,9 @@
     "department": "Electronical Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Embedded Systems", "Electronics","Data Systems","Operating Systems"]
+    "courses": ["Embedded Systems", "Electronics","Data Systems","Operating Systems"],
+    "email": "cetinpinar2025@gmail.com",
+    "phone_number": ""
   },
   {
     "firstName": "Perisa",
@@ -41,7 +47,9 @@
     "department": "Electronical Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Data Systems", "Operating Systems"]
+    "courses": ["Data Systems", "Operating Systems"],
+    "email": "",
+    "phone_number": ""
   },
   {
     "firstName": "Ross",
@@ -52,7 +60,9 @@
     "department": "Electrical Engineering",
     "faculty": "Engineering",
     "year": 3,
-    "courses": ["Embedded Systems", "Electronics"]
+    "courses": ["Embedded Systems", "Electronics"],
+    "email": "",
+    "phone_number": ""
   }
  
 ]
