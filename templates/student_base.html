@@ -94,25 +94,29 @@
                     <a href="{% url 'student_announcements' %}" style="font-size: 12px; color: #3b82f6; text-decoration: none;">View all</a>
                 </div>
                 <div id="notification-list" style="padding: 8px 0; max-height: 400px; overflow-y: auto;">
-                    {% if unread_notifications and unread_notifications|length > 0 %}
-                        {% for notification in unread_notifications %}
-                            <a href="{{ notification.url }}" 
-                               onclick="{% if notification.type == 'notification' and notification.notification_id %}markNotificationAsRead('{{ notification.id }}', event);{% elif notification.type == 'announcement' and notification.announcement_id %}markAnnouncementAsRead('{{ notification.announcement_id }}', event);{% endif %}" 
-                               class="notification-item"
-                               style="display: block; padding: 12px 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: #f0f9ff; cursor: pointer;" 
-                               onmouseover="this.style.background='#f9fafb';" 
-                               onmouseout="this.style.background='#f0f9ff';">
-                                <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 2px;">
-                                    {{ notification.title|default:"No title" }}
-                                </div>
-                                <div style="font-size: 12px; color: #4b5563; line-height: 1.4;">
-                                    {{ notification.message|default:"No message" }}
-                                </div>
-                                <div style="font-size: 10px; color: #9ca3af; margin-top: 4px;">
-                                    {{ notification.created_at|date:"d M, H:i" }}
-                                </div>
-                            </a>
-                        {% endfor %}
+                     {% if unread_notifications and unread_notifications|length > 0 %}
+                         {% for notification in unread_notifications %}
+                             <a href="{{ notification.url }}" 
+                                onclick="{% if notification.type == 'announcement' and notification.announcement_id %}markAnnouncementAsRead('{{ notification.announcement_id }}', event);{% elif notification.type == 'assignment' and notification.assignment_id %}markAssignmentAsRead('{{ notification.assignment_id }}', event);{% endif %}" 
+                                class="notification-item"
+                                style="display: block; padding: 16px; text-decoration: none; color: inherit; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; background: {% if not notification.is_read %}#f0f9ff{% else %}#ffffff{% endif %}; cursor: pointer; border-left: 4px solid {% if not notification.is_read %}#3b82f6{% else %}#e5e7eb{% endif %};" 
+                                onmouseover="this.style.background='#f9fafb';" 
+                                onmouseout="this.style.background='{% if not notification.is_read %}#f0f9ff{% else %}#ffffff{% endif %}';">
+                                 <div style="font-weight: 600; font-size: 15px; color: #0f172a; margin-bottom: 6px;">
+                                     {{ notification.title|default:"No title" }}
+                                 </div>
+                                 <div style="font-size: 12px; color: #64748b; line-height: 1.4; margin-bottom: 4px;">
+                                     {{ notification.message|default:"No message" }}
+                                 </div>
+                                 <div style="font-size: 12px; color: #64748b; display: flex; gap: 12px;">
+                                     {% if notification.sender %}
+                                     <span>From: {{ notification.sender }}</span>
+                                     <span>•</span>
+                                     {% endif %}
+                                     <span>{{ notification.created_at|date:"M d, H:i" }}</span>
+                                 </div>
+                             </a>
+                         {% endfor %}
                         <div style="padding: 10px; text-align: center; border-top: 1px solid #eee;">
                             <a href="{% url 'student_announcements' %}" style="font-size: 12px; color: #2563eb; text-decoration: none; font-weight: 500;">View All</a>
                         </div>
@@ -234,9 +238,101 @@
                 'Content-Type': 'application/json',
             },
             credentials: 'same-origin',
-        }).catch(error => {
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Remove from notification dropdown by finding item with announcement ID
+                const items = document.querySelectorAll('.notification-item');
+                items.forEach(item => {
+                    const onclickAttr = item.getAttribute('onclick') || '';
+                    if (onclickAttr.includes(`'${announcementId}'`)) {
+                        item.remove();
+                    }
+                });
+                
+                // Check if notification list is now empty
+                const notificationList = document.getElementById('notification-list');
+                if (notificationList) {
+                    const remainingItems = notificationList.querySelectorAll('.notification-item');
+                    if (remainingItems.length === 0) {
+                        notificationList.innerHTML = '<div style="padding: 30px 16px; text-align: center; color: #9ca3af;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 10px; display: block; opacity: 0.5;"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path></svg><p style="font-size: 13px; margin: 0;">No new notifications</p></div>';
+                    }
+                }
+                
+                // Update notification count
+                updateNotificationCount();
+            }
+        })
+        .catch(error => {
             console.error('Error marking announcement as read:', error);
         });
+    }
+    
+    function markAssignmentAsRead(assignmentId, event) {
+        const csrftoken = getCookie('csrftoken');
+        
+        fetch(`/student/assignments/${assignmentId}/mark-read/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Remove from notification dropdown
+                const items = document.querySelectorAll('.notification-item');
+                items.forEach(item => {
+                    const onclickAttr = item.getAttribute('onclick') || '';
+                    if (onclickAttr.includes(`'${assignmentId}'`)) {
+                        item.remove();
+                    }
+                });
+                
+                // Check if notification list is now empty
+                const notificationList = document.getElementById('notification-list');
+                if (notificationList) {
+                    const remainingItems = notificationList.querySelectorAll('.notification-item');
+                    if (remainingItems.length === 0) {
+                        notificationList.innerHTML = '<div style="padding: 30px 16px; text-align: center; color: #9ca3af;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 10px; display: block; opacity: 0.5;"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path></svg><p style="font-size: 13px; margin: 0;">No new notifications</p></div>';
+                    }
+                }
+                
+                // Update notification count
+                updateNotificationCount();
+            }
+        })
+        .catch(error => {
+            console.error('Error marking assignment as read:', error);
+        });
+    }
+    
+    function updateNotificationCount() {
+        const notificationList = document.getElementById('notification-list');
+        const notificationBtn = document.getElementById('notification-btn');
+        const notificationIcon = document.getElementById('notification-icon');
+        
+        if (notificationList) {
+            const remainingItems = notificationList.querySelectorAll('.notification-item');
+            const count = remainingItems.length;
+            
+            // Update icon color
+            if (notificationBtn && notificationIcon) {
+                if (count > 0) {
+                    notificationBtn.style.color = '#ef4444';
+                    notificationIcon.setAttribute('stroke', '#ef4444');
+                } else {
+                    notificationBtn.style.color = '#64748b';
+                    notificationIcon.setAttribute('stroke', '#64748b');
+                }
+                notificationBtn.setAttribute('data-has-notifications', count > 0 ? 'true' : 'false');
+                notificationBtn.setAttribute('data-notification-count', count);
+                notificationBtn.setAttribute('title', `Notifications (${count})`);
+            }
+        }
     }
     
     function toggleNotificationDropdown() {
