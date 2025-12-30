@@ -7,7 +7,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0036_add_student_to_announcement_role_choices'),
+        ('core', '0038_add_missing_assessment_columns'),
     ]
 
     operations = [

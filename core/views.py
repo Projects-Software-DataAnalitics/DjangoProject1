@@ -11,7 +11,7 @@ from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
-from django.db import transaction, connection
+from django.db import transaction
 from django.db.models import Q
 from django.core.cache import cache
 from .models import Grade, Student, Course, ProgramOutcome, Assessment, UserProfile, Notification, Assignment, Announcement
@@ -184,48 +184,6 @@ def get_students_data():
     # TODO: Cache invalidation - When Student/Course is updated, call:
     cache.set(cache_key, students_list, 3600)
     return students_list
-
-
-def get_student_grade_statistics_from_materialized_view(department=None, course_id=None):
-    """
-    Get student grade statistics from materialized view for improved performance.
-    
-    This function uses the materialized view 'student_grade_statistics' which
-    pre-computes grade statistics to speed up queries.
-    
-    Args:
-        department: Optional department filter
-        course_id: Optional course ID filter
-    
-    Returns:
-        List of dictionaries with student grade statistics
-    """
-    try:
-        with connection.cursor() as cursor:
-            query = "SELECT * FROM student_grade_statistics WHERE 1=1"
-            params = []
-            
-            if department:
-                query += " AND department = %s"
-                params.append(department)
-            
-            if course_id:
-                query += " AND course_id = %s"
-                params.append(course_id)
-            
-            query += " ORDER BY student_id, course_id"
-            
-            cursor.execute(query, params)
-            columns = [col[0] for col in cursor.description]
-            results = []
-            for row in cursor.fetchall():
-                results.append(dict(zip(columns, row)))
-            
-            return results
-    except Exception as e:
-        # If materialized view doesn't exist or query fails, return empty list
-        # This ensures the application continues to work even if view is not available
-        return []
 
 
 def get_instructor_data(username):

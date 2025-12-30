@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0037_create_student_grade_statistics_view'),
+        ('core', '0037_student_email_student_phone_number'),
     ]
 
     operations = [
