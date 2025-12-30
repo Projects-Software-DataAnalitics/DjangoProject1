@@ -9270,8 +9270,8 @@ def faculty_head_department_graph(request):
                 
                 for rel in assessment_relations:
                     assessment = rel.assessment
-                course_obj = assessment.course
-                assessment_type_key = rel.assessment_type
+                    course_obj = assessment.course
+                    assessment_type_key = rel.assessment_type
                 assessment_type_label = assessment_type_labels.get(assessment_type_key, assessment_type_key.title())
                 
                 # Create display name with index if needed
